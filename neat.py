@@ -3,7 +3,6 @@ import neat
 
 from game_logic.game_manager import Game
 from game_logic.search_agent import SearchAgent
-import sys
 
 
 class NEAT_Manager:
@@ -68,12 +67,11 @@ def run_neat(config):
 
 
 if __name__ == "__main__":
-    sys.path.append("C:\Users\Anders\Documents\GitHub\"battleship\game_logic")
     board_size = 10
     ship_sizes = [5, 4, 3, 3, 2]
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config.txt")
-    config = neat.config.Config(
+    config = neat.Config(
         neat.DefaultGenome,
         neat.DefaultReproduction,
         neat.DefaultSpeciesSet,
