@@ -53,6 +53,8 @@ class Game:
         except AssertionError as e:
             return False
 
+        print(self.player1Search.search)
+
         # Check if all ships are sunk
         self.check_game_over()
 

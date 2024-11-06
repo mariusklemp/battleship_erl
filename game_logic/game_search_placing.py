@@ -37,6 +37,7 @@ class Game:
             print("Illegal move", move)
             return False
 
+        print(self.searching.search)
         self.move_count += 1
         # Check if all ships are sunk
         self.check_game_over()
