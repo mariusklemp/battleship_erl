@@ -12,9 +12,9 @@ class Game:
     """
     def __init__(self, board_size, sizes, player1_search_strategy, player1_placing_strategy, player2_search_strategy,
                  player2_placing_strategy):
-        self.player1Placement = PlacementAgent(board_size=board_size, sizes=sizes, strategy=player1_placing_strategy)
+        self.player1Placement = PlacementAgent(board_size=board_size, ship_sizes=sizes, strategy=player1_placing_strategy)
         self.player1Search = SearchAgent(board_size=board_size, ship_sizes=sizes, strategy=player1_search_strategy)
-        self.player2Placement = PlacementAgent(board_size=board_size, sizes=sizes, strategy=player2_placing_strategy)
+        self.player2Placement = PlacementAgent(board_size=board_size, ship_sizes=sizes, strategy=player2_placing_strategy)
         self.player2Search = SearchAgent(board_size=board_size, ship_sizes=sizes, strategy=player2_search_strategy)
         self.player1_turn = True
         self.game_over = False
@@ -53,7 +53,7 @@ class Game:
         except AssertionError as e:
             return False
 
-        print(self.player1Search.search)
+        print(self.player1Search.board)
 
         # Check if all ships are sunk
         self.check_game_over()
@@ -66,7 +66,7 @@ class Game:
 
         if move is None:
             return False
-        if player.search[0][move] != 0:
+        if player.board[0][move] != 0:
             return False
         return True
 
@@ -74,12 +74,12 @@ class Game:
         player = self.player1Search if self.player1_turn else self.player2Search
         opponent = self.player2Placement if self.player1_turn else self.player1Placement
 
-        player.search[0][move] = 1  # Not unknown
+        player.board[0][move] = 1  # Not unknown
         if move in opponent.indexes:
-            player.search[1][move] = 1  # Hit
+            player.board[1][move] = 1  # Hit
             self.check_ship_sunk(player, opponent, move)
         else:
-            player.search[2][move] = 1  # Miss
+            player.board[2][move] = 1  # Miss
 
     def check_ship_sunk(self, player, opponent, move):
         hit_ship = None
@@ -92,14 +92,14 @@ class Game:
 
         # Check if the ship is sunk
         for i in hit_ship:
-            if player.search[0][i] == 0:
+            if player.board[0][i] == 0:
                 sunk = False
                 break
 
         # If the ship is sunk, update the search board
         if sunk:
             for i in hit_ship:
-                player.search[3][i] = 1
+                player.board[3][i] = 1
 
     def check_game_over(self):
         player = self.player1Search if self.player1_turn else self.player2Search
@@ -107,7 +107,7 @@ class Game:
 
         all_sunk = True
         for i in opponent.indexes:
-            if player.search[0][i] == 0:
+            if player.board[0][i] == 0:
                 all_sunk = False
         self.game_over = all_sunk
         self.result = 1 if self.player1_turn else 2

@@ -13,7 +13,7 @@ class CustomPlacing:
     def place_ships(self):
         """Place ships according to the chromosome."""
         for i, (x, y, direction) in enumerate(self.chromosome):
-            size = self.placing_agent.sizes[i]
+            size = self.placing_agent.ship_sizes[i]
             ship = Ship(size, self.placing_agent.board_size, x, y, direction)
 
             if self.placing_agent.check_valid_placement(ship):

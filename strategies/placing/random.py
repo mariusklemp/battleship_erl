@@ -8,7 +8,7 @@ class RandomPlacing():
         self.placing_agent = placing_agent
 
     def place_ships(self):
-        for size in self.placing_agent.sizes:
+        for size in self.placing_agent.ship_sizes:
             placed = False
             while not placed:
                 # Create a new ship

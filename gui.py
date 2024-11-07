@@ -39,7 +39,7 @@ class GUI:
             pygame.draw.rect(self.SCREEN, WHITE, square, 1)
 
             if search:
-                pygame.draw.circle(self.SCREEN, self.get_cell_color(player.search, i),
+                pygame.draw.circle(self.SCREEN, self.get_cell_color(player.board, i),
                                    (x + self.SQUARE_SIZE // 2, y + self.SQUARE_SIZE // 2),
                                    self.SQUARE_SIZE // 4)
 

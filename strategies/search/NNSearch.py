@@ -44,7 +44,7 @@ class NNSearch(nn.Module, Strategy):
         self.search_agent.move_count += 1
 
         # Convert the board state (4 layers) into a tensor
-        board_tensor = torch.tensor(self.search_agent.search, dtype=torch.float32)
+        board_tensor = torch.tensor(self.search_agent.board, dtype=torch.float32)
 
         # Reshape the board to have shape (batch_size, channels, height, width)
         # For example, (1, 4, 10, 10) for a 10x10 board
@@ -55,7 +55,7 @@ class NNSearch(nn.Module, Strategy):
         output = self.forward(board_tensor).view(1, -1)  # Flatten the output to (1, board_size^2)
 
         # Get the 'unknown' layer (first layer) and flip it to mark known squares
-        unknown_layer = torch.tensor(self.search_agent.search[0], dtype=torch.float32).view(1, -1)
+        unknown_layer = torch.tensor(self.search_agent.board[0], dtype=torch.float32).view(1, -1)
 
         # Mask the output: Set values where unknown_layer is 1 to -inf
         output[unknown_layer == 1] = float('-inf')

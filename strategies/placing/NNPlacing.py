@@ -49,7 +49,7 @@ class NNPlacing(nn.Module):
         board_tensor = torch.Tensor(self.placing_agent.board).unsqueeze(0).unsqueeze(0)
 
         # Get placements for each ship from the network
-        for size in self.placing_agent.sizes:
+        for size in self.placing_agent.ship_sizes:
             placed = False
 
             while not placed:

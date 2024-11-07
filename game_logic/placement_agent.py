@@ -6,9 +6,9 @@ from strategies.placing.random import RandomPlacing
 
 
 class PlacementAgent:
-    def __init__(self, board_size, sizes, strategy, chromosome=[(0, 0, 0), (2, 9, 0), (2, 2, 1), (0, 1, 1), (5, 2, 1)]):
+    def __init__(self, board_size, ship_sizes, strategy, chromosome=[(0, 0, 0), (2, 9, 0), (2, 2, 1), (0, 1, 1), (5, 2, 1)]):
         self.board_size = board_size
-        self.sizes = sizes  # Sizes of the ships to place
+        self.ship_sizes = ship_sizes  # Sizes of the ships to place
         self.ships = []  # List to store placed ships
         # Board state as 2D array
         self.board = np.zeros((self.board_size, self.board_size))  # Initially empty board

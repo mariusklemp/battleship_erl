@@ -15,7 +15,7 @@ class ProbabilisticStrategy(Strategy):
 
         # Loop through each unknown square and calculate probability
         for i in range(self.search_agent.board_size ** 2):
-            if self.search_agent.search[0][i] == 0:  # Check only unknown squares
+            if self.search_agent.board[0][i] == 0:  # Check only unknown squares
                 probabilities[i] = self.calculate_probability(i, possible_states)
 
         # Find the square with the highest probability
@@ -38,7 +38,7 @@ class ProbabilisticStrategy(Strategy):
                         valid = True
                         for i in range(ship_size):
                             index = row * self.search_agent.board_size + (col + i)
-                            if self.search_agent.search[2][index] == 2:  # Check if it's a miss
+                            if self.search_agent.board[2][index] == 2:  # Check if it's a miss
                                 valid = False
                                 break
                         if valid:
@@ -49,7 +49,7 @@ class ProbabilisticStrategy(Strategy):
                         valid = True
                         for i in range(ship_size):
                             index = (row + i) * self.search_agent.board_size + col
-                            if self.search_agent.search[2][index] == 2:  # Check if it's a miss
+                            if self.search_agent.board[2][index] == 2:  # Check if it's a miss
                                 valid = False
                                 break
                         if valid:
@@ -85,10 +85,10 @@ class ProbabilisticStrategy(Strategy):
             if col + ship_size > self.search_agent.board_size:
                 return False  # Ship would go off the board
             for i in range(ship_size):
-                if self.search_agent.search[2][index + i] == 1 or self.search_agent.search[3][
+                if self.search_agent.board[2][index + i] == 1 or self.search_agent.board[3][
                     index + i] == 1:  # Miss or sunk
                     return False
-                if self.search_agent.search[1][index + i] == 1 and not self.in_same_ship(
+                if self.search_agent.board[1][index + i] == 1 and not self.in_same_ship(
                         index + i):  # Invalid hit placement
                     return False
 
@@ -97,10 +97,10 @@ class ProbabilisticStrategy(Strategy):
                 return False  # Ship would go off the board
             for i in range(ship_size):
                 vertical_index = index + i * self.search_agent.board_size
-                if self.search_agent.search[2][vertical_index] == 1 or self.search_agent.search[3][
+                if self.search_agent.board[2][vertical_index] == 1 or self.search_agent.board[3][
                     vertical_index] == 1:  # Miss or sunk
                     return False
-                if self.search_agent.search[1][vertical_index] == 1 and not self.in_same_ship(
+                if self.search_agent.board[1][vertical_index] == 1 and not self.in_same_ship(
                         vertical_index):  # Invalid hit placement
                     return False
 
@@ -120,7 +120,7 @@ class ProbabilisticStrategy(Strategy):
         return best_move
 
     def print_probabilities(self, probabilities, best_move, possible_states):
-        print(self.search_agent.search)
+        print(self.search_agent.board)
         # Print the probabilities in a grid format
         print("There are {} possible states.".format(possible_states))
         print("Probabilities: ")
