@@ -4,6 +4,7 @@ import neat
 from game_logic.game_search_placing import Game
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
+import visualize
 
 
 class NEAT_Manager:
@@ -23,7 +24,11 @@ class NEAT_Manager:
         )
 
         game = Game(
-            placing=PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="random"),
+            placing=PlacementAgent(
+                board_size=self.board_size,
+                ship_sizes=self.ship_sizes,
+                strategy="random",
+            ),
             search=search_agent,
         )
 
@@ -31,9 +36,8 @@ class NEAT_Manager:
             game.play_turn()
         return game.move_count
 
-    def evaluate(self, genome):
+    def evaluate(self, genome, net):
         """Evaluate the genome fitness."""
-        net = neat.nn.FeedForwardNetwork.create(genome, self.config)
         sum_move_count = 0
         for i in range(5):
             # Play the search against a random placing agent 5 times
@@ -41,20 +45,20 @@ class NEAT_Manager:
             sum_move_count += move_count
 
         # Update the genome fitness
-        print("Average movecount: ", sum_move_count/5)
-        genome.fitness += sum_move_count/5
+        print("Average movecount: ", sum_move_count / 5)
 
+        genome.fitness += self.board_size**2 - sum_move_count / 5
 
 
 def eval_genomes(genomes, config):
     """Evaluate the fitness of each genome in the population."""
-    manager = NEAT_Manager(board_size=10, ship_sizes=[5, 4, 3, 3, 2], config=config)
+    manager = NEAT_Manager(board_size=5, ship_sizes=[1, 2, 3], config=config)
     for i, (genome_id, genome) in enumerate(genomes):
         print(f"Genome {i} with ID: {genome_id}")
-        if i == len(genomes) - 1:
-            break
         genome.fitness = 0
-        manager.evaluate(genome)
+        net = neat.nn.FeedForwardNetwork.create(genome, config)
+        manager.evaluate(genome, net)
+        print("Fitness: ", genome.fitness)
 
 
 def run(config):
@@ -64,15 +68,16 @@ def run(config):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(1))
+    p.add_reporter(neat.Checkpointer(10))
 
-    winner = p.run(eval_genomes, 50)
+    winner = p.run(eval_genomes, 300)
+    # Display the winning genome.
     print("\nBest genome:\n{!s}".format(winner))
+
+    visualize.plot_stats(stats, ylog=False, view=True)
 
 
 if __name__ == "__main__":
-    board_size = 10
-    ship_sizes = [5, 4, 3, 3, 2]
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config.txt")
     config = neat.Config(
