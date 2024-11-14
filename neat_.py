@@ -5,6 +5,7 @@ from game_logic.game_search_placing import Game
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 import visualize
+from strategies.search.Deep_NEAT import DeepNEATCNN
 
 
 class NEAT_Manager:
@@ -62,6 +63,10 @@ class NEAT_Manager:
             print(f"Genome {i} with ID: {genome_id}")
             genome.fitness = 0
             net = neat.nn.FeedForwardNetwork.create(genome, config)
+            # net = DeepNEATCNN(genome=genome, config=config, board_size=self.board_size)  # Creates the CNN instance
+            """
+            or å kjøre CNN endre find_move i NEAT_search.py
+            """
             self.evaluate(genome, net)
             print("Fitness: ", genome.fitness)
 
@@ -92,5 +97,5 @@ if __name__ == "__main__":
         neat.DefaultStagnation,
         config_path,
     )
-    run(config=config, gen=3, board_size=5, ship_sizes=[1, 3, 2],
-        strategy="random", chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)])
+    run(config=config, gen=20, board_size=5, ship_sizes=[1, 2, 1],
+        strategy="custom", chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)])

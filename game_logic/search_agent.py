@@ -1,3 +1,4 @@
+from strategies.search.Deep_NEAT import DeepNEATCNN
 from strategies.search.NNSearch import NNSearch
 from strategies.search.NEAT_search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
