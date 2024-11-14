@@ -12,7 +12,7 @@ class RandomPlacing():
             placed = False
             while not placed:
                 # Create a new ship
-                x, y, direction = self.random_ship_placement()
+                x, y, direction = self.random_ship_placement(size)
 
                 ship = Ship(size, self.placing_agent.board_size, x, y, direction)
 
@@ -21,9 +21,16 @@ class RandomPlacing():
                     self.placing_agent.ships.append(ship)
                     placed = True
 
-    def random_ship_placement(self):
-        # Fix this according to board size
-        x, y = random.randint(0, self.placing_agent.board_size - 1), random.randint(0,
-                                                                                    self.placing_agent.board_size - 1)
-        direction = random.randint(0, 1)
-        return x, y, direction
+    def random_ship_placement(self, size):
+        # Randomly pick direction
+        dir = random.randint(0, 1)
+
+        # Based on the direction and the board size limit the starting point
+        if dir == 0:  # Ship is horizontal
+            x = random.randint(0, self.placing_agent.board_size - size - 1)
+            y = random.randint(0, self.placing_agent.board_size - 1)
+        else:  # Ship is vertical
+            x = random.randint(0, self.placing_agent.board_size - 1)
+            y = random.randint(0, self.placing_agent.board_size - size -1)
+
+        return x, y, dir

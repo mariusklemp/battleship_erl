@@ -8,10 +8,13 @@ import visualize
 
 
 class NEAT_Manager:
-    def __init__(self, board_size, ship_sizes, config):
+    def __init__(self, board_size, ship_sizes, strategy, chromosome, config):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
         self.config = config
+        self.strategy = strategy
+        self.chromosome = chromosome
+
 
     def simulate_game(self, net):
         """Simulate a Battleship game and return the move count."""
@@ -27,13 +30,13 @@ class NEAT_Manager:
             placing=PlacementAgent(
                 board_size=self.board_size,
                 ship_sizes=self.ship_sizes,
-                strategy="random",
-                # chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)],
+                strategy=self.strategy,
+                chromosome=self.chromosome,
             ),
             search=search_agent,
         )
 
-        # game.placing.show_ships()
+        game.placing.show_ships()
 
         while not game.game_over:
             game.play_turn()
@@ -42,29 +45,28 @@ class NEAT_Manager:
     def evaluate(self, genome, net):
         """Evaluate the genome fitness."""
         sum_move_count = 0
-        for i in range(5):
+        range_count = 5
+        for i in range(range_count):
             # Play the search against a random placing agent 5 times
             move_count = self.simulate_game(net)
             sum_move_count += move_count
 
         # Update the genome fitness
-        print("Average movecount: ", sum_move_count / 5)
+        avg_moves = sum_move_count / range_count
+        genome.fitness += self.board_size ** 2 - avg_moves
+        print("Average movecount: ", avg_moves)
 
-        genome.fitness += self.board_size**2 - sum_move_count / 5
-
-
-def eval_genomes(genomes, config):
-    """Evaluate the fitness of each genome in the population."""
-    manager = NEAT_Manager(board_size=5, ship_sizes=[1, 2, 1], config=config)
-    for i, (genome_id, genome) in enumerate(genomes):
-        print(f"Genome {i} with ID: {genome_id}")
-        genome.fitness = 0
-        net = neat.nn.FeedForwardNetwork.create(genome, config)
-        manager.evaluate(genome, net)
-        print("Fitness: ", genome.fitness)
+    def eval_genomes(self, genomes, config):
+        """Evaluate the fitness of each genome in the population."""
+        for i, (genome_id, genome) in enumerate(genomes):
+            print(f"Genome {i} with ID: {genome_id}")
+            genome.fitness = 0
+            net = neat.nn.FeedForwardNetwork.create(genome, config)
+            self.evaluate(genome, net)
+            print("Fitness: ", genome.fitness)
 
 
-def run(config):
+def run(config, gen, board_size, ship_sizes, strategy, chromosome):
     # Searching Agent
     # p = neat.Checkpointer.restore_checkpoint("neat-checkpoint-0")
     p = neat.Population(config)
@@ -73,10 +75,10 @@ def run(config):
     p.add_reporter(stats)
     # p.add_reporter(neat.Checkpointer(10))
 
-    winner = p.run(eval_genomes, 1000)
-    # Display the winning genome.
-    print("\nBest genome:\n{!s}".format(winner))
+    manager = NEAT_Manager(board_size, ship_sizes, strategy, chromosome, config)
 
+    winner = p.run(manager.eval_genomes, gen)
+    print("\nBest genome:\n{!s}".format(winner))
     visualize.plot_stats(stats, ylog=False, view=True)
 
 
@@ -90,4 +92,5 @@ if __name__ == "__main__":
         neat.DefaultStagnation,
         config_path,
     )
-    run(config)
+    run(config=config, gen=3, board_size=5, ship_sizes=[1, 3, 2],
+        strategy="random", chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)])
