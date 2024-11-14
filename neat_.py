@@ -28,9 +28,12 @@ class NEAT_Manager:
                 board_size=self.board_size,
                 ship_sizes=self.ship_sizes,
                 strategy="random",
+                # chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)],
             ),
             search=search_agent,
         )
+
+        # game.placing.show_ships()
 
         while not game.game_over:
             game.play_turn()
@@ -52,7 +55,7 @@ class NEAT_Manager:
 
 def eval_genomes(genomes, config):
     """Evaluate the fitness of each genome in the population."""
-    manager = NEAT_Manager(board_size=5, ship_sizes=[1, 2, 3], config=config)
+    manager = NEAT_Manager(board_size=5, ship_sizes=[1, 2, 1], config=config)
     for i, (genome_id, genome) in enumerate(genomes):
         print(f"Genome {i} with ID: {genome_id}")
         genome.fitness = 0
@@ -68,9 +71,9 @@ def run(config):
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
-    p.add_reporter(neat.Checkpointer(10))
+    # p.add_reporter(neat.Checkpointer(10))
 
-    winner = p.run(eval_genomes, 300)
+    winner = p.run(eval_genomes, 1000)
     # Display the winning genome.
     print("\nBest genome:\n{!s}".format(winner))
 
