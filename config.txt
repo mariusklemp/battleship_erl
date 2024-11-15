@@ -7,7 +7,7 @@ pop_size              = 50
 reset_on_extinction   = False
 no_fitness_termination = True
 
-[DefaultGenome]
+[CNNGenome]
 # node activation options
 activation_default      = relu
 activation_mutate_rate  = 1.0
@@ -46,14 +46,7 @@ initial_connection      = full_direct
 node_add_prob           = 0.2
 node_delete_prob        = 0.2
 
-# Network parameters for CNN
-conv_layer_add_prob     = 0.3
-fc_layer_add_prob       = 0.2
-layer_remove_prob       = 0.1
-conv_filter_sizes       = [3, 5]
-conv_strides            = [1, 2]
-conv_channels           = [16, 32, 64]
-fc_layer_sizes          = [128, 64]
+# network parameters
 num_hidden              = 10
 num_inputs              = 100
 num_outputs             = 25

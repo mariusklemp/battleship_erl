@@ -1,31 +1,34 @@
 import torch.nn as nn
-import random
 
 
 class DeepNEATCNN(nn.Module):
-    def __init__(self, genome, config, board_size):
+    def __init__(self, genome, board_size):
         super().__init__()
-        self.config = config
         self.board_size = board_size
-        self.conv_layers = nn.Sequential()  # Sequential container for convolutional layers
-        self.fc_layers = nn.Sequential()  # Sequential container for fully connected layers
+        self.input_channels = 4  # Fixed input channels for hits, misses, sunk, and unknown
+        self.conv_layers = nn.Sequential()
+        self.fc_layers = nn.Sequential()
         self.build_network(genome)
 
+        print("Convolutional Layers:")
+        print(self.conv_layers)
+        print("Fully Connected Layers:")
+        print(self.fc_layers)
+
     def build_network(self, genome):
-        # Start with 4 input channels for the 4 board layers
-        input_channels = 4
-        current_size = self.board_size
+        current_size = self.board_size  # Starting size of the board
+        input_channels = self.input_channels
+        in_features = None
 
-        # Use genome to determine structure of convolutional layers
-        for idx, node in enumerate(genome.nodes.values()):
-            if getattr(node, 'type', None) == 'conv' and random.random() < self.config.conv_layer_add_prob:
-                # Select parameters from the config
-                out_channels = random.choice(self.config.conv_channels)
-                kernel_size = random.choice(self.config.conv_filter_sizes)
-                stride = random.choice(self.config.conv_strides)
-                padding = (kernel_size - 1) // 2  # To maintain spatial size
+        for layer in genome.layer_config:
+            print(layer)
+            if layer['layer_type'] == 'conv':
+                out_channels = layer['out_channels']
+                kernel_size = min(layer['kernel_size'], current_size)
+                stride = layer['stride']
+                padding = layer['padding']
 
-                # Add convolutional layer
+                # Add Conv layer
                 self.conv_layers.append(nn.Conv2d(
                     in_channels=input_channels,
                     out_channels=out_channels,
@@ -35,41 +38,36 @@ class DeepNEATCNN(nn.Module):
                 ))
                 self.conv_layers.append(nn.ReLU())
 
-                # Update parameters for next layer
                 input_channels = out_channels
                 current_size = self.calculate_conv_output_size(current_size, kernel_size, stride, padding)
 
-            elif getattr(node, 'type', None) == 'fc' and random.random() < self.config.fc_layer_add_prob:
-                # Add pooling after convolution layers for consistent flatten size
-                self.conv_layers.append(nn.AdaptiveAvgPool2d((current_size, current_size)))
+            elif layer['layer_type'] == 'fc':
+                if in_features is None:
+                    # Transition from Conv to FC layers
+                    self.conv_layers.append(nn.AdaptiveAvgPool2d((1, 1)))
+                    self.fc_layers.append(nn.Flatten())
+                    in_features = input_channels
 
-                # Flatten and create fully connected layer based on the convolutional output size
-                self.fc_layers.append(nn.Flatten())
-                in_features = input_channels * current_size * current_size
-                out_features = random.choice(self.config.fc_layer_sizes)
-
-                # Add fully connected layer
+                out_features = layer['fc_layer_size']
                 self.fc_layers.append(nn.Linear(in_features, out_features))
                 self.fc_layers.append(nn.ReLU())
-                in_features = out_features  # Update for next FC layer
+                in_features = out_features
 
-        # Ensure in_features is defined based on the final convolutional output
-        if 'in_features' not in locals():
-            self.conv_layers.append(nn.AdaptiveAvgPool2d((current_size, current_size)))
-            in_features = input_channels * current_size * current_size
+        if in_features is None:
+            self.conv_layers.append(nn.AdaptiveAvgPool2d((1, 1)))
             self.fc_layers.append(nn.Flatten())
+            in_features = input_channels
 
-        # Final output layer to match the board size
         self.fc_layers.append(nn.Linear(in_features, self.board_size ** 2))
 
-    def forward(self, board_tensor):
-        # Pass input through convolutional layers
-        x = self.conv_layers(board_tensor)
-
-        # Then pass through fully connected layers
+    def forward(self, x):
+        x = self.conv_layers(x)
         x = self.fc_layers(x)
-        return x
+        return x.view(-1, 1, self.board_size, self.board_size)
 
     @staticmethod
     def calculate_conv_output_size(input_size, kernel_size, stride, padding=0):
-        return ((input_size - kernel_size + 2 * padding) // stride) + 1
+        output_size = ((input_size - kernel_size + 2 * padding) // stride) + 1
+        if output_size <= 0:
+            raise ValueError(f"Invalid output size: {output_size}")
+        return output_size

@@ -1,6 +1,7 @@
 import os
 import neat
 
+from customGenomes import CNNGenome
 from game_logic.game_search_placing import Game
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
@@ -63,7 +64,7 @@ class NEAT_Manager:
             print(f"Genome {i} with ID: {genome_id}")
             genome.fitness = 0
             net = neat.nn.FeedForwardNetwork.create(genome, config)
-            # net = DeepNEATCNN(genome=genome, config=config, board_size=self.board_size)  # Creates the CNN instance
+            #net = DeepNEATCNN(genome=genome, board_size=self.board_size)  # Creates the CNN instance
             """
             or å kjøre CNN endre find_move i NEAT_search.py
             """
@@ -90,12 +91,13 @@ def run(config, gen, board_size, ship_sizes, strategy, chromosome):
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
     config_path = os.path.join(local_dir, "config.txt")
+
     config = neat.Config(
-        neat.DefaultGenome,
+        CNNGenome,  # Use custom genome class
         neat.DefaultReproduction,
         neat.DefaultSpeciesSet,
         neat.DefaultStagnation,
-        config_path,
+        config_path
     )
     run(config=config, gen=20, board_size=5, ship_sizes=[1, 2, 1],
         strategy="custom", chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)])
