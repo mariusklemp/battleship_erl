@@ -17,7 +17,6 @@ class NEAT_Manager:
         self.strategy = strategy
         self.chromosome = chromosome
 
-
     def simulate_game(self, net):
         """Simulate a Battleship game and return the move count."""
 
@@ -55,7 +54,7 @@ class NEAT_Manager:
 
         # Update the genome fitness
         avg_moves = sum_move_count / range_count
-        genome.fitness += self.board_size ** 2 - avg_moves
+        genome.fitness += self.board_size**2 - avg_moves
         print("Average movecount: ", avg_moves)
 
     def eval_genomes(self, genomes, config):
@@ -63,8 +62,10 @@ class NEAT_Manager:
         for i, (genome_id, genome) in enumerate(genomes):
             print(f"Genome {i} with ID: {genome_id}")
             genome.fitness = 0
-            net = neat.nn.FeedForwardNetwork.create(genome, config)
-            #net = DeepNEATCNN(genome=genome, board_size=self.board_size)  # Creates the CNN instance
+            # net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = DeepNEATCNN(
+                genome=genome, board_size=self.board_size
+            )  # Creates the CNN instance
             """
             or å kjøre CNN endre find_move i NEAT_search.py
             """
@@ -84,8 +85,13 @@ def run(config, gen, board_size, ship_sizes, strategy, chromosome):
     manager = NEAT_Manager(board_size, ship_sizes, strategy, chromosome, config)
 
     winner = p.run(manager.eval_genomes, gen)
-    print("\nBest genome:\n{!s}".format(winner))
+    print("Run completed")
+    print("\nBest genome details:")
+    print("Fitness: {}".format(winner.fitness))
+
+    # Visualize the winner genome
     visualize.plot_stats(stats, ylog=False, view=True)
+    print("Plot stats completed")
 
 
 if __name__ == "__main__":
@@ -97,7 +103,14 @@ if __name__ == "__main__":
         neat.DefaultReproduction,
         neat.DefaultSpeciesSet,
         neat.DefaultStagnation,
-        config_path
+        config_path,
     )
-    run(config=config, gen=20, board_size=5, ship_sizes=[1, 2, 1],
-        strategy="custom", chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)])
+    print("Config created")
+    run(
+        config=config,
+        gen=10,
+        board_size=5,
+        ship_sizes=[1, 2, 1],
+        strategy="custom",
+        chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)],
+    )
