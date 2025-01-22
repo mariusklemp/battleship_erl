@@ -10,11 +10,21 @@ from strategies.search.Deep_NEAT import DeepNEATCNN
 
 
 class NEAT_Manager:
-    def __init__(self, board_size, ship_sizes, strategy, chromosome, config):
+    def __init__(
+        self,
+        board_size,
+        ship_sizes,
+        strategy_placement,
+        strategy_search,
+        chromosome,
+        config,
+    ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
         self.config = config
-        self.strategy = strategy
+        self.strategy_placement = strategy_placement
+        self.strategy_search = strategy_search
+
         self.chromosome = chromosome
 
     def simulate_game(self, net):
@@ -23,17 +33,19 @@ class NEAT_Manager:
         search_agent = SearchAgent(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
-            strategy="neat",
+            strategy=self.strategy_search,
             net=net,
         )
 
+        placement_agent = PlacementAgent(
+            board_size=self.board_size,
+            ship_sizes=self.ship_sizes,
+            strategy=self.strategy_placement,
+            chromosome=self.chromosome,
+        )
+
         game = Game(
-            placing=PlacementAgent(
-                board_size=self.board_size,
-                ship_sizes=self.ship_sizes,
-                strategy=self.strategy,
-                chromosome=self.chromosome,
-            ),
+            placing=placement_agent,
             search=search_agent,
         )
 
@@ -66,14 +78,20 @@ class NEAT_Manager:
             net = DeepNEATCNN(
                 genome=genome, board_size=self.board_size
             )  # Creates the CNN instance
+            # net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = DeepNEATCNN(
+                genome=genome, board_size=self.board_size
+            )  # Creates the CNN instance
             """
-            or å kjøre CNN endre find_move i NEAT_search.py
+            For å kjøre CNN endre find_move i NEAT_search.py
             """
             self.evaluate(genome, net)
             print("Fitness: ", genome.fitness)
 
 
-def run(config, gen, board_size, ship_sizes, strategy, chromosome):
+def run(
+    config, gen, board_size, ship_sizes, strategy_placement, strategy_search, chromosome
+):
     # Searching Agent
     # p = neat.Checkpointer.restore_checkpoint("neat-checkpoint-0")
     p = neat.Population(config)
@@ -82,7 +100,9 @@ def run(config, gen, board_size, ship_sizes, strategy, chromosome):
     p.add_reporter(stats)
     # p.add_reporter(neat.Checkpointer(10))
 
-    manager = NEAT_Manager(board_size, ship_sizes, strategy, chromosome, config)
+    manager = NEAT_Manager(
+        board_size, ship_sizes, strategy_placement, strategy_search, chromosome, config
+    )
 
     winner = p.run(manager.eval_genomes, gen)
     print("Run completed")
@@ -105,12 +125,12 @@ if __name__ == "__main__":
         neat.DefaultStagnation,
         config_path,
     )
-    print("Config created")
     run(
         config=config,
-        gen=10,
+        gen=20,
         board_size=5,
         ship_sizes=[1, 2, 1],
-        strategy="custom",
+        strategy_placement="custom",
+        strategy_search="neat",
         chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)],
     )

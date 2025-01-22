@@ -2,6 +2,7 @@ import streamlit as st
 
 from game_logic.game_manager import Game
 
+
 class GUI:
     def __init__(self, board_size):
         self.board_size = board_size
@@ -50,7 +51,6 @@ class GUI:
                         index = row * self.board_size + col
                         game.play_turn(index)
 
-
         # Game over message
         if game.game_over:
             st.success(f"Game Over! Player {game.result} wins!")
@@ -58,6 +58,7 @@ class GUI:
         # Restart button
         if st.button("Restart Game"):
             game.reset()
+
 
 # Example usage:
 game = Game(board_size=10, sizes=[5, 4, 3, 3, 2], player1_search_strategy="random", player2_search_strategy="random",
