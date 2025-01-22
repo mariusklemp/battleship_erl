@@ -78,10 +78,6 @@ class NEAT_Manager:
             net = DeepNEATCNN(
                 genome=genome, board_size=self.board_size
             )  # Creates the CNN instance
-            # net = neat.nn.FeedForwardNetwork.create(genome, config)
-            net = DeepNEATCNN(
-                genome=genome, board_size=self.board_size
-            )  # Creates the CNN instance
             """
             For å kjøre CNN endre find_move i NEAT_search.py
             """
@@ -111,7 +107,6 @@ def run(
 
     # Visualize the winner genome
     visualize.plot_stats(stats, ylog=False, view=True)
-    print("Plot stats completed")
 
 
 if __name__ == "__main__":
