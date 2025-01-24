@@ -96,7 +96,7 @@ class GameManager:
         # If the ship is sunk, update the search board
         if sunk:
             for i in hit_ship:
-                self.board[3][i] = 1
+                board[3][i] = 1
 
     def check_game_over(self):
         all_sunk = True
@@ -111,3 +111,21 @@ class GameManager:
             if state.board[0][i] == 0:
                 all_sunk = False
         return all_sunk
+
+    # Show - for unknown, X for hit, O for miss, S for sunk
+    def show_board(self, state):
+        for i in range(self.size):
+            row = ""
+            for j in range(self.size):
+                index = i * self.size + j
+                if state.board[0][index] == 0:
+                    row += "- "
+                elif state.board[3][index] == 1:
+                    row += "S "
+                elif state.board[1][index] == 1:
+                    row += "X "
+                elif state.board[2][index] == 1:
+                    row += "O "
+
+            print(row)
+        print("\n")

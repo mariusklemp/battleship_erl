@@ -37,7 +37,7 @@ class NEAT_search(Strategy):
         probabilities_np = probabilities.detach().numpy()
 
         # Choose a move based on the probability distribution
-        move = np.random.choice(state.board_size**2, p=probabilities_np)
+        move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
 
         return move
 

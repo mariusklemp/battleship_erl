@@ -53,11 +53,12 @@ class NEAT_Manager:
 
         current_state = game_manager.initial_state(placing_agent)
 
-        # game.placing.show_ships()
+        game_manager.placing.show_ships()
 
         while not game_manager.is_terminal(current_state):
             move = search_agent.strategy.find_move(current_state)
             current_state = game_manager.next_state(current_state, move)
+            game_manager.show_board(current_state)
 
         return current_state.move_count
 
