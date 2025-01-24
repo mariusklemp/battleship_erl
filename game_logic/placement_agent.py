@@ -85,7 +85,9 @@ class PlacementAgent:
                 indexes[position] = f"{color}X{Style.RESET_ALL}"
 
         # Print each row with colored ship indicators
-        # for row in range(self.board_size):
-        #     print(" ".join(indexes[row * self.board_size:(row + 1) * self.board_size]))
+        for row in range(self.board_size):
+            print(
+                " ".join(indexes[row * self.board_size : (row + 1) * self.board_size])
+            )
 
-        # print("\n")
+        print("\n")
