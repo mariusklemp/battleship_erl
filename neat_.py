@@ -41,17 +41,10 @@ class NEAT_Manager:
         placement_agent = PlacementAgent(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
-            strategy=self.strategy_placement,
-            chromosome=self.chromosome,
-        )
-
-        placing_agent = PlacementAgent(
-            board_size=self.board_size,
-            ship_sizes=self.ship_sizes,
             strategy="random",
         )
 
-        current_state = game_manager.initial_state(placing_agent)
+        current_state = game_manager.initial_state(placement_agent)
 
         game_manager.placing.show_ships()
 
