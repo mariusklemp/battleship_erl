@@ -77,24 +77,20 @@ class NEAT_Manager:
 
         genome.fitness += self.board_size**2 - sum_move_count / 5
 
-
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
-        board_size = 5
-        ship_sizes = [1, 2, 3]
-        manager = NEAT_Manager(board_size=board_size, ship_sizes=ship_sizes, config=config)
-        game_manager = GameManager(size=board_size)
+        game_manager = GameManager(size=self.board_size)
         # mcts = MCTS(game_manager)
         for i, (genome_id, genome) in enumerate(genomes):
             # print(f"Genome {i} with ID: {genome_id}")
-                genome.fitness = 0
-                # net = neat.nn.FeedForwardNetwork.create(genome, config)
-                net = DeepNEATCNN(
-                    genome=genome, board_size=self.board_size, config=config
-                )  # Creates the CNN instance
-                """
-                For å kjøre CNN endre find_move i NEAT_search.py
-                """
+            genome.fitness = 0
+            # net = neat.nn.FeedForwardNetwork.create(genome, config)
+            net = DeepNEATCNN(
+                genome=genome, board_size=self.board_size, config=config
+            )  # Creates the CNN instance
+            """
+            For å kjøre CNN endre find_move i NEAT_search.py
+            """
             self.evaluate(game_manager, genome, net)
             print("Fitness: ", genome.fitness)
 
