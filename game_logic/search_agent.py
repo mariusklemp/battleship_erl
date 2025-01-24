@@ -8,8 +8,8 @@ from strategies.search.random_strategy import RandomStrategy
 class SearchAgent:
     def __init__(self, board_size, ship_sizes, strategy, weights=None, net=None):
         self.board_size = board_size
-        self.ship_sizes = ship_sizes
-        self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
+        # self.ship_sizes = ship_sizes
+        # self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
         self.strategy = self.init_strategy(strategy, weights, net)
         self.move_count = 0
 
@@ -24,7 +24,3 @@ class SearchAgent:
             return NNSearch(self, weights)
         elif strategy == "neat":
             return NEAT_search(self, net)
-
-    def reset(self):
-        self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
-        self.move_count = 0

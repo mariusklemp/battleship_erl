@@ -1,9 +1,10 @@
 import os
 import neat
 
-from game_logic.game_search_placing import Game
+from game_logic.game_search_placing import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
+from ai.mcts import MCTS
 import visualize
 
 
@@ -13,7 +14,7 @@ class NEAT_Manager:
         self.ship_sizes = ship_sizes
         self.config = config
 
-    def simulate_game(self, net):
+    def simulate_game(self, game_manager, net):
         """Simulate a Battleship game and return the move count."""
 
         search_agent = SearchAgent(
@@ -23,25 +24,26 @@ class NEAT_Manager:
             net=net,
         )
 
-        game = Game(
-            placing=PlacementAgent(
-                board_size=self.board_size,
-                ship_sizes=self.ship_sizes,
-                strategy="random",
-            ),
-            search=search_agent,
+        placing_agent = PlacementAgent(
+            board_size=self.board_size,
+            ship_sizes=self.ship_sizes,
+            strategy="random",
         )
 
-        while not game.game_over:
-            game.play_turn()
-        return game.move_count
+        current_state = game_manager.initial_state(placing_agent)
 
-    def evaluate(self, genome, net):
+        while not game_manager.is_terminal(current_state):
+            move = search_agent.strategy.find_move(current_state)
+            current_state = game_manager.next_state(current_state, move)
+
+        return current_state.move_count
+
+    def evaluate(self, game_manager, genome, net):
         """Evaluate the genome fitness."""
         sum_move_count = 0
         for i in range(5):
             # Play the search against a random placing agent 5 times
-            move_count = self.simulate_game(net)
+            move_count = self.simulate_game(game_manager, net)
             sum_move_count += move_count
 
         # Update the genome fitness
@@ -52,12 +54,16 @@ class NEAT_Manager:
 
 def eval_genomes(genomes, config):
     """Evaluate the fitness of each genome in the population."""
-    manager = NEAT_Manager(board_size=5, ship_sizes=[1, 2, 3], config=config)
+    board_size = 5
+    ship_sizes = [1, 2, 3]
+    manager = NEAT_Manager(board_size=board_size, ship_sizes=ship_sizes, config=config)
+    game_manager = GameManager(size=board_size)
+    # mcts = MCTS(game_manager)
     for i, (genome_id, genome) in enumerate(genomes):
         print(f"Genome {i} with ID: {genome_id}")
         genome.fitness = 0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
-        manager.evaluate(genome, net)
+        manager.evaluate(game_manager, genome, net)
         print("Fitness: ", genome.fitness)
 
 

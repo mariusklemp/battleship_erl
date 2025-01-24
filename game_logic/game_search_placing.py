@@ -1,21 +1,47 @@
+class GameState:
+    def __init__(self, board, move_count):
+        self.board = board
+        self.move_count = move_count
 
-from game_logic.placement_agent import PlacementAgent
-from game_logic.search_agent import SearchAgent
 
-
-class Game:
+class GameManager:
     """
     Class to manage the game state between a placing agent and a search agent
     Counts the number of moves and checks if the game is over
     """
-    def __init__(self, placing, search):
-        self.placing = placing
-        self.searching = search
+
+    def __init__(self, size):
+        self.size = size
+        self.board = [[0 for _ in range(self.size**2)] for _ in range(4)]
         self.game_over = False
         self.move_count = 0
+        self.placing = None
+
+    def initial_state(self, placing):
+        # Update the board with the ships
+        self.placing = placing
+        return GameState(self.board, self.move_count)
+
+    def get_legal_moves(self):
+        legal_moves = []
+        for i in range(len(self.board[0])):
+            if self.board[0][i] == 0:
+                legal_moves.append(i)
+        return legal_moves
+
+    def next_state(self, state, move):
+        new_board = [row[:] for row in state.board]
+        new_move_count = state.move_count
+        new_board[0][move] = 1
+        if move in self.placing.indexes:
+            new_board[1][move] = 1
+            self.check_ship_sunk(move, new_board)
+        else:
+            new_board[2][move] = 1
+        new_move_count += 1
+        return GameState(new_board, new_move_count)
 
     def play_turn(self):
-
         move = self.searching.strategy.find_move()
 
         # Update state based on the selected action
@@ -39,20 +65,20 @@ class Game:
 
         if move is None:
             return False
-        if self.searching.board[0][move] != 0:
+        if self.board[0][move] != 0:
             return False
         return True
 
     def make_move(self, move):
 
-        self.searching.board[0][move] = 1  # Not unknown
+        self.board[0][move] = 1  # Not unknown
         if move in self.placing.indexes:
-            self.searching.board[1][move] = 1  # Hit
+            self.board[1][move] = 1  # Hit
             self.check_ship_sunk(move)
         else:
-            self.searching.board[2][move] = 1  # Miss
+            self.board[2][move] = 1  # Miss
 
-    def check_ship_sunk(self, move):
+    def check_ship_sunk(self, move, board):
         hit_ship = None
         sunk = True
 
@@ -63,22 +89,25 @@ class Game:
 
         # Check if the ship is sunk
         for i in hit_ship:
-            if self.searching.board[0][i] == 0:
+            if board[0][i] == 0:
                 sunk = False
                 break
 
         # If the ship is sunk, update the search board
         if sunk:
             for i in hit_ship:
-                self.searching.board[3][i] = 1
+                self.board[3][i] = 1
 
     def check_game_over(self):
         all_sunk = True
         for i in self.placing.indexes:
-            if self.searching.board[0][i] == 0:
+            if self.board[0][i] == 0:
                 all_sunk = False
         self.game_over = all_sunk
 
-
-
-
+    def is_terminal(self, state):
+        all_sunk = True
+        for i in self.placing.indexes:
+            if state.board[0][i] == 0:
+                all_sunk = False
+        return all_sunk
