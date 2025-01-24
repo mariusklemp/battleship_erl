@@ -13,9 +13,9 @@ class Ship:
         1: "vertical",
     }
 
-    def __init__(self, size, board_size, row=None, col=None, direction=None):
+    def __init__(self, size, board_size, col=None, row=None, direction=None):
         self.board_size = board_size
-        self.row, self.col = row, col
+        self.col, self.row, = col, row
         self.size = size
         self.direction = direction
         self.indexes = self.compute_indexes()

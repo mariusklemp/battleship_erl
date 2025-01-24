@@ -7,7 +7,7 @@ pop_size              = 50
 reset_on_extinction   = False
 no_fitness_termination = True
 
-[DefaultGenome]
+[CNNGenome]
 # node activation options
 activation_default      = relu
 activation_mutate_rate  = 1.0
@@ -51,6 +51,7 @@ num_hidden              = 10
 num_inputs              = 100
 num_outputs             = 25
 
+
 # node response options
 response_init_mean      = 1.0
 response_init_stdev     = 0.0
@@ -74,7 +75,7 @@ compatibility_threshold = 3.0
 
 [DefaultStagnation]
 species_fitness_func = max
-max_stagnation       = 20
+max_stagnation       = 15
 species_elitism      = 2
 
 [DefaultReproduction]
