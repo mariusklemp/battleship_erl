@@ -49,7 +49,7 @@ class NEAT_Manager:
             search=search_agent,
         )
 
-        game.placing.show_ships()
+        # game.placing.show_ships()
 
         while not game.game_over:
             game.play_turn()
@@ -67,22 +67,22 @@ class NEAT_Manager:
         # Update the genome fitness
         avg_moves = sum_move_count / range_count
         genome.fitness += self.board_size**2 - avg_moves
-        print("Average movecount: ", avg_moves)
+        # print("Average movecount: ", avg_moves)
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
         for i, (genome_id, genome) in enumerate(genomes):
-            print(f"Genome {i} with ID: {genome_id}")
+            # print(f"Genome {i} with ID: {genome_id}")
             genome.fitness = 0
             # net = neat.nn.FeedForwardNetwork.create(genome, config)
             net = DeepNEATCNN(
-                genome=genome, board_size=self.board_size
+                genome=genome, board_size=self.board_size, config=config
             )  # Creates the CNN instance
             """
             For å kjøre CNN endre find_move i NEAT_search.py
             """
             self.evaluate(genome, net)
-            print("Fitness: ", genome.fitness)
+            # print("Fitness: ", genome.fitness)
 
 
 def run(

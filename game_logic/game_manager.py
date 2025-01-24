@@ -10,16 +10,31 @@ class Game:
     """
     Class to manage the game state between two players
     """
-    def __init__(self, board_size, sizes, player1_search_strategy, player1_placing_strategy, player2_search_strategy,
-                 player2_placing_strategy):
-        self.player1Placement = PlacementAgent(board_size=board_size, ship_sizes=sizes, strategy=player1_placing_strategy)
-        self.player1Search = SearchAgent(board_size=board_size, ship_sizes=sizes, strategy=player1_search_strategy)
-        self.player2Placement = PlacementAgent(board_size=board_size, ship_sizes=sizes, strategy=player2_placing_strategy)
-        self.player2Search = SearchAgent(board_size=board_size, ship_sizes=sizes, strategy=player2_search_strategy)
+
+    def __init__(
+        self,
+        board_size,
+        sizes,
+        player1_search_strategy,
+        player1_placing_strategy,
+        player2_search_strategy,
+        player2_placing_strategy,
+    ):
+        self.player1Placement = PlacementAgent(
+            board_size=board_size, ship_sizes=sizes, strategy=player1_placing_strategy
+        )
+        self.player1Search = SearchAgent(
+            board_size=board_size, ship_sizes=sizes, strategy=player1_search_strategy
+        )
+        self.player2Placement = PlacementAgent(
+            board_size=board_size, ship_sizes=sizes, strategy=player2_placing_strategy
+        )
+        self.player2Search = SearchAgent(
+            board_size=board_size, ship_sizes=sizes, strategy=player2_search_strategy
+        )
         self.player1_turn = True
         self.game_over = False
         self.result = None
-    
 
     def play_turn(self, gui=None):
         move = None
@@ -53,7 +68,7 @@ class Game:
         except AssertionError as e:
             return False
 
-        print(self.player1Search.board)
+        # print(self.player1Search.board)
 
         # Check if all ships are sunk
         self.check_game_over()
