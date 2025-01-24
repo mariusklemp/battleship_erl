@@ -22,18 +22,21 @@ class GameManager:
         self.placing = placing
         return GameState(self.board, self.move_count)
 
-    def get_legal_moves(self):
+    def get_legal_moves(self, state):
         legal_moves = []
-        for i in range(len(self.board[0])):
-            if self.board[0][i] == 0:
+        for i in range(self.size**2):
+            if state.board[0][i] == 0:
                 legal_moves.append(i)
+
+        if len(legal_moves) == 0:
+            print("No legal moves")
         return legal_moves
 
-    def next_state(self, state, move):
+    def next_state(self, state, move, placing):
         new_board = [row[:] for row in state.board]
         new_move_count = state.move_count
         new_board[0][move] = 1
-        if move in self.placing.indexes:
+        if move in placing.indexes:
             new_board[1][move] = 1
             self.check_ship_sunk(move, new_board)
         else:

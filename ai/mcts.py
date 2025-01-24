@@ -10,7 +10,7 @@ class Node:
         self.parent = parent
         self.move = move
         self.children = []
-        self.wins = 0
+        self.fitness = 0
         self.visits = 0
         self.untried_moves = (
             untried_moves  # To be initialized based on the game manager
@@ -21,7 +21,7 @@ class Node:
 
     def update(self, result):
         self.visits += 1
-        self.wins += result
+        self.fitness += result
 
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
@@ -29,17 +29,11 @@ class Node:
     def best_child(self, c_param=1.4):
         best_score = -float("inf")
         best_moves = []
-        current_player = 0
         for child_node in self.children:
-            if self.state.current_player == "red":
-                current_player = 1
-            else:
-                current_player = -1
 
             # Calculate score using UCB1 formula
-            move_score = (
-                current_player * child_node.wins / child_node.visits
-                + c_param * math.sqrt(math.log(self.visits / child_node.visits))
+            move_score = child_node.fitness / child_node.visits + c_param * math.sqrt(
+                math.log(self.visits / child_node.visits)
             )
 
             if move_score > best_score:
@@ -66,15 +60,15 @@ class Node:
         return distribution
 
     def value(self):
-        return self.wins / self.visits
+        return self.fitness / self.visits
 
 
 class MCTS:
-    def __init__(self, game_manager, actor):
+    def __init__(self, game_manager):
         self.game_manager = game_manager
         self.root_node = None
         self.current_node = None
-        self.actor = actor
+        self.actor = None
 
     def select_node(self, node):
         while not node.is_fully_expanded():
@@ -89,9 +83,10 @@ class MCTS:
         return node
 
     def expand_node(self, node):
+        placing = self.generate_random_placing()
         move = random.choice(node.untried_moves)
         node.untried_moves.remove(move)
-        next_state = self.game_manager.next_state(node.state, move)
+        next_state = self.game_manager.next_state(node.state, move, placing)
         legal_moves = self.game_manager.get_legal_moves(next_state)
         child_node = Node(next_state, parent=node, move=move, untried_moves=legal_moves)
         node.add_child(child_node)
@@ -99,24 +94,24 @@ class MCTS:
 
     def simulate(self, node):
         current_state = node.state
+        placing = self.generate_random_placing()
         while not self.game_manager.is_terminal(current_state):
-            best_move = self.actor.default_policy(current_state)
+            best_move = self.actor.strategy.find_move(current_state)
             # best_move = random.choice(self.game_manager.get_legal_moves(current_state))
-            current_state = self.game_manager.next_state(current_state, best_move)
-        return self.game_manager.get_winner(current_state)
+            current_state = self.game_manager.next_state(
+                current_state, best_move, placing
+            )
+        return current_state.move_count
 
-    def backpropagate(self, node, winner):
+    def backpropagate(self, node, move_count):
         while node is not None:
             node.visits += 1
-
-            if winner == "red":
-                node.wins += 1
-            elif winner == "blue":
-                node.wins -= 1
+            node.fitness += self.actor.board_size**2 - move_count
 
             node = node.parent
 
-    def run(self, current_state, simulations_number=1000):
+    def run(self, current_state, actor, simulations_number=1000):
+        self.actor = actor
         # Check if we're starting a new game or continuing from an existing state
         if self.root_node is None:
             # Starting a new game
@@ -158,10 +153,7 @@ class MCTS:
         return self.current_node.best_child()
 
     def equal(self, state1, state2):
-        return (
-            state1.board == state2.board
-            and state1.current_player == state2.current_player
-        )
+        return state1.board == state2.board
 
     def print_tree(self, node=None, indent="", last=True):
         if node is None:
@@ -175,9 +167,46 @@ class MCTS:
             print("├─", end="")
             indent += "| "
 
-        print(
-            f"Prev Move: {node.move}, Wins/Visits: {node.wins}/{node.visits}, Player: {node.state.current_player}"
-        )
+        print(f"Prev Move: {node.move}, fitness/Visits: {node.fitness}/{node.visits}")
 
         for i, child in enumerate(node.children):
             self.print_tree(child, indent, i == len(node.children) - 1)
+
+    def generate_random_placing(self):
+        # Initialize a blank board
+        board_size = self.game_manager.size
+        board = np.zeros((board_size, board_size), dtype=int)
+
+        ship_sizes = self.game_manager.placing.ship_sizes  # Sizes of ships to place
+        ships = []
+
+        for ship_size in ship_sizes:
+            placed = False
+            while not placed:
+                # Randomly choose orientation (horizontal or vertical)
+                orientation = random.choice(["horizontal", "vertical"])
+
+                if orientation == "horizontal":
+                    row = random.randint(0, board_size - 1)
+                    col = random.randint(0, board_size - ship_size)
+                    indexes = [(row, col + i) for i in range(ship_size)]
+                else:
+                    row = random.randint(0, board_size - ship_size)
+                    col = random.randint(0, board_size - 1)
+                    indexes = [(row + i, col) for i in range(ship_size)]
+
+                # Check if the placement is valid (no overlap)
+                if all(board[x][y] == 0 for x, y in indexes):
+                    # Mark the positions on the board
+                    for x, y in indexes:
+                        board[x][y] = 1
+
+                    ships.append(indexes)
+                    placed = True
+
+        # Create a placement object with the indexes of the ships
+        class ShadowPlacing:
+            def __init__(self, indexes):
+                self.indexes = [i for ship in indexes for i in ship]
+
+        return ShadowPlacing(ships)

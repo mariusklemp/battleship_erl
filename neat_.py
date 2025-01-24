@@ -19,6 +19,8 @@ class NEAT_Manager:
         strategy_search,
         chromosome,
         config,
+        game_manager,
+        mcts,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -27,6 +29,8 @@ class NEAT_Manager:
         self.strategy_search = strategy_search
 
         self.chromosome = chromosome
+        self.game_manager = game_manager
+        self.mcts = mcts
 
     def simulate_game(self, game_manager, net):
         """Simulate a Battleship game and return the move count."""
@@ -46,12 +50,18 @@ class NEAT_Manager:
 
         current_state = game_manager.initial_state(placement_agent)
 
-        game_manager.placing.show_ships()
+        # game_manager.placing.show_ships()
 
         while not game_manager.is_terminal(current_state):
-            move = search_agent.strategy.find_move(current_state)
-            current_state = game_manager.next_state(current_state, move)
-            game_manager.show_board(current_state)
+            best_child = self.mcts.run(current_state, search_agent)
+            move = best_child.move
+            if move is None:
+                break
+            # move = search_agent.strategy.find_move(current_state)
+            current_state = game_manager.next_state(
+                current_state, move, game_manager.placing
+            )
+            # game_manager.show_board(current_state)
 
         return current_state.move_count
 
@@ -69,11 +79,9 @@ class NEAT_Manager:
         genome.fitness += self.board_size**2 - avg_moves
         # print("Average movecount: ", avg_moves)
 
-        genome.fitness += self.board_size**2 - sum_move_count / 5
-
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
-        game_manager = GameManager(size=self.board_size)
+
         # mcts = MCTS(game_manager)
         for i, (genome_id, genome) in enumerate(genomes):
             # print(f"Genome {i} with ID: {genome_id}")
@@ -85,7 +93,7 @@ class NEAT_Manager:
             """
             For å kjøre CNN endre find_move i NEAT_search.py
             """
-            self.evaluate(game_manager, genome, net)
+            self.evaluate(self.game_manager, genome, net)
             print("Fitness: ", genome.fitness)
 
 
@@ -100,8 +108,18 @@ def run(
     p.add_reporter(stats)
     # p.add_reporter(neat.Checkpointer(10))
 
+    game_manager = GameManager(size=board_size)
+    mcts = MCTS(game_manager)
+
     manager = NEAT_Manager(
-        board_size, ship_sizes, strategy_placement, strategy_search, chromosome, config
+        board_size,
+        ship_sizes,
+        strategy_placement,
+        strategy_search,
+        chromosome,
+        config,
+        game_manager,
+        mcts,
     )
 
     winner = p.run(manager.eval_genomes, gen)
@@ -126,7 +144,7 @@ if __name__ == "__main__":
     )
     run(
         config=config,
-        gen=20,
+        gen=10,
         board_size=5,
         ship_sizes=[1, 2, 1],
         strategy_placement="custom",
