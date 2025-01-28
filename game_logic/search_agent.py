@@ -1,4 +1,5 @@
-from strategies.search.Deep_NEAT import DeepNEATCNN
+from colorama import Fore, Style
+
 from strategies.search.NNSearch import NNSearch
 from strategies.search.NEAT_search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
@@ -29,3 +30,23 @@ class SearchAgent:
     def reset(self):
         self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
         self.move_count = 0
+
+    def print_board(self):
+        board_state = self.board
+
+        for row in range(self.board_size):
+            row_str = ""
+            for col in range(self.board_size):
+                # Check if the ship is sunk
+                if board_state[3][row * self.board_size + col] == 1:
+                    row_str += f"{Fore.RED} S {Style.RESET_ALL}| "  # Sunk
+                # If not sunk, check hit and miss layers
+                elif board_state[1][row * self.board_size + col] == 1:
+                    row_str += f"{Fore.YELLOW} X {Style.RESET_ALL}| "  # Hit
+                elif board_state[2][row * self.board_size + col] == 1:
+                    row_str += f"{Fore.BLUE} - {Style.RESET_ALL}| "  # Miss
+                else:
+                    row_str += f"   | "  # Unknown (default)
+
+            print(row_str)
+            print("-" * (self.board_size * 4))  # Add separators

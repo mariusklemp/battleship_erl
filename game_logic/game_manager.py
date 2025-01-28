@@ -12,13 +12,13 @@ class Game:
     """
 
     def __init__(
-        self,
-        board_size,
-        sizes,
-        player1_search_strategy,
-        player1_placing_strategy,
-        player2_search_strategy,
-        player2_placing_strategy,
+            self,
+            board_size,
+            sizes,
+            player1_search_strategy,
+            player1_placing_strategy,
+            player2_search_strategy,
+            player2_placing_strategy,
     ):
         self.player1Placement = PlacementAgent(
             board_size=board_size, ship_sizes=sizes, strategy=player1_placing_strategy

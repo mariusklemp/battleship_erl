@@ -1,12 +1,12 @@
 import os
 import neat
 
-from customGenomes import CNNGenome
+from CNN_genome import CNNGenome
 from game_logic.game_search_placing import Game
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 import visualize
-from strategies.search.Deep_NEAT import DeepNEATCNN
+from convolutional_neural_network import ConvolutionalNeuralNetwork
 
 
 class NEAT_Manager:
@@ -44,15 +44,16 @@ class NEAT_Manager:
             chromosome=self.chromosome,
         )
 
+
         game = Game(
             placing=placement_agent,
             search=search_agent,
         )
-
-        # game.placing.show_ships()
+        #game.placing.show_ships()
 
         while not game.game_over:
             game.play_turn()
+            # game.searching.print_board()
         return game.move_count
 
     def evaluate(self, genome, net):
@@ -67,23 +68,15 @@ class NEAT_Manager:
         # Update the genome fitness
         avg_moves = sum_move_count / range_count
         genome.fitness += self.board_size**2 - avg_moves
-        # print("Average movecount: ", avg_moves)
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
         for i, (genome_id, genome) in enumerate(genomes):
-            # print(f"Genome {i} with ID: {genome_id}")
             genome.fitness = 0
             # net = neat.nn.FeedForwardNetwork.create(genome, config)
-            net = DeepNEATCNN(
-                genome=genome, board_size=self.board_size, config=config
-            )  # Creates the CNN instance
-            """
-            For å kjøre CNN endre find_move i NEAT_search.py
-            """
+            net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
             self.evaluate(genome, net)
             # print("Fitness: ", genome.fitness)
-
 
 def run(
     config, gen, board_size, ship_sizes, strategy_placement, strategy_search, chromosome
@@ -100,10 +93,27 @@ def run(
         board_size, ship_sizes, strategy_placement, strategy_search, chromosome, config
     )
 
+    print("Config object as dictionary:")
+    print(config.__dict__)
+
+    # Print the first 50 individuals in the population
+    for i, genome in enumerate(p.population.values()):
+        print(f"Genome ID: {genome.key}, Fitness: {genome.fitness}")
+        print(f"Layer Configuration:")
+        for layer in genome.layer_config:
+            print(f"  {layer}")
+        print("-" * 40)  # Separator between genomes
+
     winner = p.run(manager.eval_genomes, gen)
-    print("Run completed")
+
+    # Print the winner's details
     print("\nBest genome details:")
-    print("Fitness: {}".format(winner.fitness))
+    print(f"Genome ID: {winner.key}")
+    print(f"Fitness: {winner.fitness}")
+    print(f"Layer Configuration:")
+    for layer in winner.layer_config:
+        print(f"  {layer}")
+    print("-" * 40)  # Separator for clarity
 
     # Visualize the winner genome
     visualize.plot_stats(stats, ylog=False, view=True)
@@ -122,10 +132,10 @@ if __name__ == "__main__":
     )
     run(
         config=config,
-        gen=20,
+        gen=30,
         board_size=5,
-        ship_sizes=[1, 2, 1],
+        ship_sizes=[1, 2, 4],
         strategy_placement="custom",
         strategy_search="neat",
-        chromosome=[(0, 0, 0), (2, 1, 1), (4, 0, 1)],
+        chromosome=[(0, 0, 0), (1, 2, 1), (4, 0, 1)],
     )
