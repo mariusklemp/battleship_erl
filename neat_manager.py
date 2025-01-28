@@ -5,6 +5,7 @@ from CNN_genome import CNNGenome
 from game_logic.game_search_placing import Game
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
+from ai.mcts import MCTS
 import visualize
 from convolutional_neural_network import ConvolutionalNeuralNetwork
 
@@ -18,6 +19,8 @@ class NEAT_Manager:
         strategy_search,
         chromosome,
         config,
+        game_manager,
+        mcts,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -26,8 +29,10 @@ class NEAT_Manager:
         self.strategy_search = strategy_search
 
         self.chromosome = chromosome
+        self.game_manager = game_manager
+        self.mcts = mcts
 
-    def simulate_game(self, net):
+    def simulate_game(self, game_manager, net):
         """Simulate a Battleship game and return the move count."""
 
         search_agent = SearchAgent(
@@ -40,29 +45,33 @@ class NEAT_Manager:
         placement_agent = PlacementAgent(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
-            strategy=self.strategy_placement,
-            chromosome=self.chromosome,
+            strategy="random",
         )
 
+        current_state = game_manager.initial_state(placement_agent)
 
-        game = Game(
-            placing=placement_agent,
-            search=search_agent,
-        )
-        #game.placing.show_ships()
+        # game_manager.placing.show_ships()
 
-        while not game.game_over:
-            game.play_turn()
-            # game.searching.print_board()
-        return game.move_count
+        while not game_manager.is_terminal(current_state):
+            best_child = self.mcts.run(current_state, search_agent)
+            move = best_child.move
+            if move is None:
+                break
+            # move = search_agent.strategy.find_move(current_state)
+            current_state = game_manager.next_state(
+                current_state, move, game_manager.placing
+            )
+            # game_manager.show_board(current_state)
 
-    def evaluate(self, genome, net):
+        return current_state.move_count
+
+    def evaluate(self, game_manager, genome, net):
         """Evaluate the genome fitness."""
         sum_move_count = 0
         range_count = 5
         for i in range(range_count):
             # Play the search against a random placing agent 5 times
-            move_count = self.simulate_game(net)
+            move_count = self.simulate_game(game_manager, net)
             sum_move_count += move_count
 
         # Update the genome fitness
@@ -71,6 +80,8 @@ class NEAT_Manager:
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
+
+        # mcts = MCTS(game_manager)
         for i, (genome_id, genome) in enumerate(genomes):
             genome.fitness = 0
             # net = neat.nn.FeedForwardNetwork.create(genome, config)
@@ -89,8 +100,18 @@ def run(
     p.add_reporter(stats)
     # p.add_reporter(neat.Checkpointer(10))
 
+    game_manager = GameManager(size=board_size)
+    mcts = MCTS(game_manager)
+
     manager = NEAT_Manager(
-        board_size, ship_sizes, strategy_placement, strategy_search, chromosome, config
+        board_size,
+        ship_sizes,
+        strategy_placement,
+        strategy_search,
+        chromosome,
+        config,
+        game_manager,
+        mcts,
     )
 
     print("Config object as dictionary:")
