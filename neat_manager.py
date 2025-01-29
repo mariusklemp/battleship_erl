@@ -1,8 +1,10 @@
 import os
 import neat
+import tqdm
+from tqdm import tqdm
 
 from CNN_genome import CNNGenome
-from game_logic.game_search_placing import Game
+from game_logic.game_search_placing import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 from ai.mcts import MCTS
@@ -20,7 +22,7 @@ class NEAT_Manager:
         chromosome,
         config,
         game_manager,
-        mcts,
+        mcts=None,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -34,7 +36,6 @@ class NEAT_Manager:
 
     def simulate_game(self, game_manager, net):
         """Simulate a Battleship game and return the move count."""
-
         search_agent = SearchAgent(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
@@ -50,18 +51,19 @@ class NEAT_Manager:
 
         current_state = game_manager.initial_state(placement_agent)
 
-        # game_manager.placing.show_ships()
-
         while not game_manager.is_terminal(current_state):
-            best_child = self.mcts.run(current_state, search_agent)
-            move = best_child.move
-            if move is None:
-                break
-            # move = search_agent.strategy.find_move(current_state)
+            if self.mcts is not None:
+                best_child = self.mcts.run(current_state, search_agent)
+                move = best_child.move
+                if move is None:
+                    print("MCTS returned None move!")
+                    break
+            else:
+                move = search_agent.strategy.find_move(current_state)
+
             current_state = game_manager.next_state(
                 current_state, move, game_manager.placing
             )
-            # game_manager.show_board(current_state)
 
         return current_state.move_count
 
@@ -69,28 +71,37 @@ class NEAT_Manager:
         """Evaluate the genome fitness."""
         sum_move_count = 0
         range_count = 5
-        for i in range(range_count):
-            # Play the search against a random placing agent 5 times
+        for i in tqdm(range(range_count), desc="Generation simulations", leave=False):
             move_count = self.simulate_game(game_manager, net)
             sum_move_count += move_count
 
         # Update the genome fitness
         avg_moves = sum_move_count / range_count
-        genome.fitness += self.board_size**2 - avg_moves
+        genome.fitness = self.board_size**2 - avg_moves
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
 
-        # mcts = MCTS(game_manager)
-        for i, (genome_id, genome) in enumerate(genomes):
+        for i, (genome_id, genome) in enumerate(
+            tqdm(genomes, desc="Evaluating generation")
+        ):
             genome.fitness = 0
-            # net = neat.nn.FeedForwardNetwork.create(genome, config)
             net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
-            self.evaluate(genome, net)
+            self.evaluate(self.game_manager, genome, net)
             # print("Fitness: ", genome.fitness)
 
+
 def run(
-    config, gen, board_size, ship_sizes, strategy_placement, strategy_search, chromosome
+    config,
+    gen,
+    board_size,
+    ship_sizes,
+    strategy_placement,
+    strategy_search,
+    chromosome,
+    use_mcts=False,
+    simulations_number=50,
+    exploration_constant=1.41,
 ):
     # Searching Agent
     # p = neat.Checkpointer.restore_checkpoint("neat-checkpoint-0")
@@ -101,7 +112,13 @@ def run(
     # p.add_reporter(neat.Checkpointer(10))
 
     game_manager = GameManager(size=board_size)
-    mcts = MCTS(game_manager)
+    mcts = None
+    if use_mcts:
+        mcts = MCTS(
+            game_manager,
+            simulations_number=simulations_number,
+            exploration_constant=exploration_constant,
+        )
 
     manager = NEAT_Manager(
         board_size,
@@ -151,12 +168,16 @@ if __name__ == "__main__":
         neat.DefaultStagnation,
         config_path,
     )
+
     run(
         config=config,
-        gen=30,
+        gen=10,
         board_size=5,
         ship_sizes=[1, 2, 4],
         strategy_placement="custom",
         strategy_search="neat",
         chromosome=[(0, 0, 0), (1, 2, 1), (4, 0, 1)],
+        use_mcts=True,
+        simulations_number=50,
+        exploration_constant=1.41,
     )

@@ -43,7 +43,12 @@ class Node:
                 best_moves.append(child_node)
 
         # Return one of the best moves randomly
-        return random.choice(best_moves)
+        choice = random.choice(best_moves)
+
+        if choice.move == None:
+            print("Warning: No move found")
+
+        return choice
 
     def action_distribution(self, board_size=5):
         size = board_size**2
@@ -64,11 +69,13 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, game_manager):
+    def __init__(self, game_manager, simulations_number=50, exploration_constant=1.41):
         self.game_manager = game_manager
         self.root_node = None
         self.current_node = None
         self.actor = None
+        self.simulations_number = simulations_number
+        self.exploration_constant = exploration_constant
 
     def select_node(self, node):
         while not node.is_fully_expanded():
@@ -85,6 +92,8 @@ class MCTS:
     def expand_node(self, node):
         placing = self.generate_random_placing()
         move = random.choice(node.untried_moves)
+        if move == None:
+            print("Warning: No move found")
         node.untried_moves.remove(move)
         next_state = self.game_manager.next_state(node.state, move, placing)
         legal_moves = self.game_manager.get_legal_moves(next_state)
@@ -110,7 +119,11 @@ class MCTS:
 
             node = node.parent
 
-    def run(self, current_state, actor, simulations_number=1000):
+    def run(
+        self,
+        current_state,
+        actor,
+    ):
         self.actor = actor
         # Check if we're starting a new game or continuing from an existing state
         if self.root_node is None:
@@ -135,9 +148,12 @@ class MCTS:
                 # If a matching child is found, make it the new current node
                 self.current_node = matching_child
             else:
-                # If no matching child (e.g., a new move is made), create a new node and add it as a child
-                new_node = Node(current_state)
-                new_node.parent = self.current_node
+                # Find the move that led to this state
+                last_move = self.find_last_move(self.current_node, current_state)
+
+                # Create a new node with the correct move
+                new_node = Node(current_state, parent=self.current_node, move=last_move)
+
                 self.current_node.add_child(new_node)
                 self.current_node = new_node
         if self.current_node.untried_moves == None:
@@ -145,12 +161,12 @@ class MCTS:
                 current_state
             )
 
-        for _ in range(simulations_number):
+        for _ in range(self.simulations_number):
             node = self.select_node(self.current_node)
             result = self.simulate(node)
             self.backpropagate(node, result)
 
-        return self.current_node.best_child()
+        return self.current_node.best_child(c_param=self.exploration_constant)
 
     def equal(self, state1, state2):
         return state1.board == state2.board
@@ -210,3 +226,15 @@ class MCTS:
                 self.indexes = [i for ship in indexes for i in ship]
 
         return ShadowPlacing(ships)
+
+    def find_last_move(self, parent_node, current_state):
+        """Finds the move that led from parent_node.state to current_state"""
+        for move in self.game_manager.get_legal_moves(parent_node.state):
+            if self.equal(
+                self.game_manager.next_state(
+                    parent_node.state, move, self.game_manager.placing
+                ),
+                current_state,
+            ):
+                return move
+        return None  # Should not happen in normal execution

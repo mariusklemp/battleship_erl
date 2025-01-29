@@ -16,20 +16,26 @@ class ConvolutionalNeuralNetwork:
         Construct a Convolutional Neural Network phenotype from a genome.
         """
         board_size = config.genome_config.input_size
-        input_shape = (config.genome_config.input_channels, board_size, board_size)  # 4 input channels
+        input_shape = (
+            config.genome_config.input_channels,
+            board_size,
+            board_size,
+        )  # 4 input channels
         output_shape = (board_size, board_size)  # Board size
         layer_evals = []  # Holds layer specifications
 
         for layer_config in genome.layer_config:
-            activation = ConvolutionalNeuralNetwork.get_activation_function(layer_config['activation'])
+            activation = ConvolutionalNeuralNetwork.get_activation_function(
+                layer_config["activation"]
+            )
 
             if layer_config["layer_type"] == "conv":
                 conv_layer = nn.Conv2d(
-                    in_channels=layer_config['in_channels'],  # Use genome's in_channels
-                    out_channels=layer_config['out_channels'],
-                    kernel_size=layer_config['kernel_size'],
-                    stride=layer_config['stride'],
-                    padding=layer_config['padding'],
+                    in_channels=layer_config["in_channels"],  # Use genome's in_channels
+                    out_channels=layer_config["out_channels"],
+                    kernel_size=layer_config["kernel_size"],
+                    stride=layer_config["stride"],
+                    padding=layer_config["padding"],
                 )
                 layer_evals.append(
                     {
@@ -38,10 +44,10 @@ class ConvolutionalNeuralNetwork:
                     }
                 )
 
-            elif layer_config['layer_type'] == 'fc':
+            elif layer_config["layer_type"] == "fc":
                 fc_layer = nn.Linear(
-                    in_features=layer_config['input_size'],
-                    out_features=layer_config['fc_layer_size'],
+                    in_features=layer_config["input_size"],
+                    out_features=layer_config["fc_layer_size"],
                 )
                 layer_evals.append(
                     {
@@ -51,8 +57,13 @@ class ConvolutionalNeuralNetwork:
                 )
 
         # Final output layer
-        output_layer = nn.Linear(layer_config['fc_layer_size'], board_size ** 2)
-        layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
+        output_layer = nn.Linear(layer_config["fc_layer_size"], board_size**2)
+        layer_evals.append(
+            {
+                "type": "fc",
+                "params": {"layer": output_layer, "activation": nn.Identity()},
+            }
+        )
 
         return ConvolutionalNeuralNetwork(input_shape, output_shape, layer_evals)
 
