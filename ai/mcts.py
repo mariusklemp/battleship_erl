@@ -115,7 +115,9 @@ class MCTS:
     def backpropagate(self, node, move_count):
         while node is not None:
             node.visits += 1
-            node.fitness += self.actor.board_size**2 - move_count
+            node.fitness += (
+                self.actor.board_size**2 - move_count
+            ) / self.actor.board_size**2
 
             node = node.parent
 
@@ -166,6 +168,7 @@ class MCTS:
             result = self.simulate(node)
             self.backpropagate(node, result)
 
+        print("move")
         return self.current_node.best_child(c_param=self.exploration_constant)
 
     def equal(self, state1, state2):

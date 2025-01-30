@@ -28,8 +28,6 @@ class GameManager:
             if state.board[0][i] == 0:
                 legal_moves.append(i)
 
-        if len(legal_moves) == 0:
-            print("No legal moves")
         return legal_moves
 
     def next_state(self, state, move, placing):

@@ -1,9 +1,9 @@
 [NEAT]
 fitness_criterion     = max
-fitness_threshold     = 6
+fitness_threshold     = 20
 pop_size              = 50
-reset_on_extinction   = False
-no_fitness_termination = True
+reset_on_extinction   = True
+no_fitness_termination = False
 
 [CNNGenome]
 # Input and output configuration
@@ -24,13 +24,13 @@ fc_layer_size_max       = 256
 
 # Activation options
 activation_default      = relu
-activation_mutate_rate  = 1.0
+activation_mutate_rate  = 0.1
 activation_options      = relu,sigmoid,tanh
 
 # node aggregation options
 aggregation_default     = sum
-aggregation_mutate_rate = 0.0
-aggregation_options     = sum
+aggregation_mutate_rate = 0.1
+aggregation_options     = sum,max,mean
 
 # node bias options
 bias_init_mean          = 0.0
@@ -38,39 +38,41 @@ bias_init_stdev         = 1.0
 bias_max_value          = 30.0
 bias_min_value          = -30.0
 bias_mutate_power       = 0.5
-bias_mutate_rate        = 0.7
+bias_mutate_rate        = 0.2
 bias_replace_rate       = 0.1
 
 # genome compatibility options
-compatibility_disjoint_coefficient = 1.0
-compatibility_weight_coefficient   = 0.5
+compatibility_disjoint_coefficient = 2.0
+compatibility_weight_coefficient   = 1.0
 
 # connection add/remove rates
-layer_add_prob           = 0.5
-layer_delete_prob           = 0.3
-conv_params_mutate_prob = 0.3
-conv_output_mutate_prob = 0.3
-conv_activation_mutate_prob = 0.3
+layer_add_prob           = 0.15
+layer_delete_prob        = 0.1
+conv_params_mutate_prob = 0.15
+conv_output_mutate_prob = 0.15
+conv_activation_mutate_prob = 0.1
 
 # connection enable options
 enabled_default         = True
-enabled_mutate_rate     = 0.01
+enabled_mutate_rate     = 0.02
+single_structural_mutation = True
 
 # Network structure configuration
 feed_forward            = True
-initial_connection      = full_direct
+initial_connection      = partial_direct 0.5
 num_layer               = 5
 num_cnn_layer           = 3
 num_fc_layer            = 2
 
 [DefaultSpeciesSet]
-compatibility_threshold = 3.0
+compatibility_threshold = 4.0
 
 [DefaultStagnation]
 species_fitness_func = max
-max_stagnation       = 15
-species_elitism      = 2
+max_stagnation       = 25
+species_elitism      = 3
 
 [DefaultReproduction]
-elitism            = 2
-survival_threshold = 0.2
+elitism            = 3
+survival_threshold = 0.25
+min_species_size   = 4

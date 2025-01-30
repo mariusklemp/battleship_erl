@@ -51,10 +51,14 @@ class NEAT_Manager:
 
         current_state = game_manager.initial_state(placement_agent)
 
+        placement_agent.show_ships()
+
         while not game_manager.is_terminal(current_state):
+            game_manager.show_board(current_state)
             if self.mcts is not None:
                 best_child = self.mcts.run(current_state, search_agent)
                 move = best_child.move
+                # self.mcts.print_tree()
                 if move is None:
                     print("MCTS returned None move!")
                     break
@@ -77,7 +81,7 @@ class NEAT_Manager:
 
         # Update the genome fitness
         avg_moves = sum_move_count / range_count
-        genome.fitness = self.board_size**2 - avg_moves
+        genome.fitness += max(0, (self.board_size**2 - avg_moves))
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
