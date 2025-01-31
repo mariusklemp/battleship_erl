@@ -29,7 +29,7 @@ class PlacementAgent:
         self.list_of_ships = [ship.indexes for ship in self.ships]
         self.indexes = [index for sublist in self.list_of_ships for index in sublist]
 
-    def init_strategy(self, strategy, chromosome):
+    def init_strategy(self, strategy, chromosome=None):
         if strategy == "random":
             return RandomPlacing(self)
         elif strategy == "nn_placing":

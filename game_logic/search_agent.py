@@ -5,17 +5,25 @@ from strategies.search.NEAT_search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
 from strategies.search.probability import ProbabilisticStrategy
 from strategies.search.random_strategy import RandomStrategy
+import matplotlib.pyplot as plt
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import torch.optim as optim
 
 
 class SearchAgent:
-    def __init__(self, board_size, ship_sizes, strategy, weights=None, net=None):
+    def __init__(
+        self, board_size, ship_sizes, strategy, net=None, optimizer="adam", lr=0.001
+    ):
         self.board_size = board_size
         # self.ship_sizes = ship_sizes
         # self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
-        self.strategy = self.init_strategy(strategy, weights, net)
+        self.strategy = self.init_strategy(strategy, net, optimizer, lr)
         self.move_count = 0
 
-    def init_strategy(self, strategy, weights, net):
+    def init_strategy(self, strategy, net, optimizer, lr):
         if strategy == "random":
             return RandomStrategy(self)
         elif strategy == "hunt_down":
@@ -23,12 +31,12 @@ class SearchAgent:
         elif strategy == "probabilistic":
             return ProbabilisticStrategy(self)
         elif strategy == "nn_search":
-            return NNSearch(self, weights)
+            return NNSearch(self, net, optimizer, lr)
         elif strategy == "neat":
             return NEAT_search(self, net)
 
     def reset(self):
-        self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
+        self.board = [[0 for _ in range(self.board_size**2)] for _ in range(4)]
         self.move_count = 0
 
     def print_board(self):

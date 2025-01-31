@@ -192,3 +192,11 @@ def draw_net(
     dot.render(filename, view=view)
 
     return dot
+
+
+""" A function to plot the move count """
+
+
+def plot_move_count(move_count):
+    plt.plot(move_count)
+    plt.show()

@@ -1,0 +1,61 @@
+{
+    "layers": [
+      {
+        "type": "Conv2d",
+        "in_channels": 4,
+        "out_channels": 128,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1
+      },
+      {
+        "type": "Dropout",
+        "p": 0.4
+      },
+      {
+        "type": "activation"
+      },
+      {
+        "type": "Conv2d",
+        "in_channels": 128,
+        "out_channels": 128,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1
+      },
+      {
+        "type": "Dropout",
+        "p": 0.4
+      },
+      {
+        "type": "activation"
+      },
+      {
+        "type": "Conv2d",
+        "in_channels": 128,
+        "out_channels": 128,
+        "kernel_size": 3,
+        "stride": 1,
+        "padding": 1
+      },
+      {
+        "type": "activation"
+      },
+      {
+        "type": "Flatten"
+      },
+      {
+        "type": "Linear",
+        "in_features": 128,
+        "out_features": 1024,
+        "dynamic": true,
+        "last": false
+      },
+      {
+        "type": "Linear",
+        "in_features": 1024,
+        "dynamic": false,
+        "last": true
+      }
+    ]
+  }

@@ -55,13 +55,10 @@ class Node:
         distribution = np.zeros(size)
         total_child_visits = sum([child.visits for child in self.children])
         for x in range(board_size):
-            for y in range(board_size):
-                for child in self.children:
-                    if child.move == (x, y):
-                        # Normalize the visits to a 0-1 scale
-                        distribution[x * board_size + y] = (
-                            child.visits / total_child_visits
-                        )
+            for child in self.children:
+                if child.move == x:
+                    # Normalize the visits to a 0-1 scale
+                    distribution[x] = child.visits / total_child_visits
         return distribution
 
     def value(self):
@@ -168,7 +165,6 @@ class MCTS:
             result = self.simulate(node)
             self.backpropagate(node, result)
 
-        print("move")
         return self.current_node.best_child(c_param=self.exploration_constant)
 
     def equal(self, state1, state2):
