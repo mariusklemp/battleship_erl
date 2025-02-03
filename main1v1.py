@@ -1,4 +1,4 @@
-from game_logic.game_search_placing import Game
+from game_logic.game_manager import Game
 
 
 def main(board_size, sizes, search_strategy, placing_strategy):

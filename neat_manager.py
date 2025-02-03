@@ -4,7 +4,7 @@ import tqdm
 from tqdm import tqdm
 
 from CNN_genome import CNNGenome
-from game_logic.game_search_placing import GameManager
+from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 from ai.mcts import MCTS

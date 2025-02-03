@@ -197,6 +197,7 @@ def draw_net(
 """ A function to plot the move count """
 
 
-def plot_move_count(move_count):
-    plt.plot(move_count)
+def plot_fitness(move_count, board_size):
+    fitness = [board_size**2 - moves for moves in move_count]
+    plt.plot(fitness)
     plt.show()

@@ -31,7 +31,7 @@ class GUI:
         self.SCREEN = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         self.INDENT = 7
 
-    def draw_grid(self, player, left=0, top=0, search=False):
+    def draw_grid(self, state, left=0, top=0, search=False):
         for i in range(self.BOARD_SIZE ** 2):
             x = left + i % self.BOARD_SIZE * self.SQUARE_SIZE
             y = top + i // self.BOARD_SIZE * self.SQUARE_SIZE
@@ -39,7 +39,7 @@ class GUI:
             pygame.draw.rect(self.SCREEN, WHITE, square, 1)
 
             if search:
-                pygame.draw.circle(self.SCREEN, self.get_cell_color(player.board, i),
+                pygame.draw.circle(self.SCREEN, self.get_cell_color(state.board, i),
                                    (x + self.SQUARE_SIZE // 2, y + self.SQUARE_SIZE // 2),
                                    self.SQUARE_SIZE // 4)
 
@@ -84,22 +84,22 @@ class GUI:
 
         return index
 
-    def update_board(self, game):
+    def update_board(self, state_1, state_2):
         # draw background
         self.SCREEN.fill(GREY)
 
         # draw search grids
-        self.draw_grid(player=game.player1Search, search=True)
-        self.draw_grid(player=game.player2Search, search=True, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
+        self.draw_grid(state=state_1, search=True)
+        self.draw_grid(state=state_2, search=True, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
                        top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
 
         # draw position grids
-        self.draw_grid(player=game.player1Search, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-        self.draw_grid(player=game.player2Search, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
+        self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
+        self.draw_grid(state=state_2, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
 
         # draw ships
-        self.draw_ships(game.player1Placement, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-        self.draw_ships(game.player2Placement, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
+        self.draw_ships(state_1.placing, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
+        self.draw_ships(state_2.placing, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
 
     def display_win(self, result):
         # game over

@@ -6,5 +6,5 @@ class Strategy(ABC):
         self.search_agent = search_agent
 
     @abstractmethod
-    def find_move(self):
+    def find_move(self, state):
         pass

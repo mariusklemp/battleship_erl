@@ -8,9 +8,9 @@ class RandomStrategy(Strategy):
         super().__init__(search_agent)
         self.name = "random"
 
-    def find_move(self):
-        self.search_agent.move_count += 1
-        unknown = [i for i, square in enumerate(self.search_agent.board[0]) if square == 0]
+    def find_move(self, state):
+        state.move_count += 1
+        unknown = [i for i, square in enumerate(state.board[0]) if square == 0]
         if len(unknown) > 0:
             move = random.choice(unknown)
             return move

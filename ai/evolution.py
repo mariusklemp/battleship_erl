@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 from deap import base, creator, tools
 
-from game_logic.game_search_placing import Game
+from game_logic.game_manager import Game
 from game_logic.search_agent import SearchAgent
 from game_logic.placement_agent import PlacementAgent
 

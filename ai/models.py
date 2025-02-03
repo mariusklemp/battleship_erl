@@ -19,12 +19,12 @@ def activation_function(activation: str):
 
 class ANET(nn.Module):
     def __init__(
-        self,
-        board_size,
-        output_size,
-        activation,
-        device=torch.device("cpu"),
-        layer_config=None,
+            self,
+            board_size,
+            output_size,
+            activation,
+            device=torch.device("cpu"),
+            layer_config=None,
     ):
         super(ANET, self).__init__()
         self.board_size = board_size
@@ -120,3 +120,22 @@ class ANET(nn.Module):
 
     def save(self, path: str):
         torch.save(self.state_dict(), path)
+
+
+# # Example input
+# board_size = 5
+# ship_sizes = [5, 4, 3, 3, 2]
+#
+# board = [[0 for _ in range(board_size**2)] for _ in range(4)]
+#
+# # Simulated CNN Input: (batch, 4, board_size, board_size)
+# board_input = torch.tensor(self.board, dtype=torch.float32).unsqueeze(0)
+#
+#
+#
+# # Initialize model
+# model = ANET(board_size=board_size, output_size=output_size, activation="relu", max_ships=5)
+#
+# # Forward pass
+# output = model(board_input, ship_sizes_input)
+# print(output.shape)  # Expected: (batch_size, board_size * board_size)

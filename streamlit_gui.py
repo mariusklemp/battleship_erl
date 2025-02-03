@@ -1,6 +1,6 @@
 import streamlit as st
 
-from game_logic.game_manager import Game
+from game_logic.game import Game
 
 
 class GUI:

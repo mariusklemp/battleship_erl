@@ -1,6 +1,6 @@
 import pygame
 
-from game_logic.game_manager import Game
+from game_logic.game import Game
 from gui import GUI
 
 
