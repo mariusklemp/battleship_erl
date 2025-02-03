@@ -84,28 +84,71 @@ class GUI:
 
         return index
 
-    def update_board(self, state_1, state_2):
-        # draw background
+    def update_board(self, state_1, state_2=None):
+        """Updates the GUI board. Handles both two-player mode and single-agent mode."""
+
+        # Draw background
         self.SCREEN.fill(GREY)
 
-        # draw search grids
+        # Draw search grid for Player 1
         self.draw_grid(state=state_1, search=True)
-        self.draw_grid(state=state_2, search=True, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
-                       top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
 
-        # draw position grids
+        # If playing against a placing agent (single-agent mode), don't draw Player 2's board
+        if state_2 is not None:
+            self.draw_grid(
+                state=state_2, search=True,
+                left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
+                top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN
+            )
+
+        # Draw position grid for Player 1
         self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-        self.draw_grid(state=state_2, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
 
-        # draw ships
+        if state_2 is not None:
+            self.draw_grid(
+                state=state_2, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN
+            )
+
+        # Draw Player 1's ships
         self.draw_ships(state_1.placing, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-        self.draw_ships(state_2.placing, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN)
 
-    def display_win(self, result):
-        # game over
-        text = "Player " + str(result) + " wins!"
-        textbox = myfont.render(text, False, GREY, WHITE)
-        self.SCREEN.blit(textbox, (self.WIDTH // 2 - 240, self.HEIGHT // 2 - 50))
+        # Draw Player 2's ships only if it exists
+        if state_2 is not None:
+            self.draw_ships(
+                state_2.placing, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN
+            )
 
-        # update display
+    def display_win(self, result, move_count):
+        """Displays the game-over message clearly and centered."""
+
+        # Create a new font with a more adaptive size
+        font_size = max(40, self.SQUARE_SIZE * 2)  # Adjust based on board size
+        myfont = pygame.font.SysFont('fresansttf', font_size)
+
+        # Create text surfaces
+        text1 = f"Player {result} wins!"
+        text2 = f"{move_count}/{self.BOARD_SIZE * self.BOARD_SIZE} moves"
+
+        text1_surface = myfont.render(text1, True, WHITE)
+        text2_surface = myfont.render(text2, True, WHITE)
+
+        # Get text positions to center dynamically
+        text1_rect = text1_surface.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2 - 30))
+        text2_rect = text2_surface.get_rect(center=(self.WIDTH // 2, self.HEIGHT // 2 + 30))  # Slightly below text1
+
+        # Fill the background with a slightly transparent overlay
+        overlay = pygame.Surface((self.WIDTH, self.HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))  # Dark transparent background
+        self.SCREEN.blit(overlay, (0, 0))
+
+        # Draw the text on screen
+        self.SCREEN.blit(text1_surface, text1_rect)
+        self.SCREEN.blit(text2_surface, text2_rect)
+
+        # Update display
         pygame.display.flip()
+
+        # Pause for a few seconds or wait for user input before closing
+        pygame.time.wait(2000)  # 2-second delay
+
+
