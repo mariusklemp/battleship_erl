@@ -51,14 +51,24 @@ class Node:
         return choice
 
     def action_distribution(self, board_size=5):
+        """
+        Compute the action distribution from MCTS node visits.
+
+        :param board_size: The size of the Battleship board (assumed square).
+        :return: A NumPy array representing the action probability distribution.
+        """
         size = board_size ** 2
-        distribution = np.zeros(size)
-        total_child_visits = sum([child.visits for child in self.children])
-        for x in range(board_size):
-            for child in self.children:
-                if child.move == x:
-                    # Normalize the visits to a 0-1 scale
-                    distribution[x] = child.visits / total_child_visits
+        distribution = np.zeros(size)  # Initialize the distribution
+
+        total_child_visits = sum(child.visits for child in self.children)
+        if total_child_visits == 0:  # Avoid division by zero
+            return distribution
+
+        for child in self.children:
+            move_index = child.move  # Assuming move is an integer index in range(size)
+            if 0 <= move_index < size:  # Ensure the move index is valid
+                distribution[move_index] = child.visits / total_child_visits  # Normalize
+
         return distribution
 
     def value(self):
@@ -98,38 +108,22 @@ class MCTS:
     def simulate(self, node):
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
+        print("Before adjustment:")
+        print(current_state.placing.show_ships())
 
         # Slightly modify the ship placement before simulation
         current_state.placing.adjust_ship_placements(current_state.board)
+
+        print("After adjustment:")
+        print(current_state.placing.show_ships())
 
         while not self.game_manager.is_terminal(current_state):
             # Select a move randomly for now (or use a strategy)
             best_move = random.choice(self.game_manager.get_legal_moves(current_state))
             current_state = self.game_manager.next_state(current_state, best_move)
 
+
         return current_state.move_count
-
-    def perturb_ship_placement(self, state):
-        """Randomly adjust ship placements slightly within valid boundaries."""
-        new_state = copy.deepcopy(state)
-
-        # Get the current ship placements
-        ships = new_state.get_ships()  # Assumes a function that retrieves ship placements
-
-        # Randomly select a ship to perturb
-        if ships:
-            ship = random.choice(ships)
-            new_state.remove_ship(ship)  # Remove it from the board
-
-            # Generate valid alternative placements for the ship
-            valid_positions = self.game_manager.get_valid_placements(new_state, ship)
-
-            if valid_positions:
-                # Choose a new random valid position
-                new_position = random.choice(valid_positions)
-                new_state.place_ship(ship, new_position)  # Place the ship at the new position
-
-        return new_state
 
     def backpropagate(self, node, move_count):
         while node is not None:

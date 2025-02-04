@@ -15,7 +15,7 @@ def simulate_game(game_manager, search_agent, mcts, rbuf):
     current_state = game_manager.initial_state()
 
     while not game_manager.is_terminal(current_state):
-        game_manager.show_board(current_state)
+        visualize.show_board(current_state, board_size=game_manager.size)
         best_child = mcts.run(current_state, search_agent)
         move = best_child.move
 

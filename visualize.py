@@ -3,6 +3,7 @@ import warnings
 import graphviz
 import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 
 def plot_stats(statistics, ylog=False, view=False, filename="avg_fitness.svg"):
@@ -112,15 +113,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-    config,
-    genome,
-    view=False,
-    filename=None,
-    node_names=None,
-    show_disabled=True,
-    prune_unused=False,
-    node_colors=None,
-    fmt="svg",
+        config,
+        genome,
+        view=False,
+        filename=None,
+        node_names=None,
+        show_disabled=True,
+        prune_unused=False,
+        node_colors=None,
+        fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -198,6 +199,73 @@ def draw_net(
 
 
 def plot_fitness(move_count, board_size):
-    fitness = [board_size**2 - moves for moves in move_count]
+    fitness = [board_size ** 2 - moves for moves in move_count]
     plt.plot(fitness)
     plt.show()
+
+
+def plot_action_distribution(action_distribution, board_size):
+    """
+    Prints the action distribution in a readable grid format with 3 decimal precision and colors.
+
+    :param action_distribution: 1D NumPy array containing the probability of each action.
+    :param board_size: The size of the Battleship board (assumed to be square).
+    """
+    action_grid = np.array(action_distribution).reshape((board_size, board_size))
+
+    # Define color map (ANSI escape codes)
+    def get_colored_value(value):
+        if value > 0.05:
+            return f"\033[91m{value:.3f}\033[0m"  # Red for high probability
+        elif value > 0.03:
+            return f"\033[93m{value:.3f}\033[0m"  # Yellow for medium probability
+        elif value > 0.01:
+            return f"\033[92m{value:.3f}\033[0m"  # Green for low probability
+        else:
+            return f"\033[90m{value:.3f}\033[0m"  # Grey for very low probability
+
+    print("\nMCTS Action Distribution:")
+    print("-" * (board_size * 7))  # Formatting line
+
+    for row in range(board_size):
+        row_values = [get_colored_value(action_grid[row, col]) for col in range(board_size)]
+        print(" | ".join(row_values))  # Print row with values separated by "|"
+
+    print("-" * (board_size * 7))  # Formatting line
+
+
+def show_board(state, board_size):
+    """
+    Prints the Battleship board with colors for better visualization.
+
+    :param state: The game state containing the board layers.
+    :param board_size: The size of the board (assumed square).
+    """
+    # ANSI Color Codes
+    COLORS = {
+        "empty": "\033[90m- \033[0m",  # Grey for unexplored
+        "hit": "\033[93mX \033[0m",    # Yellow for hits
+        "miss": "\033[94mO \033[0m",   # Blue for misses
+        "sunk": "\033[91mS \033[0m"    # Red for sunken ships
+    }
+
+    print("\nCurrent Board State:")
+    print("-" * (board_size * 2))  # Formatting line
+
+    for i in range(board_size):
+        row = ""
+        for j in range(board_size):
+            index = i * board_size + j
+            if state.board[3][index] == 1:   # Sunken ship
+                row += COLORS["sunk"]
+            elif state.board[1][index] == 1: # Hit
+                row += COLORS["hit"]
+            elif state.board[2][index] == 1: # Miss
+                row += COLORS["miss"]
+            else:                            # Unexplored
+                row += COLORS["empty"]
+
+        print(row)
+
+    print("-" * (board_size * 2))  # Formatting line
+

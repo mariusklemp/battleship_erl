@@ -1,4 +1,5 @@
 from strategies.search.strategy import Strategy
+from visualize import plot_action_distribution, show_board
 
 
 class MCTSStrategy(Strategy):
@@ -12,7 +13,13 @@ class MCTSStrategy(Strategy):
         self.search_agent.move_count += 1
 
         best_child = self.mcts.run(state, self.search_agent)
-        #self.mcts.print_tree()
+
+        # Visualize
+        state.placing.show_ships()
+        show_board(best_child.state, self.search_agent.board_size)
+        action_distribution = best_child.action_distribution(board_size=self.search_agent.board_size)
+        plot_action_distribution(action_distribution, self.search_agent.board_size)
+
         move = best_child.move
         return move
 
