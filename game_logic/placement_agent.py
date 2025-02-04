@@ -1,6 +1,9 @@
+import random
+
 import numpy as np
 from colorama import Fore, Style, init
 
+from game_logic.ship import Ship
 from strategies.placing.NNPlacing import NNPlacing
 from strategies.placing.custom import CustomPlacing
 from strategies.placing.random import RandomPlacing
@@ -37,6 +40,88 @@ class PlacementAgent:
         self.strategy.place_ships()
         self.list_of_ships = [ship.indexes for ship in self.ships]
         self.indexes = [index for sublist in self.list_of_ships for index in sublist]
+
+    def adjust_ship_placements(self, board):
+        """Adjust ship placements while ensuring hits stay in the area and sunken ships remain unchanged."""
+        print("Ship before")
+        self.show_ships()
+        sunken_tiles = board[3]    # Cells occupied by fully sunk ships
+
+        for ship in self.ships:
+            # If the ship is sunk, do NOT move it
+            if any(sunken_tiles[i] == 1 for i in ship.indexes):
+                continue  # Skip adjusting this ship
+
+            # Remove current ship indexes from the board temporarily
+            self.list_of_ships.remove(ship.indexes)
+
+            # Find valid alternative placements that satisfy the hit constraints
+            valid_positions = self.get_valid_adjustments(ship, board)
+
+            if valid_positions:
+                # Choose a new valid position at random
+                new_col, new_row, new_direction = random.choice(valid_positions)
+
+                # Update ship position
+                ship.col = new_col
+                ship.row = new_row
+                ship.direction = new_direction
+                ship.indexes = ship.compute_indexes()  # Recompute indexes
+
+            # Re-add the adjusted ship
+            self.list_of_ships.append(ship.indexes)
+
+        # Update the index list after adjustment
+        self.indexes = [index for sublist in self.list_of_ships for index in sublist]
+
+        print("Ship after")
+        self.show_ships()
+
+    def get_valid_adjustments(self, ship, board):
+        """Find alternative valid positions for a ship while ensuring hit parts stay within the area."""
+        board_size = self.board_size
+        explored_tiles = board[0]
+        hit_tiles = board[1]
+        miss_tiles = board[2]
+
+        valid_positions = []
+        directions = [0, 1]  # 0: horizontal, 1: vertical
+
+        # Identify which ship parts are hit
+        hit_positions = [i for i in ship.indexes if hit_tiles[i] == 1]
+
+        for direction in directions:
+            for row in range(board_size):
+                for col in range(board_size):
+                    # Create a temporary ship at this position
+                    temp_ship = Ship(ship.size, board_size, col, row, direction)
+                    temp_indexes = temp_ship.compute_indexes()
+
+                    # Ensure all positions are within board limits
+                    if any(i >= board_size ** 2 for i in temp_indexes):
+                        continue
+
+                    # Ensure no part of the ship is placed on a missed shot
+                    if any(miss_tiles[i] == 1 for i in temp_indexes):
+                        continue
+
+                    # Ensure the ship does not overlap with explored tiles
+                    if any(explored_tiles[i] == 1 for i in temp_indexes):
+                        continue
+
+                    # If ship was hit, ensure at least one hit position remains in the ship
+                    if hit_positions and not any(i in temp_indexes for i in hit_positions):
+                        continue
+
+                    # Ensure the placement does not overlap with other ships
+                    if any(i in self.indexes for i in temp_indexes):
+                        continue
+
+                    # If valid, add it to the list of possible positions
+                    valid_positions.append((col, row, direction))
+
+        return valid_positions
+
 
     def check_valid_placement(self, ship):
         possible = True
@@ -87,7 +172,6 @@ class PlacementAgent:
 
         # Print each row with colored ship indicators
 
-        print("Ship Placement:")
         for row in range(self.board_size):
             print(
                 " ".join(indexes[row * self.board_size: (row + 1) * self.board_size])

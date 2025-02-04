@@ -35,11 +35,13 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
     """
 
     # Player 1 (Search 1 vs Placing 2)
-    search_agent_1, placement_agent_1 = initialize_agents(board_size, sizes, player1_search_strategy, player1_placing_strategy)
+    search_agent_1, placement_agent_1 = initialize_agents(board_size, sizes, player1_search_strategy,
+                                                          player1_placing_strategy)
 
     # If player2_search_strategy is None, assume single-player mode
     if player2_search_strategy:
-        search_agent_2, placement_agent_2 = initialize_agents(board_size, sizes, player2_search_strategy, player2_placing_strategy)
+        search_agent_2, placement_agent_2 = initialize_agents(board_size, sizes, player2_search_strategy,
+                                                              player2_placing_strategy)
         game_manager_1 = GameManager(size=board_size, placing=placement_agent_2)  # Player 1 attacks Player 2’s board
         game_manager_2 = GameManager(size=board_size, placing=placement_agent_1)  # Player 2 attacks Player 1’s board
         game = Game(game_manager_1, search_agent_1, game_manager_2, search_agent_2)
@@ -54,20 +56,13 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
 
     # Initialize MCTS for AI players
     if player1_search_strategy == "mcts":
-        mcts = MCTS(game_manager_1 if player2_search_strategy else game_manager, simulations_number=400, exploration_constant=1.41)
+        mcts = MCTS(game_manager_1 if player2_search_strategy else game_manager, simulations_number=400,
+                    exploration_constant=1.41)
         search_agent_1.strategy.set_mcts(mcts)
 
     if player2_search_strategy == "mcts":
         mcts = MCTS(game_manager_2, simulations_number=400, exploration_constant=1.41)
         search_agent_2.strategy.set_mcts(mcts)
-
-    # Display initial ship placements
-    print("Game Manager 1: Search 1 vs Placing 2")
-    game_manager_1.placing.show_ships() if player2_search_strategy else game_manager.placing.show_ships()
-
-    if player2_search_strategy:
-        print("Game Manager 2: Search 2 vs Placing 1")
-        game_manager_2.placing.show_ships()
 
     # Initialize Pygame
     pygame.init()
@@ -82,7 +77,8 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
         pygame.display.update()
 
         if human_player:
-            current_state_1, current_state_2 = game.play_turn(gui=gui, current_state_1=current_state_1, current_state_2=current_state_2)
+            current_state_1, current_state_2 = game.play_turn(gui=gui, current_state_1=current_state_1,
+                                                              current_state_2=current_state_2)
         else:
             current_state_1, current_state_2 = game.play_turn(current_state_1, current_state_2)
 
@@ -91,22 +87,21 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
 
     # Display result
     gui.display_win(game.winner, current_state_1.move_count)
-    print(f"Result: Player {game.winner} won!")
     pygame.time.wait(1000)
     pygame.display.update()
 
 
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
-    #initialize_game(board_size=5, sizes=[2, 1, 2],
-    #                human_player=True,
-    #                player1_search_strategy="mcts",
-    #                player1_placing_strategy="random",
-    #               player2_search_strategy="mcts",
-    #                player2_placing_strategy="random")
-
-    #Example: Human vs AI
     initialize_game(board_size=5, sizes=[2, 1, 2],
-                     human_player=False,
-                     player1_search_strategy="mcts",
-                     player1_placing_strategy="random")
+                    human_player=True,
+                    player1_search_strategy="mcts",
+                    player1_placing_strategy="random",
+                    player2_search_strategy="mcts",
+                    player2_placing_strategy="random")
+
+    # Example: Human vs AI
+    # initialize_game(board_size=5, sizes=[2, 1, 2],
+    #                 human_player=True,
+    #                 player1_search_strategy="mcts",
+    #                 player1_placing_strategy="random")

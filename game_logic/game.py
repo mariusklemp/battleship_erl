@@ -56,19 +56,9 @@ class Game:
             assert self.is_move_possible(move), "Move has already been made"
 
             if self.single_agent_mode or self.player1_turn:
-                print(f"Player 1 trying to hit")
-                self.game_manager1.placing.show_ships()
-                print(f"Player 1 move: {move}")
-                print("On the board:", current_state_1.board[0])
                 current_state_1 = self.game_manager1.next_state(current_state_1, move)
-                print("After move:", current_state_1.board[0])
             else:
-                print(f"Player 2 trying to hit")
-                self.game_manager2.placing.show_ships()
-                print(f"Player 2 move: {move}")
-                print("On the board:", current_state_2.board[0])
                 current_state_2 = self.game_manager2.next_state(current_state_2, move)
-                print("After move:", current_state_2.board[0])
 
         except AssertionError:
             return current_state_1, current_state_2  # Return unchanged if move is invalid

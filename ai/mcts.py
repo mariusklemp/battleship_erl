@@ -1,3 +1,4 @@
+import copy
 import random
 import math
 import numpy as np
@@ -95,14 +96,40 @@ class MCTS:
         return child_node
 
     def simulate(self, node):
-        current_state = node.state
+        # Make a copy of the board to avoid modifying the original node
+        current_state = copy.deepcopy(node.state)
+
+        # Slightly modify the ship placement before simulation
+        current_state.placing.adjust_ship_placements(current_state.board)
+
         while not self.game_manager.is_terminal(current_state):
-            # best_move = self.actor.strategy.find_move(current_state)
+            # Select a move randomly for now (or use a strategy)
             best_move = random.choice(self.game_manager.get_legal_moves(current_state))
-            current_state = self.game_manager.next_state(
-                current_state, best_move
-            )
+            current_state = self.game_manager.next_state(current_state, best_move)
+
         return current_state.move_count
+
+    def perturb_ship_placement(self, state):
+        """Randomly adjust ship placements slightly within valid boundaries."""
+        new_state = copy.deepcopy(state)
+
+        # Get the current ship placements
+        ships = new_state.get_ships()  # Assumes a function that retrieves ship placements
+
+        # Randomly select a ship to perturb
+        if ships:
+            ship = random.choice(ships)
+            new_state.remove_ship(ship)  # Remove it from the board
+
+            # Generate valid alternative placements for the ship
+            valid_positions = self.game_manager.get_valid_placements(new_state, ship)
+
+            if valid_positions:
+                # Choose a new random valid position
+                new_position = random.choice(valid_positions)
+                new_state.place_ship(ship, new_position)  # Place the ship at the new position
+
+        return new_state
 
     def backpropagate(self, node, move_count):
         while node is not None:

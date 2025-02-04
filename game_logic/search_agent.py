@@ -1,5 +1,4 @@
 from strategies.search.NNSearch import NNSearch
-from colorama import Fore, Style
 
 from strategies.search.NEAT_search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
