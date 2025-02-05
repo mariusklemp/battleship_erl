@@ -9,10 +9,9 @@ from strategies.search.mcts import MCTSStrategy
 
 class SearchAgent:
     def __init__(
-            self, board_size, ship_sizes, strategy, net=None, optimizer="adam", lr=0.001
+            self, board_size, strategy, net=None, optimizer="adam", lr=0.001
     ):
         self.board_size = board_size
-        self.ship_sizes = ship_sizes
         self.strategy = self.init_strategy(strategy, net, optimizer, lr)
         self.move_count = 0
 
