@@ -48,7 +48,7 @@ class PlacementAgent:
     def check_valid_placement(self, ship):
         possible = True
         for i in ship.indexes:
-            if i < 0 or i >= (self.board_size ** 2):
+            if i < 0 or i >= (self.board_size**2):
                 possible = False
                 break
 
@@ -66,14 +66,14 @@ class PlacementAgent:
 
     def show_ships(self):
         """Display the current board with ships (cells with a ship show an 'X' colored by ship size)."""
-        board = ["-" for _ in range(self.board_size ** 2)]
+        board = ["-" for _ in range(self.board_size**2)]
         for ship in self.list_of_ships:
             ship_size = len(ship)
             color = self.SIZE_COLORS.get(ship_size, Fore.WHITE)
             for pos in ship:
                 board[pos] = f"{color}X{Style.RESET_ALL}"
         for row in range(self.board_size):
-            print(" ".join(board[row * self.board_size:(row + 1) * self.board_size]))
+            print(" ".join(board[row * self.board_size : (row + 1) * self.board_size]))
 
     def adjust_ship_placements(self, board):
         """
@@ -111,12 +111,14 @@ class PlacementAgent:
             candidates = []
             # If any cell in the ship is sunk, only the current placement is valid.
             if any(board[3][i] == 1 for i in ship.indexes):
-                candidates.append({
-                    'col': ship.col,
-                    'row': ship.row,
-                    'direction': ship.direction,
-                    'indexes': ship.indexes
-                })
+                candidates.append(
+                    {
+                        "col": ship.col,
+                        "row": ship.row,
+                        "direction": ship.direction,
+                        "indexes": ship.indexes,
+                    }
+                )
                 candidate_map[ship] = candidates
                 continue
 
@@ -131,30 +133,38 @@ class PlacementAgent:
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
 
-                            if not self._is_candidate_valid(candidate_indexes, board, is_hit, hit_positions):
+                            if not self._is_candidate_valid(
+                                candidate_indexes, board, is_hit, hit_positions
+                            ):
                                 continue
 
-                            candidates.append({
-                                'col': col,
-                                'row': row,
-                                'direction': direction,
-                                'indexes': candidate_indexes
-                            })
+                            candidates.append(
+                                {
+                                    "col": col,
+                                    "row": row,
+                                    "direction": direction,
+                                    "indexes": candidate_indexes,
+                                }
+                            )
                 else:  # Vertical placements
                     for col in range(board_size):
                         for row in range(board_size - ship.size + 1):
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
 
-                            if not self._is_candidate_valid(candidate_indexes, board, is_hit, hit_positions):
+                            if not self._is_candidate_valid(
+                                candidate_indexes, board, is_hit, hit_positions
+                            ):
                                 continue
 
-                            candidates.append({
-                                'col': col,
-                                'row': row,
-                                'direction': direction,
-                                'indexes': candidate_indexes
-                            })
+                            candidates.append(
+                                {
+                                    "col": col,
+                                    "row": row,
+                                    "direction": direction,
+                                    "indexes": candidate_indexes,
+                                }
+                            )
             candidate_map[ship] = candidates
 
         return candidate_map
@@ -193,7 +203,7 @@ class PlacementAgent:
             candidates = candidate_map[ship][:]
             random.shuffle(candidates)
             for cand in candidates:
-                cand_set = set(cand['indexes'])
+                cand_set = set(cand["indexes"])
                 if cand_set & used_indexes:
                     continue  # Overlap detected
                 current_config.append(cand)
@@ -211,10 +221,10 @@ class PlacementAgent:
         Also update the flattened list of ship indexes.
         """
         for ship, cand in zip(self.ships, chosen_config):
-            ship.col = cand['col']
-            ship.row = cand['row']
-            ship.direction = cand['direction']
-            ship.indexes = cand['indexes']
+            ship.col = cand["col"]
+            ship.row = cand["row"]
+            ship.direction = cand["direction"]
+            ship.indexes = cand["indexes"]
 
         self.list_of_ships = [ship.indexes for ship in self.ships]
         self.indexes = [i for sublist in self.list_of_ships for i in sublist]

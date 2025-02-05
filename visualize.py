@@ -113,15 +113,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-        config,
-        genome,
-        view=False,
-        filename=None,
-        node_names=None,
-        show_disabled=True,
-        prune_unused=False,
-        node_colors=None,
-        fmt="svg",
+    config,
+    genome,
+    view=False,
+    filename=None,
+    node_names=None,
+    show_disabled=True,
+    prune_unused=False,
+    node_colors=None,
+    fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -199,8 +199,78 @@ def draw_net(
 
 
 def plot_fitness(move_count, board_size):
-    fitness = [board_size ** 2 - moves for moves in move_count]
-    plt.plot(fitness)
+    """
+    Plot the fitness evolution over games, including statistics and a moving average.
+
+    Args:
+        move_count (list): List of moves taken in each game
+        board_size (int): Size of the game board
+    """
+    # Calculate fitness from move count
+    fitness = [board_size**2 - moves for moves in move_count]
+    games = range(1, len(fitness) + 1)
+
+    # Calculate moving average
+    window = 5
+    moving_avg = np.convolve(fitness, np.ones(window) / window, mode="valid")
+
+    # Create the plot
+    plt.figure(figsize=(12, 6))
+
+    # Plot raw fitness
+    plt.plot(games, fitness, "b-", alpha=0.5, label="Game Fitness")
+
+    # Plot moving average
+    plt.plot(
+        range(window, len(fitness) + 1),
+        moving_avg,
+        "r-",
+        label=f"{window}-Game Moving Average",
+        linewidth=2,
+    )
+
+    # Add statistics
+    mean_fitness = np.mean(fitness)
+    std_fitness = np.std(fitness)
+    max_fitness = np.max(fitness)
+    min_fitness = np.min(fitness)
+
+    # Add statistics text box
+    stats_text = (
+        f"Mean: {mean_fitness:.2f}\n"
+        f"Std Dev: {std_fitness:.2f}\n"
+        f"Max: {max_fitness:.2f}\n"
+        f"Min: {min_fitness:.2f}"
+    )
+
+    plt.text(
+        0.02,
+        0.98,
+        stats_text,
+        transform=plt.gca().transAxes,
+        verticalalignment="top",
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+    )
+
+    # Customize the plot
+    plt.title("Battleship AI Fitness Evolution", fontsize=12, pad=15)
+    plt.xlabel("Game Number", fontsize=10)
+    plt.ylabel("Fitness (Board Size² - Moves)", fontsize=10)
+    plt.grid(True, linestyle="--", alpha=0.7)
+    plt.legend(loc="lower right")
+
+    # Add a horizontal line at maximum possible fitness
+    max_possible_fitness = board_size**2 - board_size
+    plt.axhline(
+        y=max_possible_fitness,
+        color="g",
+        linestyle="--",
+        alpha=0.5,
+        label=f"Perfect Game ({max_possible_fitness})",
+    )
+
+    # Adjust layout and display
+    plt.tight_layout()
     plt.show()
 
 
@@ -228,7 +298,9 @@ def plot_action_distribution(action_distribution, board_size):
     print("-" * (board_size * 7))  # Formatting line
 
     for row in range(board_size):
-        row_values = [get_colored_value(action_grid[row, col]) for col in range(board_size)]
+        row_values = [
+            get_colored_value(action_grid[row, col]) for col in range(board_size)
+        ]
         print(" | ".join(row_values))  # Print row with values separated by "|"
 
     print("-" * (board_size * 7))  # Formatting line
@@ -244,9 +316,9 @@ def show_board(state, board_size):
     # ANSI Color Codes
     COLORS = {
         "empty": "\033[90m- \033[0m",  # Grey for unexplored
-        "hit": "\033[93mX \033[0m",    # Yellow for hits
-        "miss": "\033[94mO \033[0m",   # Blue for misses
-        "sunk": "\033[91mS \033[0m"    # Red for sunken ships
+        "hit": "\033[93mX \033[0m",  # Yellow for hits
+        "miss": "\033[94mO \033[0m",  # Blue for misses
+        "sunk": "\033[91mS \033[0m",  # Red for sunken ships
     }
 
     print("\nCurrent Board State:")
@@ -256,16 +328,15 @@ def show_board(state, board_size):
         row = ""
         for j in range(board_size):
             index = i * board_size + j
-            if state.board[3][index] == 1:   # Sunken ship
+            if state.board[3][index] == 1:  # Sunken ship
                 row += COLORS["sunk"]
-            elif state.board[1][index] == 1: # Hit
+            elif state.board[1][index] == 1:  # Hit
                 row += COLORS["hit"]
-            elif state.board[2][index] == 1: # Miss
+            elif state.board[2][index] == 1:  # Miss
                 row += COLORS["miss"]
-            else:                            # Unexplored
+            else:  # Unexplored
                 row += COLORS["empty"]
 
         print(row)
 
     print("-" * (board_size * 2))  # Formatting line
-

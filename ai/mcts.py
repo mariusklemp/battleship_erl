@@ -57,7 +57,7 @@ class Node:
         :param board_size: The size of the Battleship board (assumed square).
         :return: A NumPy array representing the action probability distribution.
         """
-        size = board_size ** 2
+        size = board_size**2
         distribution = np.zeros(size)  # Initialize the distribution
 
         # Compute total visits among all children.
@@ -111,8 +111,13 @@ class MCTS:
     def simulate(self, node):
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
+        # print("Before adjustment:")
+        # print(current_state.placing.show_ships())
 
         current_state.placing.adjust_ship_placements(current_state.board)
+
+        # print("After adjustment:")
+        # print(current_state.placing.show_ships())
 
         while not self.game_manager.is_terminal(current_state):
             # Select a move randomly for now (or use a strategy)
@@ -125,15 +130,15 @@ class MCTS:
         while node is not None:
             node.visits += 1
             node.fitness += (
-                                    self.actor.board_size ** 2 - move_count
-                            ) / self.actor.board_size ** 2
+                self.actor.board_size**2 - move_count
+            ) / self.actor.board_size**2
 
             node = node.parent
 
     def run(
-            self,
-            current_state,
-            actor,
+        self,
+        current_state,
+        actor,
     ):
 
         self.actor = actor
@@ -195,10 +200,8 @@ class MCTS:
         """Finds the move that led from parent_node.state to current_state"""
         for move in self.game_manager.get_legal_moves(parent_node.state):
             if self.equal(
-                    self.game_manager.next_state(
-                        parent_node.state, move
-                    ),
-                    current_state,
+                self.game_manager.next_state(parent_node.state, move),
+                current_state,
             ):
                 return move
         return None  # Should not happen in normal execution
