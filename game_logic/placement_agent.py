@@ -11,11 +11,11 @@ from strategies.placing.random import RandomPlacing
 
 class PlacementAgent:
     def __init__(
-            self,
-            board_size,
-            ship_sizes,
-            strategy,
-            chromosome=[(0, 0, 0), (2, 9, 0), (2, 2, 1), (0, 1, 1), (5, 2, 1)],
+        self,
+        board_size,
+        ship_sizes,
+        strategy,
+        chromosome=[(0, 0, 0), (2, 9, 0), (2, 2, 1), (0, 1, 1), (5, 2, 1)],
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -43,9 +43,9 @@ class PlacementAgent:
 
     def adjust_ship_placements(self, board):
         """Randomly adjust ship placements while ensuring:
-           - Sunken ships remain fixed.
-           - Hit ships stay in the hit area (but can slide/rotate).
-           - Other ships move freely.
+        - Sunken ships remain fixed.
+        - Hit ships stay in the hit area (but can slide/rotate).
+        - Other ships move freely.
         """
         sunken_tiles = board[3]  # Cells occupied by fully sunk ships
 
@@ -101,7 +101,7 @@ class PlacementAgent:
                     temp_indexes = temp_ship.compute_indexes()
 
                     # Ensure all positions are within board limits
-                    if any(i >= board_size ** 2 for i in temp_indexes):
+                    if any(i >= board_size**2 for i in temp_indexes):
                         continue
 
                     # Ensure the ship does not overlap with a fully sunken ship
@@ -113,7 +113,9 @@ class PlacementAgent:
                         continue
 
                     # If ship was hit, ensure at least one hit position remains in the ship
-                    if hit_positions and not any(i in temp_indexes for i in hit_positions):
+                    if hit_positions and not any(
+                        i in temp_indexes for i in hit_positions
+                    ):
                         continue
 
                     # Ensure the placement does not overlap with other ships
@@ -129,7 +131,7 @@ class PlacementAgent:
         possible = True
         for i in ship.indexes:
             # indexes must be within the board
-            if i < 0 or i >= (self.board_size ** 2) - 1:
+            if i < 0 or i >= (self.board_size**2) - 1:
                 possible = False
                 break
 
@@ -158,9 +160,9 @@ class PlacementAgent:
     }
 
     def show_ships(self):
-        print("Current Ship Placements:")
+        # print("Current Ship Placements:")
         # Initialize the board with empty cells
-        indexes = ["-" for _ in range(self.board_size ** 2)]
+        indexes = ["-" for _ in range(self.board_size**2)]
 
         # Iterate over each ship in list_of_ships
         for ship in self.list_of_ships:
@@ -176,5 +178,5 @@ class PlacementAgent:
         # Print each row with colored ship indicators
         for row in range(self.board_size):
             print(
-                " ".join(indexes[row * self.board_size: (row + 1) * self.board_size])
+                " ".join(indexes[row * self.board_size : (row + 1) * self.board_size])
             )

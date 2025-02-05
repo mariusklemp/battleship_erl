@@ -16,11 +16,17 @@ class NNPlacing(nn.Module):
 
         # Define CNN layers
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(
+            in_channels=16, out_channels=32, kernel_size=3, padding=1
+        )
+        self.conv3 = nn.Conv2d(
+            in_channels=32, out_channels=64, kernel_size=3, padding=1
+        )
 
         # Fully connected layers for output
-        self.fc1 = nn.Linear(64 * self.placing_agent.board_size * self.placing_agent.board_size, 128)
+        self.fc1 = nn.Linear(
+            64 * self.placing_agent.board_size * self.placing_agent.board_size, 128
+        )
         self.fc2 = nn.Linear(128, 3)  # Outputs: (x, y, direction)
 
     def forward(self, board_tensor):
@@ -67,7 +73,9 @@ class NNPlacing(nn.Module):
                 # Adjust the placement to ensure validity
                 x, y = self.adjust_to_valid_position(x, y, direction, size)
 
-                print(f"Placing ship of size {size} at ({x}, {y}) in direction {direction}")
+                # print(
+                #     f"Placing ship of size {size} at ({x}, {y}) in direction {direction}"
+                # )
                 # Create a new ship object with calculated placement
                 ship = Ship(size, self.placing_agent.board_size, x, y, direction)
 
@@ -100,5 +108,5 @@ class NNPlacing(nn.Module):
 
         # You can add more logic here to check for overlaps and make further adjustments if needed
 
-        print(f"Adjusted position: ({row}, {col})")
+        # print(f"Adjusted position: ({row}, {col})")
         return row, col

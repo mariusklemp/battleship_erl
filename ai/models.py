@@ -19,19 +19,20 @@ def activation_function(activation: str):
 
 class ANET(nn.Module):
     def __init__(
-            self,
-            board_size,
-            output_size,
-            activation,
-            device=torch.device("cpu"),
-            layer_config=None,
+        self,
+        board_size,
+        output_size,
+        activation,
+        extra_input_size,
+        device=torch.device("cpu"),
+        layer_config=None,
     ):
         super(ANET, self).__init__()
         self.board_size = board_size
         self.activation_func = activation_function(activation)
         self.device = device
         self.output_size = output_size
-
+        self.extra_input_size = extra_input_size
         input_channels = 4
 
         if layer_config is None:
@@ -54,23 +55,56 @@ class ANET(nn.Module):
             self.layer_config = layer_config
             self.logits = nn.Sequential(*self.getLayers())
 
-    def forward(self, game_state: torch.Tensor):
+        # Extra input branch: process ship information vector
+        # For example, we assume extra_input_size is the dimension of the extra features.
+        self.fc_extra = nn.Sequential(
+            nn.Linear(self.extra_input_size, 128),
+            self.activation_func,
+            nn.Linear(128, 128),
+            self.activation_func,
+        )
+
+        # After processing, we will combine the board branch (1024-dim) with extra branch (128-dim)
+        combined_dim = 1024 + 128
+        # Final fully connected layer for policy (you can also add an extra hidden layer if desired)
+        self.fc_policy = nn.Linear(combined_dim, output_size)
+
+        # Optionally, you might also add a value head:
+        self.fc_value = nn.Linear(combined_dim, 1)
+
+        self.apply(self.init_weights)
+
+    def forward(self, game_state: torch.Tensor, extra_input: torch.Tensor):
+        # game_state: (batch, 4, board_size, board_size)
+        # extra_input: (batch, extra_input_size)
+
         game_state = game_state.to(self.device)
-        x = game_state
+        extra_input = extra_input.to(self.device)
+
         if hasattr(self, "logits"):
-            policy = self.logits(x)
+            # If using layer_config, use that branch (not shown here)
+            policy = self.logits(game_state)
         else:
-            model = nn.Sequential(
-                self.conv1,
-                self.activation_func,
-                self.conv2,
-                self.activation_func,
-                self.flatten,
-                self.fc_shared,
-                self.activation_func,
-                self.dropout,
-            )
-            policy = self.fc_policy(model(x))
+            # Process board through convolutional layers
+            x = self.conv1(game_state)
+            x = self.activation_func(x)
+            x = self.conv2(x)
+            x = self.activation_func(x)
+            x = self.flatten(x)
+            board_features = self.fc_shared(x)
+            board_features = self.activation_func(board_features)
+            board_features = self.dropout(board_features)
+
+            # Process extra input through extra branch
+            extra_features = self.fc_extra(extra_input)
+            # Concatenate along the feature (last) dimension
+            combined = torch.cat([board_features, extra_features], dim=1)
+
+            # Pass through final policy layer
+            policy = self.fc_policy(combined)
+            # Optionally, if you need a value head as well:
+            # value = self.fc_value(combined)
+            # return policy, value
 
         return policy
 

@@ -7,11 +7,12 @@ from ai.models import ANET
 from RBUF import RBUF
 import json
 import visualize
+import torch
 
 
 def simulate_game(game_manager, search_agent, mcts, rbuf):
     """Simulate a Battleship game and return the move count."""
-
+    game_manager.placing.new_placements()
     current_state = game_manager.initial_state()
 
     while not game_manager.is_terminal(current_state):
@@ -19,19 +20,18 @@ def simulate_game(game_manager, search_agent, mcts, rbuf):
         best_child = mcts.run(current_state, search_agent)
         move = best_child.move
 
-        # Add move to rbuf
+        # Get both board tensor and extra features
+        board_tensor, extra_features = best_child.state.state_tensor()
+
+        # Add move to rbuf with both board and extra features
         rbuf.add_data_point(
             (
-                best_child.state.state_tensor(),
+                (board_tensor, extra_features),  # Input tuple containing both tensors
                 best_child.action_distribution(board_size=game_manager.size),
             )
         )
 
-        # self.mcts.print_tree()
-
-        current_state = game_manager.next_state(
-            current_state, move
-        )
+        current_state = game_manager.next_state(current_state, move)
 
     return current_state.move_count
 
@@ -54,8 +54,8 @@ def train_models(
     move_count = []
     """Play a series of games, training and saving the model as specified."""
     for i in tqdm(range(number_actual_games)):
-        #game_manager.placing.new_placements()
-        #game_manager.placing.show_ships()
+        # game_manager.placing.new_placements()
+        # game_manager.placing.show_ships()
 
         move_count.append(
             simulate_game(
@@ -71,14 +71,14 @@ def train_models(
                 search_agent.strategy.train(batch, rbuf.get_validation_set())
 
         if save_model and ((i + 1) % (number_actual_games / M) == 0):
-            search_agent.strategy.save_model(f"/models/model_{i+1}.pth")
+            search_agent.strategy.save_model(f"models/model_{i+1}.pth")
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
     if train_model:
         search_agent.strategy.plot_metrics()
 
-    visualize.plot_fitness(move_count, 5)
+    visualize.plot_fitness(move_count, game_manager.size)
 
 
 def main(
@@ -106,6 +106,7 @@ def main(
         output_size=board_size**2,
         device="cpu",
         layer_config=layer_config,
+        extra_input_size=6,
     )
 
     search_agent = SearchAgent(
@@ -153,20 +154,28 @@ def main(
 
 
 if __name__ == "__main__":
+
+    device = "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    if torch.backends.mps.is_available():
+        device = "mps"
+    print(f"Using device: {device}")
+
     main(
         board_size=5,
         sizes=[2, 2, 1],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=250,
+        simulations_number=500,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=50,
-        batch_size=50,
+        number_actual_games=100,
+        batch_size=100,
         device="cpu",
-        load_rbuf=False,
-        graphic_visualiser=False,
-        save_model=False,
-        train_model=False,
-        save_rbuf=False,
+        load_rbuf=True,
+        graphic_visualiser=True,
+        save_model=True,
+        train_model=True,
+        save_rbuf=True,
     )

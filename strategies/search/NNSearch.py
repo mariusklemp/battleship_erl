@@ -29,21 +29,24 @@ class NNSearch(nn.Module, Strategy):
         self.optimizer = get_optimizer(optimizer, self.net, lr)
         self.training_losses = []
         self.validation_losses = []
-        self.accuracy_history = []
+        self.top1_accuracy_history = []
+        self.top3_accuracy_history = []
+        self.val_top1_accuracy_history = []
+        self.val_top3_accuracy_history = []
 
     def find_move(self, state):
         self.search_agent.move_count += 1
 
-        # Convert the board state (4 layers) into a tensor
-        board_tensor = torch.tensor(state.board, dtype=torch.float32)
+        # Get both board tensor and extra features
+        board_tensor, extra_features = state.state_tensor()
 
         # Reshape the board to have shape (batch_size, channels, height, width)
-        # For example, (1, 4, 10, 10) for a 10x10 board
         board_size = self.search_agent.board_size
         board_tensor = board_tensor.view(1, 4, board_size, board_size)
+        extra_features = extra_features.unsqueeze(0)  # Add batch dimension
 
         # Forward pass to get raw output (logits)
-        output = self.net.forward(board_tensor).view(
+        output = self.net(board_tensor, extra_features).view(
             1, -1
         )  # Flatten the output to (1, board_size^2)
 
@@ -64,6 +67,37 @@ class NNSearch(nn.Module, Strategy):
 
         return move
 
+    def calculate_accuracy(self, predicted_values, target_values):
+        """
+        Calculate accuracy for move prediction.
+
+        Args:
+            predicted_values: Model output logits
+            target_values: True target moves
+
+        Returns:
+            tuple: (accuracy, top_3_accuracy)
+        """
+        # Apply softmax to get probabilities
+        predicted_probs = F.softmax(predicted_values, dim=1)
+
+        # Get top-k predictions
+        top1_pred = predicted_probs.argmax(dim=1)
+        top3_pred = predicted_probs.topk(
+            k=min(3, predicted_probs.size(1)), dim=1
+        ).indices
+
+        # Get true moves (assuming target is one-hot encoded)
+        true_moves = target_values.argmax(dim=1)
+
+        # Calculate accuracies
+        top1_accuracy = (top1_pred == true_moves).float().mean()
+        top3_accuracy = (
+            torch.any(top3_pred == true_moves.unsqueeze(1), dim=1).float().mean()
+        )
+
+        return top1_accuracy, top3_accuracy
+
     def train(self, training_data, validation_data):
         """
         Train the actor network on the value output.
@@ -73,17 +107,17 @@ class NNSearch(nn.Module, Strategy):
         self.net.train()
         states, target_values = zip(*training_data)
 
+        # Unpack the state tuples into board tensors and extra features
+        board_tensors, extra_features = zip(*[state for state in states])
+
         # Stack states and reshape to [batch_size, channels, height, width]
-        states_tensor = torch.stack(
-            states
-        )  # Shape: [batch_size, 1, channels, board_size*board_size]
-        states_tensor = states_tensor.squeeze(1)  # Remove the extra dimension
-        board_size = int(
-            states_tensor.shape[-1] ** 0.5
-        )  # Calculate board size from flattened dimension
-        states_tensor = states_tensor.view(
-            -1, 4, board_size, board_size
-        )  # Reshape to proper dimensions
+        board_tensor = torch.stack(board_tensors)
+        board_tensor = board_tensor.squeeze(1)  # Remove the extra dimension
+        board_size = int(board_tensor.shape[-1] ** 0.5)
+        board_tensor = board_tensor.view(-1, 4, board_size, board_size)
+
+        # Stack extra features
+        extra_tensor = torch.stack(extra_features)  # Shape: [batch_size, 6]
 
         # Convert the target values from a list of ndarrays to a single ndarray
         target_values = np.array(target_values)
@@ -94,27 +128,25 @@ class NNSearch(nn.Module, Strategy):
         self.optimizer.zero_grad()
 
         # Forward pass to get the value predictions
-        predicted_values = self.net(states_tensor)
+        predicted_values = self.net(board_tensor, extra_tensor)
 
-        # Compute the cros entropy loss using nn.CrossEntropyLoss
+        # Compute the cross entropy loss using nn.CrossEntropyLoss
         policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
 
         # Backward pass and optimize
         policy_loss.backward()
         self.optimizer.step()
 
-        self.training_losses.append(policy_loss.item())
-
-        print(f"{self.name} value loss: {policy_loss.item()}")
-
-        # Calculate the accuracy of the model
-        accuracy = (
-            (predicted_values.argmax(dim=1) == target_values_tensor.argmax(dim=1))
-            .float()
-            .mean()
+        # Calculate accuracies
+        top1_acc, top3_acc = self.calculate_accuracy(
+            predicted_values, target_values_tensor
         )
-        print(f"Training Accuracy: {accuracy}")
-        self.accuracy_history.append(accuracy.item())
+        # print(f"{self.name} value loss: {policy_loss.item()}")
+        # print(f"Training Accuracy - Top-1: {top1_acc:.3f}, Top-3: {top3_acc:.3f}")
+
+        self.training_losses.append(policy_loss.item())
+        self.top1_accuracy_history.append(top1_acc.item())
+        self.top3_accuracy_history.append(top3_acc.item())
 
         # Validate the model
         if validation_data:
@@ -130,17 +162,17 @@ class NNSearch(nn.Module, Strategy):
             self.net.eval()
             states, target_values = zip(*validation_data)
 
+            # Unpack the state tuples into board tensors and extra features
+            board_tensors, extra_features = zip(*[state for state in states])
+
             # Stack states and reshape to [batch_size, channels, height, width]
-            states_tensor = torch.stack(
-                states
-            )  # Shape: [batch_size, 1, channels, board_size*board_size]
-            states_tensor = states_tensor.squeeze(1)  # Remove the extra dimension
-            board_size = int(
-                states_tensor.shape[-1] ** 0.5
-            )  # Calculate board size from flattened dimension
-            states_tensor = states_tensor.view(
-                -1, 4, board_size, board_size
-            )  # Reshape to proper dimensions
+            board_tensor = torch.stack(board_tensors)
+            board_tensor = board_tensor.squeeze(1)
+            board_size = int(board_tensor.shape[-1] ** 0.5)
+            board_tensor = board_tensor.view(-1, 4, board_size, board_size)
+
+            # Stack extra features
+            extra_tensor = torch.stack(extra_features)
 
             # Convert the target values from a list of ndarrays to a single ndarray
             target_values = np.array(target_values)
@@ -149,31 +181,68 @@ class NNSearch(nn.Module, Strategy):
             ).squeeze(1)
 
             # Forward pass to get the value predictions
-            predicted_values = self.net(states_tensor)
+            predicted_values = self.net(board_tensor, extra_tensor)
             policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
+
+            # Calculate accuracies
+            top1_acc, top3_acc = self.calculate_accuracy(
+                predicted_values, target_values_tensor
+            )
+
             self.validation_losses.append(policy_loss.item())
-
-            # Calculate the accuracy
-            predicted_values = F.softmax(predicted_values, dim=1)
-            predicted_values = torch.argmax(predicted_values, dim=1)
-            correct = (predicted_values == target_values_tensor.argmax(dim=1)).sum()
-            total = target_values_tensor.size(0)
-            accuracy = correct / total
-            print(f"Validation Accuracy: {accuracy}")
-
-            print(f"{self.name} validation loss: {policy_loss.item()}")
+            self.val_top1_accuracy_history.append(top1_acc.item())
+            self.val_top3_accuracy_history.append(top3_acc.item())
 
     def plot_metrics(self):
-        # Plot the training and validation losses and accuracy
-        plt.figure(figsize=(12, 6))
-        plt.subplot(1, 2, 1)
-        plt.plot(self.training_losses, label="Training Loss")
-        plt.plot(self.validation_losses, label="Validation Loss")
-        plt.title("Loss")
-        plt.legend()
+        """Plot training metrics with improved visualization."""
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
 
-        plt.subplot(1, 2, 2)
-        plt.plot(self.accuracy_history, label="Accuracy")
-        plt.title("Accuracy")
-        plt.legend()
+        # Plot losses
+        ax1.plot(self.training_losses, "b-", label="Training Loss", alpha=0.7)
+        ax1.plot(self.validation_losses, "r-", label="Validation Loss", alpha=0.7)
+        ax1.set_title("Loss Evolution", pad=10)
+        ax1.set_xlabel("Training Steps")
+        ax1.set_ylabel("Cross Entropy Loss")
+        ax1.grid(True, linestyle="--", alpha=0.6)
+        ax1.legend()
+
+        # Plot accuracies
+        ax2.plot(self.top1_accuracy_history, "b-", label="Top-1 Train", alpha=0.7)
+        ax2.plot(self.top3_accuracy_history, "b--", label="Top-3 Train", alpha=0.7)
+        ax2.plot(self.val_top1_accuracy_history, "r-", label="Top-1 Val", alpha=0.7)
+        ax2.plot(self.val_top3_accuracy_history, "r--", label="Top-3 Val", alpha=0.7)
+        ax2.set_title("Accuracy Evolution", pad=10)
+        ax2.set_xlabel("Training Steps")
+        ax2.set_ylabel("Accuracy")
+        ax2.grid(True, linestyle="--", alpha=0.6)
+        ax2.legend()
+
+        # Add summary statistics
+        if len(self.training_losses) > 0:
+            stats_text = (
+                f"Final Metrics:\n"
+                f"Train Loss: {self.training_losses[-1]:.3f}\n"
+                f"Val Loss: {self.validation_losses[-1]:.3f}\n"
+                f"Top-1 Train: {self.top1_accuracy_history[-1]:.3f}\n"
+                f"Top-3 Train: {self.top3_accuracy_history[-1]:.3f}\n"
+                f"Top-1 Val: {self.val_top1_accuracy_history[-1]:.3f}\n"
+                f"Top-3 Val: {self.val_top3_accuracy_history[-1]:.3f}"
+            )
+            fig.text(
+                0.98,
+                0.98,
+                stats_text,
+                fontsize=9,
+                verticalalignment="top",
+                horizontalalignment="right",
+                bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
+            )
+
+        plt.tight_layout()
         plt.show()
+
+    def save_model(self, path):
+        self.net.save(path)
+
+    def load_model(self, path):
+        self.net.load_state_dict(torch.load(path))
