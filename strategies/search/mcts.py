@@ -15,6 +15,7 @@ class MCTSStrategy(Strategy):
         best_child = self.mcts.run(state, self.search_agent)
 
         # Visualize
+        print("__Board__")
         state.placing.show_ships()
         show_board(best_child.state, self.search_agent.board_size)
         action_distribution = best_child.action_distribution(board_size=self.search_agent.board_size)

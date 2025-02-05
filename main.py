@@ -1,4 +1,3 @@
-import sys
 import pygame
 
 from ai.mcts import MCTS
@@ -61,7 +60,7 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
         search_agent_1.strategy.set_mcts(mcts)
 
     if player2_search_strategy == "mcts":
-        mcts = MCTS(game_manager_2, simulations_number=10, exploration_constant=1.41)
+        mcts = MCTS(game_manager_2, simulations_number=1000, exploration_constant=1.41)
         search_agent_2.strategy.set_mcts(mcts)
 
     # Initialize Pygame
@@ -93,7 +92,7 @@ def initialize_game(board_size, sizes, human_player, player1_search_strategy, pl
 
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
-    initialize_game(board_size=5, sizes=[2, 1, 2],
+    initialize_game(board_size=4, sizes=[3,2,2],
                     human_player=True,
                     player1_search_strategy="mcts",
                     player1_placing_strategy="random",

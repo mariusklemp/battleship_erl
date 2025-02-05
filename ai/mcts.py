@@ -60,14 +60,17 @@ class Node:
         size = board_size ** 2
         distribution = np.zeros(size)  # Initialize the distribution
 
+        # Compute total visits among all children.
         total_child_visits = sum(child.visits for child in self.children)
-        if total_child_visits == 0:  # Avoid division by zero
+
+        if total_child_visits == 0:
             return distribution
 
+        # Process each child and fill the distribution.
         for child in self.children:
             move_index = child.move  # Assuming move is an integer index in range(size)
-            if 0 <= move_index < size:  # Ensure the move index is valid
-                distribution[move_index] = child.visits / total_child_visits  # Normalize
+            if 0 <= move_index < size:
+                distribution[move_index] = child.visits / total_child_visits
 
         return distribution
 
@@ -108,20 +111,13 @@ class MCTS:
     def simulate(self, node):
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
-        print("Before adjustment:")
-        print(current_state.placing.show_ships())
 
-        # Slightly modify the ship placement before simulation
         current_state.placing.adjust_ship_placements(current_state.board)
-
-        print("After adjustment:")
-        print(current_state.placing.show_ships())
 
         while not self.game_manager.is_terminal(current_state):
             # Select a move randomly for now (or use a strategy)
             best_move = random.choice(self.game_manager.get_legal_moves(current_state))
             current_state = self.game_manager.next_state(current_state, best_move)
-
 
         return current_state.move_count
 
@@ -156,19 +152,24 @@ class MCTS:
             result = self.simulate(node)
             self.backpropagate(node, result)
 
-        return self.current_node.best_child(c_param=self.exploration_constant)
+        best_child = self.current_node.best_child(c_param=self.exploration_constant)
+
+        # Now prune the tree so that the branch from the best action becomes the new tree.
+        self.prune_tree()
+
+        return best_child
 
     def find_current_node(self, current_state):
-        # Check if we're starting a new game or continuing from an existing state
+        # Check if we're starting a new game
         if self.root_node is None:
-            # Starting a new game
             self.root_node = Node(current_state)
             current_node = self.root_node
 
+        # Check if the current state equals the root node's state
         elif self.equal(self.root_node.state, current_state):
             current_node = self.root_node
+
         else:
-            # Continuing from an existing state: find the child node that matches the current state
             matching_child = next(
                 (
                     child
@@ -177,19 +178,17 @@ class MCTS:
                 ),
                 None,
             )
-
             if matching_child:
-                # If a matching child is found, make it the new current node
                 current_node = matching_child
             else:
-                # Find the move that led to this state
                 last_move = self.find_last_move(self.current_node, current_state)
 
-                # Create a new node with the correct move
+                # Create a new node based on the last move
                 new_node = Node(current_state, parent=self.current_node, move=last_move)
 
                 self.current_node.add_child(new_node)
                 current_node = new_node
+
         return current_node
 
     def find_last_move(self, parent_node, current_state):
@@ -223,3 +222,25 @@ class MCTS:
 
         for i, child in enumerate(node.children):
             self.print_tree(child, indent, i == len(node.children) - 1)
+
+    def prune_tree(self):
+        """
+        Prunes the tree to only keep the subtree that branches out from the best action.
+        This method re-roots the tree by selecting the best child (using c_param=0 for pure exploitation),
+        detaching it from its parent, and setting it as the new root.
+        """
+        if self.root_node is None:
+            return
+
+        if len(self.root_node.children) == 0:
+            return
+
+        # Use c_param=0 to pick the child with the highest win rate (pure exploitation)
+        best_child = self.root_node.best_child(c_param=0)
+        if best_child is None:
+            return
+
+        # Detach best_child from its parent.
+        best_child.parent = None
+        # Set the best child as the new root.
+        self.root_node = best_child
