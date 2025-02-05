@@ -129,7 +129,6 @@ def main(
 
     search_agent = SearchAgent(
         board_size=board_size,
-        ship_sizes=sizes,
         strategy=strategy_search,
         net=net,
         optimizer="adam",

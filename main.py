@@ -24,7 +24,6 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
     )
     search_agent = SearchAgent(
         board_size=board_size,
-        ship_sizes=sizes,
         strategy=search_strategy,
         net=net,
         optimizer="adam",
