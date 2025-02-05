@@ -1,6 +1,7 @@
 import json
 import matplotlib.pyplot as plt
 import visualize
+from ai.mcts import MCTS
 from ai.models import ANET
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
@@ -13,7 +14,7 @@ class Tournament:
     Strategies may include "nn_search", "random", "hunt_down", "mcts", etc.
     """
 
-    def __init__(self, board_size, num_games, ship_sizes, placing_strategy, search_strategies):
+    def __init__(self, board_size, num_games, ship_sizes, placing_strategy, search_strategies, num_players, game_manager):
         """
         Initialize the Tournament.
 
@@ -25,18 +26,21 @@ class Tournament:
         """
         self.board_size = board_size
         self.num_games = num_games
+        self.num_players = num_players
         self.ship_sizes = ship_sizes
         self.placing_strategy = placing_strategy
         self.search_strategies = search_strategies
-        self.players = {}   # Dictionary mapping an identifier to a search agent
-        self.result = {}    # Dictionary mapping an identifier to a list of move counts
+        self.players = {}  # Dictionary mapping an identifier to a search agent
+        self.result = {}  # Dictionary mapping an identifier to a list of move counts
+        self.game_manager = game_manager
 
     def set_nn_agent(self, i, default_net):
         """Initializes a SearchAgent that uses a neural network.
            Model number is based on tournament parameters.
         """
-        model_number = int(self.num_games / len(self.search_strategies) * (i + 1))
-        path = f"/models/model{model_number}.pth"
+        model_number = int(self.num_games / self.num_players * (i + 1))
+        print(f"[DEBUG] Loading model: {model_number}")
+        path = f"models/model_{model_number}.pth"
 
         search_agent = SearchAgent(
             board_size=self.board_size,
@@ -47,8 +51,6 @@ class Tournament:
         )
         search_agent.strategy.load_model(path)
         return search_agent, f"nn_{model_number}"
-
-
 
     def init_players(self):
         """
@@ -68,14 +70,26 @@ class Tournament:
         )
 
         # For each strategy in the provided list, create a player.
+        for i in range(self.num_players):
+            agent, identifier = self.set_nn_agent(i, default_net)
+            self.players[identifier] = agent
+            self.result[identifier] = []  # Initialize an empty result list for this player
+
         for i, strat in enumerate(self.search_strategies):
-            if strat == "nn_search":
-                agent, identifier = self.set_nn_agent(i, default_net)
-            elif strat in ["random", "hunt_down", "mcts"]:
+            if strat in ["random", "hunt_down"]:
                 agent = SearchAgent(
-                        board_size=self.board_size,
-                        strategy=strat,
-                    )
+                    board_size=self.board_size,
+                    strategy=strat,
+                )
+
+                identifier = f"{strat}"
+            elif strat == "mcts":
+                agent = SearchAgent(
+                    board_size=self.board_size,
+                    strategy=strat,
+                )
+                mcts = MCTS(self.game_manager, simulations_number=500, exploration_constant=1.41)
+                agent.strategy.set_mcts(mcts)
 
                 identifier = f"{strat}"
             else:
@@ -124,21 +138,20 @@ class Tournament:
         plt.show()
 
 
-def main(board_size, placing_strategy, ship_sizes, num_games):
-    search_strategies = ["nn_search", "random"]
-    tournament = Tournament(board_size, num_games, ship_sizes, placing_strategy, search_strategies)
-    tournament.init_players()
+def main(board_size, placing_strategy, ship_sizes, num_games, num_players, other_strategies=None):
 
     placement_agent = PlacementAgent(
         board_size=board_size,
         ship_sizes=ship_sizes,
         strategy=placing_strategy,
     )
-
     game_manager = GameManager(size=board_size, placing=placement_agent)
 
+    tournament = Tournament(board_size, num_games, ship_sizes, placing_strategy, other_strategies, num_players, game_manager)
+    tournament.init_players()
+
     for i in range(num_games):
-        game_manager.placing.new_placement()
+        game_manager.placing.new_placements()
         for identifier, search_agent in tournament.players.items():
             move_count = tournament.play(search_agent, game_manager)
             tournament.result[identifier].append(move_count)
@@ -147,4 +160,4 @@ def main(board_size, placing_strategy, ship_sizes, num_games):
 
 
 if __name__ == "__main__":
-    main(board_size=5, placing_strategy="random", ship_sizes=[2, 1, 2], num_games=1000)
+    main(board_size=5, placing_strategy="random", ship_sizes=[2, 1, 2], num_games=100, num_players=10,  other_strategies = ["random", "hunt_down", "mcts"])
