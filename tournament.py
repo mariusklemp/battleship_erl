@@ -1,17 +1,47 @@
 import pygame
 
 from game_logic.game import Game
+from game_logic.placement_agent import PlacementAgent
+from game_logic.search_agent import SearchAgent
 from gui import GUI
 
 
-def main(board_size=10, sizes=[5, 4, 3, 3, 2], human_player=False, player1_search_strategy="random",
-         player2_search_strategy="random", player1_placing_strategy="random", player2_placing_strategy="random"):
+def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
+    """Initializes Search and Placement Agents."""
+
+    # model_100
+    search_agent = SearchAgent(
+        board_size=board_size,
+        ship_sizes=sizes,
+        strategy=search_strategy,
+        net=None,
+        optimizer=None,
+        lr=None
+    )
+    placement_agent = PlacementAgent(
+        board_size=board_size,
+        ship_sizes=sizes,
+        strategy=placing_strategy,
+    )
+    return search_agent, placement_agent
+
+
+def init_players(numb_players):
+    # Create nets from saved models
+    # return a dict of nets
+    for i in range(numb_players):
+        initialize_agents()
+    return {}
+
+
+def main(board_size, ship_sizes, placing_strategy, numb_players, numb_games=100):
     results = {1: [0, []], 2: [0, []]}
 
-    for i in range(100):
-        game = Game(board_size=board_size, sizes=sizes, player1_search_strategy=player1_search_strategy,
-                    player2_search_strategy=player2_search_strategy,
-                    player1_placing_strategy=player1_placing_strategy, player2_placing_strategy=player2_placing_strategy)
+    players = init_players(numb_players)
+
+    for i in range(numb_games):
+
+        human_player = False
 
         while not game.game_over:
             game.play_turn() if human_player else game.play_turn()
@@ -28,5 +58,4 @@ def main(board_size=10, sizes=[5, 4, 3, 3, 2], human_player=False, player1_searc
 
 
 if __name__ == "__main__":
-    main(board_size=10, player1_search_strategy="random", player1_placing_strategy="random",
-         player2_search_strategy="hunt_down",  player2_placing_strategy="random")
+    main(board_size=5, placing_strategy="random", ship_sizes=[2, 1, 2], numb_players=2)
