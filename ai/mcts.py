@@ -31,7 +31,7 @@ class Node:
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param):
         best_score = -float("inf")
         best_moves = []
         for child_node in self.children:
@@ -134,12 +134,9 @@ class MCTS:
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
 
-        visualize.show_board(current_state, board_size=self.actor.board_size)
-
         current_state.placing.adjust_ship_placements(current_state.board)
 
-        print("After adjustment:")
-        current_state.placing.show_ships()
+        #current_state.placing.show_ships()
 
         while not self.game_manager.is_terminal(current_state):
             # Select a move randomly for now (or use a strategy)
@@ -251,16 +248,13 @@ class MCTS:
         pruned = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
-        # print the pruned moves
+
         pruned_moves = [
             move
             for move in legal_moves
             if not self.is_possible_ship_location(state, move)
         ]
-        if len(pruned_moves) > 0:
-            print("Pruned moves:", pruned_moves)
-            visualize.show_board(state, board_size=self.game_manager.size)
-            print("--------------------------------")
+
         return pruned
 
     def is_possible_ship_location(self, state, move):

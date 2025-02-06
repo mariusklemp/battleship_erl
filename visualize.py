@@ -4,6 +4,7 @@ import graphviz
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
+import torch
 
 
 def plot_stats(statistics, ylog=False, view=False, filename="avg_fitness.svg"):
@@ -113,15 +114,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-    config,
-    genome,
-    view=False,
-    filename=None,
-    node_names=None,
-    show_disabled=True,
-    prune_unused=False,
-    node_colors=None,
-    fmt="svg",
+        config,
+        genome,
+        view=False,
+        filename=None,
+        node_names=None,
+        show_disabled=True,
+        prune_unused=False,
+        node_colors=None,
+        fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -207,7 +208,7 @@ def plot_fitness(move_count, board_size):
         board_size (int): Size of the game board
     """
     # Calculate fitness from move count
-    fitness = [board_size**2 - moves for moves in move_count]
+    fitness = [board_size ** 2 - moves for moves in move_count]
     games = range(1, len(fitness) + 1)
 
     # Calculate moving average
@@ -260,7 +261,7 @@ def plot_fitness(move_count, board_size):
     plt.legend(loc="lower right")
 
     # Add a horizontal line at maximum possible fitness
-    max_possible_fitness = board_size**2 - board_size
+    max_possible_fitness = board_size ** 2 - board_size
     plt.axhline(
         y=max_possible_fitness,
         color="g",
@@ -306,7 +307,7 @@ def plot_action_distribution(action_distribution, board_size):
     print("-" * (board_size * 7))  # Formatting line
 
 
-def show_board(state, board_size):
+def show_board(board, board_size):
     """
     Prints the Battleship board with colors for better visualization.
 
@@ -328,11 +329,11 @@ def show_board(state, board_size):
         row = ""
         for j in range(board_size):
             index = i * board_size + j
-            if state.board[3][index] == 1:  # Sunken ship
+            if board[3][index] == 1:  # Sunken ship
                 row += COLORS["sunk"]
-            elif state.board[1][index] == 1:  # Hit
+            elif board[1][index] == 1:  # Hit
                 row += COLORS["hit"]
-            elif state.board[2][index] == 1:  # Miss
+            elif board[2][index] == 1:  # Miss
                 row += COLORS["miss"]
             else:  # Unexplored
                 row += COLORS["empty"]
@@ -340,3 +341,33 @@ def show_board(state, board_size):
         print(row)
 
     print("-" * (board_size * 2))  # Formatting line
+
+
+import numpy as np
+
+
+def print_rbuf(rbuf, num_samples, board_size):
+    """
+    Pretty-print a few samples from the replay buffer.
+
+    :param rbuf: The replay buffer object.
+    :param num_samples: The number of samples to print (default: 5).
+    """
+    print("\n--- Replay Buffer Contents ---")
+    print(f"Total stored samples: {len(rbuf.data)}")
+
+    if len(rbuf.data) == 0:
+        print("Replay buffer is empty.")
+        return
+
+    # Randomly sample entries to print if buffer is large
+    indices = np.random.choice(len(rbuf.data), min(num_samples, len(rbuf.data)), replace=False)
+
+    for idx in indices:
+        (board_tensor, extra_features), action_distribution = rbuf.data[idx]
+
+        print(f"\nSample {idx + 1}:")
+        show_board(board_tensor.numpy().reshape(-1, board_tensor.shape[-1]), board_size)
+        print("Extra Features:", extra_features.numpy() if isinstance(extra_features, torch.Tensor) else extra_features)
+        plot_action_distribution(action_distribution, board_size)
+        print("-" * 40)

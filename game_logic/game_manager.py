@@ -9,14 +9,19 @@ class GameManager:
 
     def __init__(self, size, placing):
         self.size = size
-        self.board = [[0 for _ in range(self.size**2)] for _ in range(4)]
-        self.game_over = False
         self.placing = placing
         self.move_count = 0
 
     def initial_state(self):
+        print("New game started")
+        print("Placing ships")
+        self.placing.new_placements()
+        print("Setting board")
+        board = [[0 for _ in range(self.size**2)] for _ in range(4)]
+        print("Setting move count")
+        print("Setting remaining ships", self.placing.ship_sizes)
         return GameState(
-            self.board, self.move_count, self.placing, self.placing.ship_sizes
+            board=board, move_count=0, placing=self.placing, remaining_ships=self.placing.ship_sizes
         )
 
     def get_legal_moves(self, state):
@@ -33,8 +38,12 @@ class GameManager:
         new_board[0][move] = 1
         remaining_ships = state.remaining_ships.copy()
         if move in self.placing.indexes:
+            #print("Hit!")
             new_board[1][move] = 1
+            #print("Checking if ship is sunk")
             sunk, ship_size = self.check_ship_sunk(move, new_board)
+            #print("Ship sunk:", sunk)
+            #print("Ship size:", ship_size)
             if sunk:
                 if ship_size in remaining_ships:
                     remaining_ships.remove(ship_size)
