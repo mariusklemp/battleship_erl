@@ -3,10 +3,11 @@ from collections import Counter
 
 
 class GameState:
-    def __init__(self, board, move_count, placing):
+    def __init__(self, board, move_count, placing, remaining_ships):
         self.board = board
         self.move_count = move_count
         self.placing = placing
+        self.remaining_ships = remaining_ships
 
     def state_tensor(self):
         """Returns both the board tensor and extra features tensor."""

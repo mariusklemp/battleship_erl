@@ -12,13 +12,16 @@ class MCTSStrategy(Strategy):
     def find_move(self, state):
         self.search_agent.move_count += 1
 
-        best_child = self.mcts.run(state, self.search_agent)
+        current_node = self.mcts.run(state, self.search_agent)
+        best_child = current_node.best_child(c_param=self.mcts.exploration_constant)
 
         # Visualize
         print("__Board__")
         state.placing.show_ships()
-        show_board(best_child.state, self.search_agent.board_size)
-        action_distribution = best_child.action_distribution(board_size=self.search_agent.board_size)
+        show_board(current_node.state, self.search_agent.board_size)
+        action_distribution = current_node.action_distribution(
+            board_size=self.search_agent.board_size
+        )
         plot_action_distribution(action_distribution, self.search_agent.board_size)
 
         move = best_child.move
