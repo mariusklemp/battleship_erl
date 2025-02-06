@@ -2,6 +2,9 @@ import copy
 import random
 import math
 import numpy as np
+import visualize
+
+MIN_VISITS_THRESHOLD = 10
 
 import visualize
 
@@ -65,6 +68,9 @@ class Node:
         # Compute total visits among all children.
         total_child_visits = sum(child.visits for child in self.children)
 
+        if total_child_visits < MIN_VISITS_THRESHOLD:  # e.g., 10
+            return None  # Skip adding to RBUF if not enough visits
+
         if total_child_visits == 0:
             return distribution
 
@@ -102,11 +108,25 @@ class MCTS:
         return node
 
     def expand_node(self, node):
-        move = random.choice(node.untried_moves)
+        # Get the raw legal moves from the game manager.
+        legal_moves = node.untried_moves
+        # Use the pruning function to filter them based on ship-placement constraints.
+        moves_to_expand = self.prune_moves(legal_moves, node.state)
+
+        # If no moves remain after pruning, fallback to the original list (or handle appropriately)
+        if not moves_to_expand:
+            moves_to_expand = legal_moves
+
+        move = random.choice(moves_to_expand)
         node.untried_moves.remove(move)
         next_state = self.game_manager.next_state(node.state, move)
-        legal_moves = self.game_manager.get_legal_moves(next_state)
-        child_node = Node(next_state, parent=node, move=move, untried_moves=legal_moves)
+        next_legal_moves = self.game_manager.get_legal_moves(next_state)
+        # Optionally, prune moves for the next state as well.
+        next_legal_moves = self.prune_moves(next_legal_moves, next_state)
+
+        child_node = Node(
+            next_state, parent=node, move=move, untried_moves=next_legal_moves
+        )
         node.add_child(child_node)
         return child_node
 
@@ -159,12 +179,7 @@ class MCTS:
             result = self.simulate(node)
             self.backpropagate(node, result)
 
-        best_child = self.current_node.best_child(c_param=self.exploration_constant)
-
-        # Now prune the tree so that the branch from the best action becomes the new tree.
-        self.prune_tree()
-
-        return best_child
+        return self.current_node
 
     def find_current_node(self, current_state):
         # Check if we're starting a new game
@@ -228,24 +243,97 @@ class MCTS:
         for i, child in enumerate(node.children):
             self.print_tree(child, indent, i == len(node.children) - 1)
 
-    def prune_tree(self):
+    def prune_moves(self, legal_moves, state):
         """
-        Prunes the tree to only keep the subtree that branches out from the best action.
-        This method re-roots the tree by selecting the best child (using c_param=0 for pure exploitation),
-        detaching it from its parent, and setting it as the new root.
+        Given a list of candidate moves (each as a tuple (row, col)) and the current state,
+        return only those moves that are consistent with any remaining ship placement.
         """
-        if self.root_node is None:
-            return
+        pruned = [
+            move for move in legal_moves if self.is_possible_ship_location(state, move)
+        ]
+        # print the pruned moves
+        pruned_moves = [
+            move
+            for move in legal_moves
+            if not self.is_possible_ship_location(state, move)
+        ]
+        if len(pruned_moves) > 0:
+            print("Pruned moves:", pruned_moves)
+            visualize.show_board(state, board_size=self.game_manager.size)
+            print("--------------------------------")
+        return pruned
 
-        if len(self.root_node.children) == 0:
-            return
+    def is_possible_ship_location(self, state, move):
+        """
+        Check if a candidate move (cell) could be part of any remaining ship.
 
-        # Use c_param=0 to pick the child with the highest win rate (pure exploitation)
-        best_child = self.root_node.best_child(c_param=0)
-        if best_child is None:
-            return
+        Parameters:
+            state: an object that must have:
+                - state.board: a list of 4 lists (layers) of length board_size**2.
+                Layer 0: Explored cells (1 for explored, 0 for unexplored)
+                Layer 1: Hit cells (1 for hit, 0 otherwise)
+                Layer 2: Misses (1 for miss, 0 otherwise)
+                Layer 3: Sunken ships (1 for sunken ship cell, 0 otherwise)
+                - state.remaining_ships: a list of ship sizes that have not yet been sunk.
+            move: an integer (0 to board_size**2 - 1) representing the candidate cell in row‑major order.
 
-        # Detach best_child from its parent.
-        best_child.parent = None
-        # Set the best child as the new root.
-        self.root_node = best_child
+        Returns:
+            True if there exists at least one legal placement (horizontal or vertical) for any of the
+            remaining ships that includes the candidate cell, given that each cell in the placement is either
+            unexplored (layer 0 is 0) or already a confirmed hit (layer 0 is 1 and layer 1 is 1). Otherwise, returns False.
+        """
+        board = state.board
+        remaining_ships = state.remaining_ships  # e.g., [2, 2, 1]
+        total_cells = len(board[0])
+        board_size = int(math.sqrt(total_cells))
+
+        # Convert move (an integer) to (row, col)
+        r = move // board_size
+        c = move % board_size
+
+        # Candidate cell is ruled out if:
+        # 1. It is explored but not a hit.
+        # 2. It is marked as a miss or as part of a sunken ship.
+        if board[0][move] == 1 and board[1][move] == 0:
+            return False
+        if board[2][move] == 1 or board[3][move] == 1:
+            return False
+
+        # For each remaining ship size, check for at least one valid placement that includes this cell.
+        for size in remaining_ships:
+            # --- Horizontal placements ---
+            start_c_min = max(0, c - size + 1)
+            start_c_max = min(c, board_size - size)
+            for start_c in range(start_c_min, start_c_max + 1):
+                valid = True
+                # Check the horizontal segment in row r from start_c to start_c+size-1.
+                for j in range(start_c, start_c + size):
+                    idx = r * board_size + j
+                    if board[2][idx] == 1 or board[3][idx] == 1:
+                        valid = False
+                        break
+                    if board[0][idx] == 1 and board[1][idx] == 0:
+                        valid = False
+                        break
+                if valid:
+                    return True
+
+            # --- Vertical placements ---
+            start_r_min = max(0, r - size + 1)
+            start_r_max = min(r, board_size - size)
+            for start_r in range(start_r_min, start_r_max + 1):
+                valid = True
+                # Check the vertical segment in column c from start_r to start_r+size-1.
+                for i in range(start_r, start_r + size):
+                    idx = i * board_size + c
+                    if board[2][idx] == 1 or board[3][idx] == 1:
+                        valid = False
+                        break
+                    if board[0][idx] == 1 and board[1][idx] == 0:
+                        valid = False
+                        break
+                if valid:
+                    return True
+
+        # If no valid placement exists for any ship size, then prune the move.
+        return False

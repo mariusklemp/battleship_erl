@@ -145,12 +145,9 @@ class ANET(nn.Module):
 
     @staticmethod
     def init_weights(m):
-        """
-        Initializes weights to be zero
-        """
-        if type(m) == nn.Linear or type(m) == nn.Conv2d:
-            torch.nn.init.zeros_(m.weight)
-            torch.nn.init.zeros_(m.bias)
+        if isinstance(m, (nn.Linear, nn.Conv2d)):
+            nn.init.kaiming_normal_(m.weight)  # He initialization
+            nn.init.constant_(m.bias, 0)
 
     def save(self, path: str):
         torch.save(self.state_dict(), path)

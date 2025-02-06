@@ -29,7 +29,7 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
         optimizer="adam",
         lr=0.001,
     )
-    #search_agent.strategy.load_model("models/model_100.pth")
+    # search_agent.strategy.load_model("models/model_100.pth")
     placement_agent = PlacementAgent(
         board_size=board_size,
         ship_sizes=sizes,
@@ -82,7 +82,7 @@ def initialize_game(
     if player1_search_strategy == "mcts":
         mcts = MCTS(
             game_manager_1 if player2_search_strategy else game_manager,
-            simulations_number=400,
+            simulations_number=1000,
             exploration_constant=1.41,
         )
         search_agent_1.strategy.set_mcts(mcts)

@@ -27,6 +27,9 @@ class NNSearch(nn.Module, Strategy):
         self.search_agent = search_agent
         self.net = net
         self.optimizer = get_optimizer(optimizer, self.net, lr)
+        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
+        )
         self.training_losses = []
         self.validation_losses = []
         self.top1_accuracy_history = []
@@ -150,7 +153,8 @@ class NNSearch(nn.Module, Strategy):
 
         # Validate the model
         if validation_data:
-            self.validate(validation_data)
+            val_loss = self.validate(validation_data)
+            self.scheduler.step(val_loss)
 
     def validate(self, validation_data):
         """
@@ -192,6 +196,8 @@ class NNSearch(nn.Module, Strategy):
             self.validation_losses.append(policy_loss.item())
             self.val_top1_accuracy_history.append(top1_acc.item())
             self.val_top3_accuracy_history.append(top3_acc.item())
+
+            return policy_loss.item()
 
     def plot_metrics(self):
         """Plot training metrics with improved visualization."""

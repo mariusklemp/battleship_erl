@@ -15,11 +15,13 @@ class GameManager:
         self.move_count = 0
 
     def initial_state(self):
-        return GameState(self.board, self.move_count, self.placing)
+        return GameState(
+            self.board, self.move_count, self.placing, self.placing.ship_sizes
+        )
 
     def get_legal_moves(self, state):
         legal_moves = []
-        for i in range(self.size ** 2):
+        for i in range(self.size**2):
             if state.board[0][i] == 0:
                 legal_moves.append(i)
 
@@ -29,13 +31,23 @@ class GameManager:
         new_board = [row[:] for row in state.board]
         new_move_count = state.move_count
         new_board[0][move] = 1
+        remaining_ships = state.remaining_ships.copy()
         if move in self.placing.indexes:
             new_board[1][move] = 1
-            self.check_ship_sunk(move, new_board)
+            sunk, ship_size = self.check_ship_sunk(move, new_board)
+            if sunk:
+                if ship_size in remaining_ships:
+                    remaining_ships.remove(ship_size)
+                else:
+                    print(
+                        "Warning: sunk ship size",
+                        ship_size,
+                        "not found in remaining_ships",
+                    )
         else:
             new_board[2][move] = 1
         new_move_count += 1
-        return GameState(new_board, new_move_count, self.placing)
+        return GameState(new_board, new_move_count, self.placing, remaining_ships)
 
     def check_ship_sunk(self, move, board):
         hit_ship = None
@@ -56,6 +68,9 @@ class GameManager:
         if sunk:
             for i in hit_ship:
                 board[3][i] = 1
+
+        # Return if the ship is sunk and the ship size
+        return sunk, len(hit_ship)
 
     def is_terminal(self, state):
         all_sunk = True
