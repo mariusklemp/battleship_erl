@@ -77,24 +77,25 @@ class PlacementAgent:
 
     def adjust_ship_placements(self, board):
         """
-        Given a board state (a list of four binary arrays of length board_size*board_size):
+        Adjust ship placements given a board state.
+
+        The board is a list of four binary arrays of length board_size*board_size:
           board[0] - explored cells,
           board[1] - hits,
           board[2] - misses,
           board[3] - sunk.
 
-        For each ship:
-          - Sunken ships remain fixed.
-          - Hit ships are placed so that every hit cell remains within the ship.
-          - Free ships are only placed on unexplored cells.
+        The new placements must obey two rules:
+          1. If any cell has been hit, then some ship in the new configuration must cover that hit.
+          2. For a ship that is not sunk, every cell in its candidate placement that is not a hit
+             must be unexplored (i.e. the player has not fired there).
 
-        Instead of generating all configurations, we sample a single valid configuration
-        (if one exists) and update the ship placements accordingly.
+        Sunk ships remain fixed.
         """
         candidate_map = self._generate_candidate_map(board)
-        chosen_config = self._sample_configuration(candidate_map)
+        chosen_config = self._sample_configuration(candidate_map, board)
         if chosen_config is None:
-            # Handle the failure (e.g. do nothing or raise an error)
+            # Handle failure as needed (e.g. do nothing or raise an error)
             return
 
         self._update_ships(chosen_config)
@@ -102,110 +103,112 @@ class PlacementAgent:
     def _generate_candidate_map(self, board):
         """
         Build and return a dictionary mapping each ship to its list of valid candidate placements.
-        Each candidate is a dict with keys: 'col', 'row', 'direction', and 'indexes'.
+        For sunk ships (any cell in ship.indexes is sunk) we only allow the current placement.
+        For non-sunk ships we generate all placements (horizontal and vertical) that do not:
+          - Overlap any cell that is marked as a miss (board[2]) or sunk (board[3]).
+          - Place a ship on an explored cell unless that cell is a hit.
         """
         candidate_map = {}
         board_size = self.board_size
 
         for ship in self.ships:
             candidates = []
-            # If any cell in the ship is sunk, only the current placement is valid.
+            # For sunk ships, keep the current placement.
             if any(board[3][i] == 1 for i in ship.indexes):
-                candidates.append(
-                    {
-                        "col": ship.col,
-                        "row": ship.row,
-                        "direction": ship.direction,
-                        "indexes": ship.indexes,
-                    }
-                )
+                candidates.append({
+                    "col": ship.col,
+                    "row": ship.row,
+                    "direction": ship.direction,
+                    "indexes": ship.indexes,
+                })
                 candidate_map[ship] = candidates
                 continue
 
-            hit_positions = [i for i in ship.indexes if board[1][i] == 1]
-            is_hit = len(hit_positions) > 0
-
             for direction in [0, 1]:
                 if direction == 0:
-                    # Horizontal placements: valid columns are 0 .. board_size - ship.size
+                    # Horizontal placements: columns 0 .. board_size - ship.size
                     for row in range(board_size):
                         for col in range(board_size - ship.size + 1):
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
-
-                            if not self._is_candidate_valid(
-                                candidate_indexes, board, is_hit, hit_positions
-                            ):
+                            if not self._is_candidate_valid(candidate_indexes, board):
                                 continue
-
-                            candidates.append(
-                                {
-                                    "col": col,
-                                    "row": row,
-                                    "direction": direction,
-                                    "indexes": candidate_indexes,
-                                }
-                            )
+                            candidates.append({
+                                "col": col,
+                                "row": row,
+                                "direction": direction,
+                                "indexes": candidate_indexes,
+                            })
                 else:  # Vertical placements
                     for col in range(board_size):
                         for row in range(board_size - ship.size + 1):
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
-
-                            if not self._is_candidate_valid(
-                                candidate_indexes, board, is_hit, hit_positions
-                            ):
+                            if not self._is_candidate_valid(candidate_indexes, board):
                                 continue
-
-                            candidates.append(
-                                {
-                                    "col": col,
-                                    "row": row,
-                                    "direction": direction,
-                                    "indexes": candidate_indexes,
-                                }
-                            )
+                            candidates.append({
+                                "col": col,
+                                "row": row,
+                                "direction": direction,
+                                "indexes": candidate_indexes,
+                            })
             candidate_map[ship] = candidates
 
         return candidate_map
 
-    def _is_candidate_valid(self, candidate_indexes, board, is_hit, hit_positions):
+    def _is_candidate_valid(self, candidate_indexes, board):
         """
-        Check whether all cells in candidate_indexes satisfy:
-          - No overlap with misses (board[2]) or sunken cells (board[3])
-          - For a free ship (not hit): candidate cells must be unexplored (board[0] is 0)
-          - For a hit ship: all previously hit cells must be included
+        Determine whether a candidate placement is valid given the board state.
+
+        For each cell index in candidate_indexes:
+          - It must NOT be marked as a miss (board[2]==1) or as sunk (board[3]==1).
+          - If the cell is NOT a hit (board[1]!=1), it must be unexplored (board[0]==0).
+
+        This ensures that:
+          • You never place a ship over a cell the player has confirmed as a miss.
+          • For cells that aren’t hits, you do not put a ship into an already-explored cell.
+          • Hit cells (which are explored by definition) are allowed, so that the global constraint
+            of “a ship must still be there” is met.
         """
         for idx in candidate_indexes:
+            # Disallow placements on misses or sunk cells.
             if board[2][idx] == 1 or board[3][idx] == 1:
                 return False
-            if not is_hit and board[0][idx] == 1:
+            # For non-hit cells, require that the cell is unexplored.
+            if board[1][idx] != 1 and board[0][idx] == 1:
                 return False
-
-        if is_hit and not all(hp in candidate_indexes for hp in hit_positions):
-            return False
-
         return True
 
-    def _sample_configuration(self, candidate_map):
+    def _sample_configuration(self, candidate_map, board):
         """
-        Instead of generating all configurations, sample a single valid configuration.
-        This function performs a randomized backtracking search and returns the first
-        complete configuration found (a list of candidate placements, one per ship).
+        Sample a complete configuration via randomized backtracking.
+
+        In addition to avoiding candidate overlaps, we enforce the global constraint:
+        every hit cell (i.e. where board[1]==1 and not sunk) must be covered by at least one ship.
         """
         ships_list = self.ships
+        # Identify all hit cells that have not been sunk.
+        global_hits = {i for i, hit in enumerate(board[1]) if hit == 1 and board[3][i] != 1}
 
         def backtrack(i, current_config, used_indexes):
             if i == len(ships_list):
-                return current_config.copy()
+                # Collect all indexes from the chosen candidate placements.
+                all_indices = set()
+                for cand in current_config:
+                    all_indices.update(cand["indexes"])
+                # Global constraint: every hit cell must be covered.
+                if global_hits.issubset(all_indices):
+                    return current_config.copy()
+                else:
+                    return None
             ship = ships_list[i]
-            # Randomize the candidate order to sample a random configuration.
+            # Randomize candidate order.
             candidates = candidate_map[ship][:]
             random.shuffle(candidates)
             for cand in candidates:
                 cand_set = set(cand["indexes"])
                 if cand_set & used_indexes:
-                    continue  # Overlap detected
+                    continue  # Overlap detected.
                 current_config.append(cand)
                 result = backtrack(i + 1, current_config, used_indexes | cand_set)
                 if result is not None:
@@ -217,7 +220,7 @@ class PlacementAgent:
 
     def _update_ships(self, chosen_config):
         """
-        Update each ship's attributes (col, row, direction, indexes) using the chosen configuration.
+        Update each ship’s attributes using the chosen configuration candidate.
         Also update the flattened list of ship indexes.
         """
         for ship, cand in zip(self.ships, chosen_config):

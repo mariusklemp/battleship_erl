@@ -6,6 +6,8 @@ import visualize
 
 MIN_VISITS_THRESHOLD = 10
 
+import visualize
+
 
 class Node:
     def __init__(self, state, parent=None, move=None, untried_moves=None):
@@ -29,7 +31,7 @@ class Node:
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
 
-    def best_child(self, c_param=1.4):
+    def best_child(self, c_param):
         best_score = -float("inf")
         best_moves = []
         for child_node in self.children:
@@ -130,8 +132,10 @@ class MCTS:
 
     def simulate(self, node):
         current_state = copy.deepcopy(node.state)
+
         current_state.placing.adjust_ship_placements(current_state.board)
 
+        # current_state.placing.show_ships()
         # Update remaining_ships to match the adjusted placements
         current_state.remaining_ships = [
             ship.size for ship in current_state.placing.ships
@@ -246,6 +250,16 @@ class MCTS:
         pruned = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
+        # print the pruned moves
+        pruned_moves = [
+            move
+            for move in legal_moves
+            if not self.is_possible_ship_location(state, move)
+        ]
+        if len(pruned_moves) > 0:
+            print("Pruned moves:", pruned_moves)
+            visualize.show_board(state, board_size=self.game_manager.size)
+            print("--------------------------------")
         return pruned
 
     def is_possible_ship_location(self, state, move):
