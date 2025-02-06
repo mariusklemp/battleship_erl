@@ -13,15 +13,11 @@ from gui import GUI
 import torch
 
 
-def simulate_game(game_manager, search_agent, rbuf, gui=None):
+def simulate_game(game_manager, search_agent, rbuf, mcts, gui=None):
     """Simulate a Battleship game and return the move count."""
     current_state = game_manager.initial_state()  # Reset the game and sets new board!
 
-    mcts = MCTS(
-        game_manager,
-        simulations_number=1000,
-        exploration_constant=1.41,
-    )
+    mcts.reset(game_manager)
     if gui:
         gui.update_board(current_state)
         pygame.display.update()
@@ -57,6 +53,7 @@ def train_models(
         number_actual_games,
         batch_size,
         M,
+        mcts,
         device,
         graphic_visualiser,
         save_model,
@@ -79,6 +76,7 @@ def train_models(
                 game_manager,
                 search_agent,
                 rbuf,
+                mcts,
                 gui,
             )
         )
@@ -145,6 +143,12 @@ def main(
 
     game_manager = GameManager(size=board_size, placing=placement_agent)
 
+    mcts = MCTS(
+        game_manager,
+        simulations_number=simulations_number,
+        exploration_constant=exploration_constant,
+    )
+
     rbuf = RBUF(max_len=10000)
 
     if load_rbuf:
@@ -158,6 +162,7 @@ def main(
         number_actual_games,
         batch_size,
         M,
+        mcts,
         device,
         graphic_visualiser,
         save_model,
