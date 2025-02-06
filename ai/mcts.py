@@ -3,6 +3,8 @@ import random
 import math
 import numpy as np
 
+import visualize
+
 
 class Node:
     def __init__(self, state, parent=None, move=None, untried_moves=None):
@@ -111,13 +113,15 @@ class MCTS:
     def simulate(self, node):
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
-        # print("Before adjustment:")
-        # print(current_state.placing.show_ships())
+        #print("Before adjustment:")
+        #current_state.placing.show_ships()
+
+        visualize.show_board(current_state, board_size=self.actor.board_size)
 
         current_state.placing.adjust_ship_placements(current_state.board)
 
-        # print("After adjustment:")
-        # print(current_state.placing.show_ships())
+        print("After adjustment:")
+        current_state.placing.show_ships()
 
         while not self.game_manager.is_terminal(current_state):
             # Select a move randomly for now (or use a strategy)
