@@ -113,8 +113,6 @@ class MCTS:
     def simulate(self, node):
         # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
-        #print("Before adjustment:")
-        #current_state.placing.show_ships()
 
         visualize.show_board(current_state, board_size=self.actor.board_size)
 

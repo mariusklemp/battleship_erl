@@ -1,3 +1,4 @@
+import visualize
 from strategies.search.strategy import Strategy
 from visualize import plot_action_distribution, show_board
 
@@ -11,6 +12,12 @@ class MCTSStrategy(Strategy):
 
     def find_move(self, state):
         self.search_agent.move_count += 1
+
+        print("Real Placement before adjustment:")
+        state.placing.show_ships()
+
+        print("State when running MCTS:")
+        visualize.show_board(state, self.search_agent.board_size)
 
         best_child = self.mcts.run(state, self.search_agent)
 
