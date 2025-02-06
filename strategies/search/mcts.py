@@ -19,7 +19,7 @@ class MCTSStrategy(Strategy):
 
         print("__Board__")
         state.placing.show_ships()
-        show_board(current_node.state.board, self.search_agent.board_size)
+        # show_board(current_node.state.board, self.search_agent.board_size)
         action_distribution = current_node.action_distribution(
             board_size=self.search_agent.board_size
         )

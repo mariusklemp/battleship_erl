@@ -1,4 +1,5 @@
 from game_logic.game_state import GameState
+import copy
 
 
 class GameManager:
@@ -7,21 +8,17 @@ class GameManager:
     Counts the number of moves and checks if the game is over
     """
 
-    def __init__(self, size, placing):
+    def __init__(self, size):
         self.size = size
-        self.placing = placing
-        self.move_count = 0
 
-    def initial_state(self):
-        print("New game started")
-        print("Placing ships")
-        self.placing.new_placements()
-        self.placing.show_ships()
-
+    def initial_state(self, placing):
         board = [[0 for _ in range(self.size**2)] for _ in range(4)]
-        print("Setting remaining ships", self.placing.ship_sizes)
+
         return GameState(
-            board=board, move_count=0, placing=self.placing, remaining_ships=self.placing.ship_sizes
+            board=board,
+            move_count=0,
+            placing=placing,
+            remaining_ships=placing.ship_sizes.copy(),
         )
 
     def get_legal_moves(self, state):
@@ -32,21 +29,31 @@ class GameManager:
 
         return legal_moves
 
-    def next_state(self, state, move):
+    def next_state(self, state, move, sim_id=None):
         new_board = [row[:] for row in state.board]
         new_move_count = state.move_count
         new_board[0][move] = 1
-        remaining_ships = state.remaining_ships.copy()
-        if move in self.placing.indexes:
+        new_remaining_ships = state.remaining_ships.copy()
+        # If all cells are hit board 0, print
+        if all(cell == 1 for cell in new_board[0]):
+            print("All cells are hit board 0")
+
+        if move in state.placing.indexes:
             new_board[1][move] = 1
-            sunk, ship_size = self.check_ship_sunk(move, new_board)
+            print("Hit cell", move, "in sim_id", sim_id, flush=True)
+            sunk, ship_size, hit_ship = self.check_ship_sunk(
+                move, new_board, state.placing
+            )
 
             if sunk:
-                if ship_size in remaining_ships:
-                    remaining_ships.remove(ship_size)
+                print("Sunk ship size", hit_ship)
+                if hit_ship is None:
+                    print("Warning: hit_ship is None")
+                if ship_size in new_remaining_ships:
+                    for i in hit_ship:
+                        new_board[3][i] = 1
+                    new_remaining_ships.remove(ship_size)
                 else:
-                    print("Ship size", ship_size)
-                    print("Remaining ships", remaining_ships)
                     print(
                         "Warning: sunk ship size",
                         ship_size,
@@ -55,34 +62,21 @@ class GameManager:
         else:
             new_board[2][move] = 1
         new_move_count += 1
-        return GameState(new_board, new_move_count, self.placing, remaining_ships)
+        return GameState(new_board, new_move_count, state.placing, new_remaining_ships)
 
-    def check_ship_sunk(self, move, board):
+    def check_ship_sunk(self, move, board, placing):
         hit_ship = None
         sunk = True
-
         # Find the ship that was hit
-        for ship in self.placing.ships:
+        for ship in placing.ships:
             if move in ship.indexes:
                 hit_ship = ship.indexes
 
-        # Check if the ship is sunk
-        for i in hit_ship:
-            if board[0][i] == 0:
-                sunk = False
-                break
-
-        # If the ship is sunk, update the search board
-        if sunk:
-            for i in hit_ship:
-                board[3][i] = 1
+        sunk = all(board[1][i] == 1 for i in hit_ship)
 
         # Return if the ship is sunk and the ship size
-        return sunk, len(hit_ship)
+        return sunk, len(hit_ship), hit_ship
 
     def is_terminal(self, state):
-        all_sunk = True
-        for i in self.placing.indexes:
-            if state.board[0][i] == 0:
-                all_sunk = False
-        return all_sunk
+        print("Remaining ships", state.remaining_ships)
+        return len(state.remaining_ships) == 0

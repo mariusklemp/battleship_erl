@@ -6,8 +6,6 @@ import visualize
 
 MIN_VISITS_THRESHOLD = 10
 
-import visualize
-
 
 class Node:
     def __init__(self, state, parent=None, move=None, untried_moves=None):
@@ -31,7 +29,7 @@ class Node:
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
 
-    def best_child(self, c_param):
+    def best_child(self, c_param=1.4):
         best_score = -float("inf")
         best_moves = []
         for child_node in self.children:
@@ -48,6 +46,9 @@ class Node:
                 best_moves.append(child_node)
 
         # Return one of the best moves randomly
+        if len(best_moves) < 1:
+            print("Warning: No best moves found")
+            return None
         choice = random.choice(best_moves)
 
         if choice.move == None:
@@ -103,7 +104,7 @@ class MCTS:
             if not node.is_fully_expanded():
                 return self.expand_node(node)
             else:
-                node = node.best_child(c_param=2)
+                node = node.best_child(c_param=self.exploration_constant)
 
         return node
 
@@ -120,9 +121,8 @@ class MCTS:
         move = random.choice(moves_to_expand)
         node.untried_moves.remove(move)
         next_state = self.game_manager.next_state(node.state, move)
+
         next_legal_moves = self.game_manager.get_legal_moves(next_state)
-        # Optionally, prune moves for the next state as well.
-        next_legal_moves = self.prune_moves(next_legal_moves, next_state)
 
         child_node = Node(
             next_state, parent=node, move=move, untried_moves=next_legal_moves
@@ -130,20 +130,29 @@ class MCTS:
         node.add_child(child_node)
         return child_node
 
-    def simulate(self, node):
+    def simulate(self, node, sim_id):
         current_state = copy.deepcopy(node.state)
 
+        # After adjusting placements, get the new ship sizes
         current_state.placing.adjust_ship_placements(current_state.board)
-
-        # current_state.placing.show_ships()
-        # Update remaining_ships to match the adjusted placements
         current_state.remaining_ships = [
-            ship.size for ship in current_state.placing.ships
+            len(ship.indexes) for ship in current_state.placing.ships
         ]
+
+        current_state.placing.show_ships()
+
+        print(
+            "Remaining ships in sim_id:",
+            sim_id,
+            current_state.placing.list_of_ships,
+            flush=True,
+        )
 
         while not self.game_manager.is_terminal(current_state):
             best_move = random.choice(self.game_manager.get_legal_moves(current_state))
-            current_state = self.game_manager.next_state(current_state, best_move)
+            current_state = self.game_manager.next_state(
+                current_state, best_move, sim_id
+            )
 
         return current_state.move_count
 
@@ -173,9 +182,9 @@ class MCTS:
             )
 
         # Simulate a number of games
-        for _ in range(self.simulations_number):
+        for i in range(self.simulations_number):
             node = self.select_node(self.current_node)
-            result = self.simulate(node)
+            result = self.simulate(node, sim_id=i)
             self.backpropagate(node, result)
 
         return self.current_node
@@ -223,7 +232,10 @@ class MCTS:
         return None  # Should not happen in normal execution
 
     def equal(self, state1, state2):
-        return state1.board == state2.board
+        return (
+            state1.board == state2.board
+            and state1.remaining_ships == state2.remaining_ships
+        )
 
     def print_tree(self, node=None, indent="", last=True):
         if node is None:
@@ -250,16 +262,7 @@ class MCTS:
         pruned = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
-        # print the pruned moves
-        pruned_moves = [
-            move
-            for move in legal_moves
-            if not self.is_possible_ship_location(state, move)
-        ]
-        if len(pruned_moves) > 0:
-            print("Pruned moves:", pruned_moves)
-            visualize.show_board(state, board_size=self.game_manager.size)
-            print("--------------------------------")
+
         return pruned
 
     def is_possible_ship_location(self, state, move):

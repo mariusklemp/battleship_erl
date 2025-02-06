@@ -13,18 +13,25 @@ from gui import GUI
 import torch
 
 
-def simulate_game(game_manager, search_agent, mcts, rbuf, gui=None):
+def simulate_game(
+    game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
+):
     """Simulate a Battleship game and return the move count."""
-    current_state = game_manager.initial_state()  # Reset the game and sets new board!
+    placement_agent.new_placements()
+    current_state = game_manager.initial_state(
+        placing=placement_agent
+    )  # Reset the game and sets new board!
     if gui:
         gui.update_board(current_state)
         pygame.display.update()
+
+    print("Ships to look for", current_state.placing.list_of_ships)
 
     while not game_manager.is_terminal(current_state):
         if gui:
             gui.update_board(current_state)
             pygame.display.update()
-        # visualize.show_board(current_state.board, board_size=game_manager.size)
+        visualize.show_board(current_state.board, board_size=game_manager.size)
         current_node = mcts.run(current_state, search_agent)
         best_child = current_node.best_child(c_param=0)
 
@@ -51,19 +58,20 @@ def simulate_game(game_manager, search_agent, mcts, rbuf, gui=None):
 
 
 def train_models(
-        game_manager,
-        mcts,
-        rbuf,
-        search_agent,
-        number_actual_games,
-        batch_size,
-        M,
-        device,
-        graphic_visualiser,
-        save_model,
-        train_model,
-        save_rbuf,
-        board_size,
+    game_manager,
+    mcts,
+    rbuf,
+    search_agent,
+    number_actual_games,
+    batch_size,
+    M,
+    device,
+    graphic_visualiser,
+    save_model,
+    train_model,
+    save_rbuf,
+    board_size,
+    placement_agent,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -82,6 +90,7 @@ def train_models(
                 mcts,
                 rbuf,
                 gui,
+                placement_agent,
             )
         )
         print(f"Finished game {i + 1} with {move_count[-1]} moves.")
@@ -105,28 +114,28 @@ def train_models(
 
 
 def main(
-        board_size,
-        sizes,
-        strategy_placement,
-        strategy_search,
-        simulations_number,
-        exploration_constant,
-        M,
-        number_actual_games,
-        batch_size,
-        device,
-        load_rbuf,
-        graphic_visualiser,
-        save_model,
-        train_model,
-        save_rbuf,
+    board_size,
+    sizes,
+    strategy_placement,
+    strategy_search,
+    simulations_number,
+    exploration_constant,
+    M,
+    number_actual_games,
+    batch_size,
+    device,
+    load_rbuf,
+    graphic_visualiser,
+    save_model,
+    train_model,
+    save_rbuf,
 ):
     layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size ** 2,
+        output_size=board_size**2,
         device="cpu",
         layer_config=layer_config,
         extra_input_size=6,
@@ -145,7 +154,7 @@ def main(
         strategy=strategy_placement,
     )
 
-    game_manager = GameManager(size=board_size, placing=placement_agent)
+    game_manager = GameManager(size=board_size)
 
     mcts = MCTS(
         game_manager,
@@ -173,6 +182,7 @@ def main(
         train_model,
         save_rbuf,
         board_size,
+        placement_agent,
     )
 
 
@@ -190,15 +200,15 @@ if __name__ == "__main__":
         sizes=[2, 2, 1],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=1000,
+        simulations_number=100,
         exploration_constant=1.41,
         M=10,
         number_actual_games=500,
         batch_size=100,
         device="cpu",
         load_rbuf=False,
-        graphic_visualiser=True,
+        graphic_visualiser=False,
         save_model=False,
         train_model=False,
-        save_rbuf=False,
+        save_rbuf=True,
     )
