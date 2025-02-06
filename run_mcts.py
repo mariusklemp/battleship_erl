@@ -13,9 +13,15 @@ from gui import GUI
 import torch
 
 
-def simulate_game(game_manager, search_agent, mcts, rbuf, gui=None):
+def simulate_game(game_manager, search_agent, rbuf, gui=None):
     """Simulate a Battleship game and return the move count."""
     current_state = game_manager.initial_state()  # Reset the game and sets new board!
+
+    mcts = MCTS(
+        game_manager,
+        simulations_number=1000,
+        exploration_constant=1.41,
+    )
     if gui:
         gui.update_board(current_state)
         pygame.display.update()
@@ -24,20 +30,14 @@ def simulate_game(game_manager, search_agent, mcts, rbuf, gui=None):
         if gui:
             gui.update_board(current_state)
             pygame.display.update()
-        # visualize.show_board(current_state.board, board_size=game_manager.size)
+
         current_node = mcts.run(current_state, search_agent)
         best_child = current_node.best_child(c_param=0)
-
         move = best_child.move
 
         # Get both board tensor and extra features
         board_tensor, extra_features = current_node.state.state_tensor()
 
-        # Add move to rbuf with both board and extra features
-        # visualize.plot_action_distribution(
-        #    current_node.action_distribution(board_size=game_manager.size),
-        #    game_manager.size,
-        # )
         rbuf.add_data_point(
             (
                 (board_tensor, extra_features),  # Input tuple containing both tensors
@@ -52,7 +52,6 @@ def simulate_game(game_manager, search_agent, mcts, rbuf, gui=None):
 
 def train_models(
         game_manager,
-        mcts,
         rbuf,
         search_agent,
         number_actual_games,
@@ -79,7 +78,6 @@ def train_models(
             simulate_game(
                 game_manager,
                 search_agent,
-                mcts,
                 rbuf,
                 gui,
             )
@@ -147,12 +145,6 @@ def main(
 
     game_manager = GameManager(size=board_size, placing=placement_agent)
 
-    mcts = MCTS(
-        game_manager,
-        simulations_number=simulations_number,
-        exploration_constant=exploration_constant,
-    )
-
     rbuf = RBUF(max_len=10000)
 
     if load_rbuf:
@@ -161,7 +153,6 @@ def main(
 
     train_models(
         game_manager,
-        mcts,
         rbuf,
         search_agent,
         number_actual_games,

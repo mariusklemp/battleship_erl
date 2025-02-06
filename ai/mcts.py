@@ -2,11 +2,9 @@ import copy
 import random
 import math
 import numpy as np
-import visualize
 
 MIN_VISITS_THRESHOLD = 10
 
-import visualize
 
 
 class Node:
@@ -94,6 +92,11 @@ class MCTS:
         self.actor = None
         self.simulations_number = simulations_number
         self.exploration_constant = exploration_constant
+
+    def reset(self):
+        self.root_node = None
+        self.current_node = None
+        self.actor = None
 
     def select_node(self, node):
         while not node.is_fully_expanded():
@@ -247,12 +250,6 @@ class MCTS:
         """
         pruned = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
-        ]
-
-        pruned_moves = [
-            move
-            for move in legal_moves
-            if not self.is_possible_ship_location(state, move)
         ]
 
         return pruned

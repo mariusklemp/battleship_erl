@@ -13,15 +13,12 @@ class GameManager:
         self.move_count = 0
 
     def initial_state(self):
-        print("New game started")
-        print("Placing ships")
         self.placing.new_placements()
         self.placing.show_ships()
 
         board = [[0 for _ in range(self.size**2)] for _ in range(4)]
-        print("Setting remaining ships", self.placing.ship_sizes)
         return GameState(
-            board=board, move_count=0, placing=self.placing, remaining_ships=self.placing.ship_sizes
+            board=board, move_count=0, placing=self.placing, remaining_ships=self.placing.ship_sizes.copy()
         )
 
     def get_legal_moves(self, state):
