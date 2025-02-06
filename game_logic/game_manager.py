@@ -16,9 +16,9 @@ class GameManager:
         print("New game started")
         print("Placing ships")
         self.placing.new_placements()
-        print("Setting board")
+        self.placing.show_ships()
+
         board = [[0 for _ in range(self.size**2)] for _ in range(4)]
-        print("Setting move count")
         print("Setting remaining ships", self.placing.ship_sizes)
         return GameState(
             board=board, move_count=0, placing=self.placing, remaining_ships=self.placing.ship_sizes
@@ -38,16 +38,15 @@ class GameManager:
         new_board[0][move] = 1
         remaining_ships = state.remaining_ships.copy()
         if move in self.placing.indexes:
-            #print("Hit!")
             new_board[1][move] = 1
-            #print("Checking if ship is sunk")
             sunk, ship_size = self.check_ship_sunk(move, new_board)
-            #print("Ship sunk:", sunk)
-            #print("Ship size:", ship_size)
+
             if sunk:
                 if ship_size in remaining_ships:
                     remaining_ships.remove(ship_size)
                 else:
+                    print("Ship size", ship_size)
+                    print("Remaining ships", remaining_ships)
                     print(
                         "Warning: sunk ship size",
                         ship_size,
