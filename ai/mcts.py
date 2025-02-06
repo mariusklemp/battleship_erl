@@ -129,18 +129,15 @@ class MCTS:
         return child_node
 
     def simulate(self, node):
-        # Make a copy of the board to avoid modifying the original node
         current_state = copy.deepcopy(node.state)
-        # print("Before adjustment:")
-        # print(current_state.placing.show_ships())
-
         current_state.placing.adjust_ship_placements(current_state.board)
 
-        # print("After adjustment:")
-        # print(current_state.placing.show_ships())
+        # Update remaining_ships to match the adjusted placements
+        current_state.remaining_ships = [
+            ship.size for ship in current_state.placing.ships
+        ]
 
         while not self.game_manager.is_terminal(current_state):
-            # Select a move randomly for now (or use a strategy)
             best_move = random.choice(self.game_manager.get_legal_moves(current_state))
             current_state = self.game_manager.next_state(current_state, best_move)
 
@@ -249,16 +246,6 @@ class MCTS:
         pruned = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
-        # print the pruned moves
-        pruned_moves = [
-            move
-            for move in legal_moves
-            if not self.is_possible_ship_location(state, move)
-        ]
-        if len(pruned_moves) > 0:
-            print("Pruned moves:", pruned_moves)
-            visualize.show_board(state, board_size=self.game_manager.size)
-            print("--------------------------------")
         return pruned
 
     def is_possible_ship_location(self, state, move):

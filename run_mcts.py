@@ -188,7 +188,7 @@ if __name__ == "__main__":
 
     main(
         board_size=5,
-        sizes=[4, 2, 3],
+        sizes=[2, 2, 1],
         strategy_placement="random",
         strategy_search="nn_search",
         simulations_number=100,
