@@ -183,18 +183,18 @@ if __name__ == "__main__":
 
     main(
         board_size=5,
-        sizes=[4, 2, 3],
+        sizes=[4, 3, 2],
         strategy_placement="random",
         strategy_search="nn_search",
         simulations_number=1000,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=500,
+        number_actual_games=50,
         batch_size=100,
         device="cpu",
         load_rbuf=False,
         graphic_visualiser=True,
         save_model=False,
         train_model=False,
-        save_rbuf=False,
+        save_rbuf=True,
     )
