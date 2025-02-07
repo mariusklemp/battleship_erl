@@ -34,19 +34,14 @@ class GameManager:
         new_move_count = state.move_count
         new_board[0][move] = 1
         new_remaining_ships = state.remaining_ships.copy()
-        # If all cells are hit board 0, print
-        if all(cell == 1 for cell in new_board[0]):
-            print("All cells are hit board 0")
 
         if move in state.placing.indexes:
             new_board[1][move] = 1
-            print("Hit cell", move, "in sim_id", sim_id, flush=True)
             sunk, ship_size, hit_ship = self.check_ship_sunk(
                 move, new_board, state.placing
             )
 
             if sunk:
-                print("Sunk ship size", hit_ship)
                 if hit_ship is None:
                     print("Warning: hit_ship is None")
                 if ship_size in new_remaining_ships:
@@ -78,5 +73,4 @@ class GameManager:
         return sunk, len(hit_ship), hit_ship
 
     def is_terminal(self, state):
-        print("Remaining ships", state.remaining_ships)
         return len(state.remaining_ships) == 0

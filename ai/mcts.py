@@ -112,7 +112,8 @@ class MCTS:
         # Get the raw legal moves from the game manager.
         legal_moves = node.untried_moves
         # Use the pruning function to filter them based on ship-placement constraints.
-        moves_to_expand = self.prune_moves(legal_moves, node.state)
+        state = copy.deepcopy(node.state)
+        moves_to_expand = self.prune_moves(legal_moves, state)
 
         # If no moves remain after pruning, fallback to the original list (or handle appropriately)
         if not moves_to_expand:
@@ -120,9 +121,12 @@ class MCTS:
 
         move = random.choice(moves_to_expand)
         node.untried_moves.remove(move)
-        next_state = self.game_manager.next_state(node.state, move)
+        next_state = self.game_manager.next_state(state, move)
 
         next_legal_moves = self.game_manager.get_legal_moves(next_state)
+
+        if move is None:
+            print("Warning: Move is None", flush=True)
 
         child_node = Node(
             next_state, parent=node, move=move, untried_moves=next_legal_moves
@@ -132,24 +136,19 @@ class MCTS:
 
     def simulate(self, node, sim_id):
         current_state = copy.deepcopy(node.state)
+        new_placing = copy.deepcopy(current_state.placing)
 
         # After adjusting placements, get the new ship sizes
-        current_state.placing.adjust_ship_placements(current_state.board)
-        current_state.remaining_ships = [
-            len(ship.indexes) for ship in current_state.placing.ships
-        ]
+        new_placing.adjust_ship_placements(current_state.board)
 
-        current_state.placing.show_ships()
-
-        print(
-            "Remaining ships in sim_id:",
-            sim_id,
-            current_state.placing.list_of_ships,
-            flush=True,
-        )
+        current_state.placing = new_placing
 
         while not self.game_manager.is_terminal(current_state):
-            best_move = random.choice(self.game_manager.get_legal_moves(current_state))
+            legal_moves = self.game_manager.get_legal_moves(current_state)
+            if len(legal_moves) == 0:
+                print("No legal moves found", flush=True)
+                break
+            best_move = random.choice(legal_moves)
             current_state = self.game_manager.next_state(
                 current_state, best_move, sim_id
             )
@@ -184,6 +183,16 @@ class MCTS:
         # Simulate a number of games
         for i in range(self.simulations_number):
             node = self.select_node(self.current_node)
+            # If board 1 contains a 1 in a cell that is not in placing.indexes, print
+            if any(
+                node.state.board[1][i] == 1 and i not in node.state.placing.indexes
+                for i in range(len(node.state.board[1]))
+            ):
+                print(
+                    "Warning: Board 1 contains a 1 in a cell that is not in placing.indexes",
+                    flush=True,
+                )
+
             result = self.simulate(node, sim_id=i)
             self.backpropagate(node, result)
 
@@ -212,6 +221,8 @@ class MCTS:
                 current_node = matching_child
             else:
                 last_move = self.find_last_move(self.current_node, current_state)
+                if last_move is None:
+                    print("Warning: Last move is None", flush=True)
 
                 # Create a new node based on the last move
                 new_node = Node(current_state, parent=self.current_node, move=last_move)
@@ -223,13 +234,15 @@ class MCTS:
 
     def find_last_move(self, parent_node, current_state):
         """Finds the move that led from parent_node.state to current_state"""
-        for move in self.game_manager.get_legal_moves(parent_node.state):
-            if self.equal(
-                self.game_manager.next_state(parent_node.state, move),
-                current_state,
+        legal_moves = self.game_manager.get_legal_moves(parent_node.state)
+        # Find which one of the legal moves that exist in current_state.board[0] but not in parent_node.state.board[0]
+        for move in legal_moves:
+            if (
+                current_state.board[0][move] == 1
+                and parent_node.state.board[0][move] == 0
             ):
                 return move
-        return None  # Should not happen in normal execution
+        return None
 
     def equal(self, state1, state2):
         return (
