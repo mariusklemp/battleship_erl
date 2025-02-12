@@ -24,6 +24,7 @@ class Tournament:
         search_strategies,
         num_players,
         game_manager,
+        placement_agent,
     ):
         """
         Initialize the Tournament.
@@ -43,6 +44,7 @@ class Tournament:
         self.players = {}  # Dictionary mapping an identifier to a search agent
         self.result = {}  # Dictionary mapping an identifier to a list of move counts
         self.game_manager = game_manager
+        self.placement_agent = placement_agent
 
     def set_nn_agent(self, i, default_net):
         """Initializes a SearchAgent that uses a neural network.
@@ -116,7 +118,7 @@ class Tournament:
 
     def play(self, search_agent, game_manager):
         """Plays one game with the given search agent and returns the move count."""
-        current_state = game_manager.initial_state()
+        current_state = game_manager.initial_state(placing=self.placement_agent)
         while not game_manager.is_terminal(current_state):
             # visualize.show_board(current_state, board_size=game_manager.size)
             move = search_agent.strategy.find_move(current_state)
@@ -170,7 +172,7 @@ def main(
         ship_sizes=ship_sizes,
         strategy=placing_strategy,
     )
-    game_manager = GameManager(size=board_size, placing=placement_agent)
+    game_manager = GameManager(size=board_size)
 
     tournament = Tournament(
         board_size,
@@ -180,11 +182,12 @@ def main(
         other_strategies,
         num_players,
         game_manager,
+        placement_agent,
     )
     tournament.init_players()
 
-    for i in tqdm(range(int(num_games / 50)), desc="Tournament Progress"):
-        game_manager.placing.new_placements()
+    for i in tqdm(range(int(num_games)), desc="Tournament Progress"):
+        placement_agent.new_placements()
         for identifier, search_agent in tournament.players.items():
             move_count = tournament.play(search_agent, game_manager)
             tournament.result[identifier].append(move_count)
@@ -194,10 +197,10 @@ def main(
 
 if __name__ == "__main__":
     main(
-        board_size=5,
+        board_size=3,
         placing_strategy="random",
-        ship_sizes=[2, 1, 2],
-        num_games=500,
+        ship_sizes=[2],
+        num_games=1000,
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],
     )

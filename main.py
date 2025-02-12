@@ -130,12 +130,12 @@ def initialize_game(
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
     initialize_game(
-        board_size=5,
-        sizes=[2, 3, 2],
+        board_size=3,
+        sizes=[2],
         human_player=True,
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
-        player2_search_strategy="mcts",
+        player2_search_strategy="nn_search",
         player2_placing_strategy="random",
     )
 

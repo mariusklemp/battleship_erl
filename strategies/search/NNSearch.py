@@ -38,7 +38,6 @@ class NNSearch(nn.Module, Strategy):
         self.val_top3_accuracy_history = []
 
     def find_move(self, state):
-        self.search_agent.move_count += 1
 
         # Get both board tensor and extra features
         board_tensor, extra_features = state.state_tensor()

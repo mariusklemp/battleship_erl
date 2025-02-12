@@ -212,7 +212,7 @@ if __name__ == "__main__":
         device="cpu",
         load_rbuf=True,
         graphic_visualiser=False,
-        save_model=False,
-        train_model=False,
+        save_model=True,
+        train_model=True,
         save_rbuf=True,
     )
