@@ -8,7 +8,9 @@ MIN_VISITS_THRESHOLD = 10
 
 
 class Node:
-    def __init__(self, state, parent=None, move=None, untried_moves=None):
+    def __init__(
+        self, state, parent=None, move=None, untried_moves=None, mcts_ref=None
+    ):
         self.state = state
         self.parent = parent
         self.move = move
@@ -18,6 +20,7 @@ class Node:
         self.untried_moves = (
             untried_moves  # To be initialized based on the game manager
         )
+        self.mcts_ref = mcts_ref  # Reference to the MCTS instance
 
     def add_child(self, child_node):
         self.children.append(child_node)
@@ -35,14 +38,50 @@ class Node:
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
 
+    def get_untried_moves(self):
+        # If there are no untried moves, return empty list
+        if not self.untried_moves:
+            return []
+
+        # If we don't have a reference to MCTS instance, return unpruned moves
+        if not self.mcts_ref:
+            return self.untried_moves
+
+        # Create a copy of the current state to avoid modifying the original
+        current_state = copy.deepcopy(self.state)
+
+        # Apply pruning to the untried moves
+        pruned_moves = self.mcts_ref.prune_moves(self.untried_moves, current_state)
+
+        # If pruning removed all moves, return original untried moves
+        if not pruned_moves:
+            return self.untried_moves
+
+        # Update the untried_moves list to only contain valid moves
+        self.untried_moves = pruned_moves
+
+        return self.untried_moves
+
     def best_child(self, c_param=1.4):
         best_score = -float("inf")
         best_moves = []
+
+        # If this is early in the game (few visits), increase exploration
+        if self.visits < 10:  # Adjust this threshold as needed
+            c_param *= 2  # Double the exploration parameter for early moves
+
         for child_node in self.children:
+            # For nodes with very few visits, add some noise to encourage exploration
+            if child_node.visits < 3:  # Adjust this threshold as needed
+                exploration_bonus = random.uniform(0, 0.1)  # Small random bonus
+            else:
+                exploration_bonus = 0
 
             # Calculate score using UCB1 formula
-            move_score = child_node.fitness / child_node.visits + c_param * math.sqrt(
-                math.log(self.visits / child_node.visits)
+            move_score = (
+                child_node.fitness / child_node.visits
+                + c_param * math.sqrt(math.log(self.visits) / child_node.visits)
+                + exploration_bonus
             )
 
             if move_score > best_score:
@@ -75,7 +114,7 @@ class Node:
         # Compute total visits among all children.
         total_child_visits = sum(child.visits for child in self.children)
 
-        if total_child_visits < MIN_VISITS_THRESHOLD:  # e.g., 10
+        if total_child_visits < MIN_VISITS_THRESHOLD:
             return None  # Skip adding to RBUF if not enough visits
 
         if total_child_visits == 0:
@@ -83,9 +122,13 @@ class Node:
 
         # Process each child and fill the distribution.
         for child in self.children:
-            move_index = child.move  # Assuming move is an integer index in range(size)
+            move_index = child.move
             if 0 <= move_index < size:
-                distribution[move_index] = child.visits / total_child_visits
+                distribution[move_index] += child.visits / total_child_visits
+            else:
+                print(
+                    f"Warning: Move index {move_index} out of range for board size {board_size}"
+                )
 
         return distribution
 
@@ -115,29 +158,34 @@ class MCTS:
         return node
 
     def expand_node(self, node):
-        # Get the raw legal moves from the game manager.
-        legal_moves = node.untried_moves
-        # Use the pruning function to filter them based on ship-placement constraints.
-        state = copy.deepcopy(node.state)
-        # moves_to_expand = self.prune_moves(legal_moves, state)
-        moves_to_expand = legal_moves
-        # If no moves remain after pruning, fallback to the original list (or handle appropriately)
+        # Get the pruned legal moves using get_untried_moves
+        moves_to_expand = node.get_untried_moves()
+
+        # If no moves remain after pruning, this node becomes terminal
         if not moves_to_expand:
-            moves_to_expand = legal_moves
+            return node
 
         move = random.choice(moves_to_expand)
+        # Remove the chosen move from untried_moves
         node.untried_moves.remove(move)
-        next_state = self.game_manager.next_state(state, move)
 
+        # Create the next state
+        state = copy.deepcopy(node.state)
+        next_state = self.game_manager.next_state(state, move)
         next_legal_moves = self.game_manager.get_legal_moves(next_state)
 
         if move is None:
             print("Warning: Move is None", flush=True)
 
+        # Check if this child already exists
         child_node = node.child_exists(move, next_state)
         if child_node is None:
             child_node = Node(
-                next_state, parent=node, move=move, untried_moves=next_legal_moves
+                next_state,
+                parent=node,
+                move=move,
+                untried_moves=next_legal_moves,
+                mcts_ref=self,
             )
             node.add_child(child_node)
         return child_node
@@ -215,7 +263,7 @@ class MCTS:
     def find_current_node(self, current_state):
         # Check if we're starting a new game
         if self.root_node is None:
-            self.root_node = Node(current_state)
+            self.root_node = Node(current_state, mcts_ref=self)
             current_node = self.root_node
 
         # Check if the current state equals the root node's state
@@ -240,7 +288,12 @@ class MCTS:
                     print("Warning: Last move is None", flush=True)
 
                 # Create a new node based on the last move
-                new_node = Node(current_state, parent=self.current_node, move=last_move)
+                new_node = Node(
+                    current_state,
+                    parent=self.current_node,
+                    move=last_move,
+                    mcts_ref=self,
+                )
                 self.current_node.add_child(new_node)
                 current_node = new_node
 
@@ -291,11 +344,11 @@ class MCTS:
         Given a list of candidate moves (each as a tuple (row, col)) and the current state,
         return only those moves that are consistent with any remaining ship placement.
         """
-        pruned = [
+        moves_after_pruning = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
 
-        return pruned
+        return moves_after_pruning
 
     def is_possible_ship_location(self, state, move):
         """

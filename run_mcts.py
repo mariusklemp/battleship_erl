@@ -34,19 +34,18 @@ def simulate_game(
             pygame.display.update()
 
         current_node = mcts.run(current_state, search_agent)
-        best_child = current_node.best_child(c_param=0)
+        best_child = current_node.best_child()
 
         move = best_child.move
 
         # Get both board tensor and extra features
         board_tensor, extra_features = current_node.state.state_tensor()
-
-        # Add move to rbuf with both board and extra features
         visualize.show_board(current_state.board, board_size=game_manager.size)
         visualize.plot_action_distribution(
             current_node.action_distribution(board_size=game_manager.size),
             game_manager.size,
         )
+        # Add move to rbuf with both board and extra features
         rbuf.add_data_point(
             (
                 (board_tensor, extra_features),  # Input tuple containing both tensors
@@ -205,15 +204,15 @@ if __name__ == "__main__":
         sizes=[2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=100,
+        simulations_number=1000,
         exploration_constant=1.41,
         M=10,
         number_actual_games=1000,
         batch_size=100,
         device="cpu",
-        load_rbuf=False,
+        load_rbuf=True,
         graphic_visualiser=False,
         save_model=False,
         train_model=False,
-        save_rbuf=False,
+        save_rbuf=True,
     )
