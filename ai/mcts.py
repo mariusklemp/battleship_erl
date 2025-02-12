@@ -115,18 +115,18 @@ class MCTS:
         # Get the raw legal moves from the game manager.
         legal_moves = node.untried_moves
         # Use the pruning function to filter them based on ship-placement constraints.
-        #moves_to_expand = self.prune_moves(legal_moves, node.state)
+        moves_to_expand = self.prune_moves(legal_moves, node.state)
 
         # If no moves remain after pruning, fallback to the original list (or handle appropriately)
-        #if not moves_to_expand:
-        moves_to_expand = legal_moves
+        if not moves_to_expand:
+            moves_to_expand = legal_moves
 
         move = random.choice(moves_to_expand)
         node.untried_moves.remove(move)
         next_state = self.game_manager.next_state(node.state, move)
         next_legal_moves = self.game_manager.get_legal_moves(next_state)
         # Optionally, prune moves for the next state as well.
-        #next_legal_moves = self.prune_moves(next_legal_moves, next_state)
+        next_legal_moves = self.prune_moves(next_legal_moves, next_state)
 
         child_node = Node(
             next_state, parent=node, move=move, untried_moves=next_legal_moves
