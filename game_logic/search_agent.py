@@ -13,7 +13,6 @@ class SearchAgent:
     ):
         self.board_size = board_size
         self.strategy = self.init_strategy(strategy, net, optimizer, lr)
-        self.move_count = 0
 
     def init_strategy(self, strategy, net, optimizer, lr):
         if strategy == "random":
@@ -28,7 +27,3 @@ class SearchAgent:
             return NEAT_search(self, net)
         elif strategy == "mcts":
             return MCTSStrategy(self)
-
-    def reset(self):
-        self.board = [[0 for _ in range(self.board_size ** 2)] for _ in range(4)]
-        self.move_count = 0
