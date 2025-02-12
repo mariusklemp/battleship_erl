@@ -25,14 +25,14 @@ def simulate_game(
         gui.update_board(current_state)
         pygame.display.update()
 
-    print("Ships to look for", current_state.placing.list_of_ships)
+    print("Ships to look for", current_state.placing.show_ships())
     move_count = 0
 
     while not game_manager.is_terminal(current_state):
         if gui:
             gui.update_board(current_state)
             pygame.display.update()
-        visualize.show_board(current_state.board, board_size=game_manager.size)
+
         current_node = mcts.run(current_state, search_agent)
         best_child = current_node.best_child(c_param=0)
 
@@ -42,10 +42,11 @@ def simulate_game(
         board_tensor, extra_features = current_node.state.state_tensor()
 
         # Add move to rbuf with both board and extra features
-        # visualize.plot_action_distribution(
-        #    current_node.action_distribution(board_size=game_manager.size),
-        #    game_manager.size,
-        # )
+        visualize.show_board(current_state.board, board_size=game_manager.size)
+        visualize.plot_action_distribution(
+            current_node.action_distribution(board_size=game_manager.size),
+            game_manager.size,
+        )
         rbuf.add_data_point(
             (
                 (board_tensor, extra_features),  # Input tuple containing both tensors
@@ -97,7 +98,7 @@ def train_models(
         )
         print(f"Finished game {i + 1} with {move_count[-1]} moves.")
         print("Replay buffer length:", len(rbuf.data))
-        visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
+        # visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
 
         if train_model:
             batch = rbuf.get_training_set(batch_size)
@@ -111,7 +112,9 @@ def train_models(
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
     if train_model:
         search_agent.strategy.plot_metrics()
-    mcts.print_tree()
+
+    print(len(mcts.root_node.children))
+
     visualize.plot_fitness(move_count, game_manager.size)
 
 
@@ -199,13 +202,13 @@ if __name__ == "__main__":
 
     main(
         board_size=3,
-        sizes=[2, 1],
+        sizes=[2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=1000,
+        simulations_number=100,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=2,
+        number_actual_games=1000,
         batch_size=100,
         device="cpu",
         load_rbuf=False,

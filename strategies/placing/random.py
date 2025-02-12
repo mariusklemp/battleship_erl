@@ -3,7 +3,7 @@ import random
 from game_logic.ship import Ship
 
 
-class RandomPlacing():
+class RandomPlacing:
     def __init__(self, placing_agent):
         self.placing_agent = placing_agent
 
@@ -27,10 +27,10 @@ class RandomPlacing():
 
         # Based on the direction and the board size limit the starting point
         if dir == 0:  # Ship is horizontal
-            x = random.randint(0, self.placing_agent.board_size - size - 1)
+            x = random.randint(0, self.placing_agent.board_size - size)
             y = random.randint(0, self.placing_agent.board_size - 1)
         else:  # Ship is vertical
             x = random.randint(0, self.placing_agent.board_size - 1)
-            y = random.randint(0, self.placing_agent.board_size - size -1)
+            y = random.randint(0, self.placing_agent.board_size - size)
 
         return x, y, dir
