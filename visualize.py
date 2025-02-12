@@ -319,5 +319,5 @@ def print_rbuf(rbuf, num_samples, board_size):
                 else extra_features
             ),
         )
-        plot_action_distribution(action_distribution, board_size)
+        # plot_action_distribution(action_distribution, board_size)
         print("-" * 40)

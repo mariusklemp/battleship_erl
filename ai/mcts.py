@@ -26,6 +26,12 @@ class Node:
         self.visits += 1
         self.fitness += result
 
+    def child_exists(self, move, state):
+        for child in self.children:
+            if child.move == move and child.state.board == state.board:
+                return child
+        return None
+
     def is_fully_expanded(self):
         return len(self.untried_moves) == 0
 
@@ -128,21 +134,16 @@ class MCTS:
         if move is None:
             print("Warning: Move is None", flush=True)
 
-        child_node = Node(
-            next_state, parent=node, move=move, untried_moves=next_legal_moves
-        )
-        node.add_child(child_node)
+        child_node = node.child_exists(move, next_state)
+        if child_node is None:
+            child_node = Node(
+                next_state, parent=node, move=move, untried_moves=next_legal_moves
+            )
+            node.add_child(child_node)
         return child_node
 
     def simulate(self, node, sim_id):
-        current_state = copy.deepcopy(node.state)
-        new_placing = copy.deepcopy(current_state.placing)
-
-        # After adjusting placements, get the new ship sizes
-        new_placing.adjust_ship_placements(current_state.board)
-
-        current_state.placing = new_placing
-
+        current_state = node.state
         while not self.game_manager.is_terminal(current_state):
             legal_moves = self.game_manager.get_legal_moves(current_state)
             if len(legal_moves) == 0:
@@ -175,14 +176,27 @@ class MCTS:
         self.current_node = self.find_current_node(current_state)
 
         # Ensure that the current node has its legal moves
-        if self.current_node.untried_moves is None:
+        if (
+            self.current_node.untried_moves is None
+            or len(self.current_node.untried_moves) == 0
+        ):
             self.current_node.untried_moves = self.game_manager.get_legal_moves(
                 current_state
             )
 
         # Simulate a number of games
         for i in range(self.simulations_number):
+            current_state = copy.deepcopy(self.current_node.state)
+            new_placing = copy.deepcopy(current_state.placing)
+
+            # After adjusting placements, get the new ship sizes
+            new_placing.adjust_ship_placements(current_state.board)
+
+            current_state.placing = new_placing
+            self.current_node.state = current_state
+
             node = self.select_node(self.current_node)
+
             # If board 1 contains a 1 in a cell that is not in placing.indexes, print
             if any(
                 node.state.board[1][i] == 1 and i not in node.state.placing.indexes
@@ -220,13 +234,13 @@ class MCTS:
             if matching_child:
                 current_node = matching_child
             else:
+
                 last_move = self.find_last_move(self.current_node, current_state)
                 if last_move is None:
                     print("Warning: Last move is None", flush=True)
 
                 # Create a new node based on the last move
                 new_node = Node(current_state, parent=self.current_node, move=last_move)
-
                 self.current_node.add_child(new_node)
                 current_node = new_node
 
@@ -262,7 +276,12 @@ class MCTS:
             print("├─", end="")
             indent += "| "
 
-        print(f"Prev Move: {node.move}, fitness/Visits: {node.fitness}/{node.visits}")
+        fitness = round(node.fitness, 2)
+        parent_visits = node.parent.visits if node.parent else node.visits
+
+        print(
+            f"Prev Move: {node.move}, fitness: {fitness}, Visits: {node.visits}/{parent_visits} Board: {node.state.board}"
+        )
 
         for i, child in enumerate(node.children):
             self.print_tree(child, indent, i == len(node.children) - 1)
