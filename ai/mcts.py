@@ -93,8 +93,7 @@ class MCTS:
         self.simulations_number = simulations_number
         self.exploration_constant = exploration_constant
 
-    def reset(self, game_manager):
-        self.game_manager = game_manager
+    def reset(self):
         self.root_node = None
         self.current_node = None
         self.actor = None
