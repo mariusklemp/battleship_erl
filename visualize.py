@@ -114,15 +114,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-        config,
-        genome,
-        view=False,
-        filename=None,
-        node_names=None,
-        show_disabled=True,
-        prune_unused=False,
-        node_colors=None,
-        fmt="svg",
+    config,
+    genome,
+    view=False,
+    filename=None,
+    node_names=None,
+    show_disabled=True,
+    prune_unused=False,
+    node_colors=None,
+    fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -201,77 +201,18 @@ def draw_net(
 
 def plot_fitness(move_count, board_size):
     """
-    Plot the fitness evolution over games, including statistics and a moving average.
+    Plot the move count evolution over games, including statistics and a moving average.
 
     Args:
         move_count (list): List of moves taken in each game
         board_size (int): Size of the game board
     """
-    # Calculate fitness from move count
-    fitness = [board_size ** 2 - moves for moves in move_count]
-    games = range(1, len(fitness) + 1)
-
-    # Calculate moving average
-    window = 5
-    moving_avg = np.convolve(fitness, np.ones(window) / window, mode="valid")
-
-    # Create the plot
-    plt.figure(figsize=(12, 6))
-
-    # Plot raw fitness
-    plt.plot(games, fitness, "b-", alpha=0.5, label="Game Fitness")
-
-    # Plot moving average
-    plt.plot(
-        range(window, len(fitness) + 1),
-        moving_avg,
-        "r-",
-        label=f"{window}-Game Moving Average",
-        linewidth=2,
-    )
-
-    # Add statistics
-    mean_fitness = np.mean(fitness)
-    std_fitness = np.std(fitness)
-    max_fitness = np.max(fitness)
-    min_fitness = np.min(fitness)
-
-    # Add statistics text box
-    stats_text = (
-        f"Mean: {mean_fitness:.2f}\n"
-        f"Std Dev: {std_fitness:.2f}\n"
-        f"Max: {max_fitness:.2f}\n"
-        f"Min: {min_fitness:.2f}"
-    )
-
-    plt.text(
-        0.02,
-        0.98,
-        stats_text,
-        transform=plt.gca().transAxes,
-        verticalalignment="top",
-        bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
-    )
-
-    # Customize the plot
-    plt.title("Battleship AI Fitness Evolution", fontsize=12, pad=15)
-    plt.xlabel("Game Number", fontsize=10)
-    plt.ylabel("Fitness (Board Size² - Moves)", fontsize=10)
-    plt.grid(True, linestyle="--", alpha=0.7)
-    plt.legend(loc="lower right")
-
-    # Add a horizontal line at maximum possible fitness
-    max_possible_fitness = board_size ** 2 - board_size
-    plt.axhline(
-        y=max_possible_fitness,
-        color="g",
-        linestyle="--",
-        alpha=0.5,
-        label=f"Perfect Game ({max_possible_fitness})",
-    )
-
-    # Adjust layout and display
-    plt.tight_layout()
+    plt.figure(figsize=(10, 5))
+    plt.plot(move_count, label="Moves per game")
+    plt.xlabel("Game")
+    plt.ylabel("Moves")
+    plt.title("Moves per game")
+    plt.legend()
     plt.show()
 
 
@@ -361,13 +302,22 @@ def print_rbuf(rbuf, num_samples, board_size):
         return
 
     # Randomly sample entries to print if buffer is large
-    indices = np.random.choice(len(rbuf.data), min(num_samples, len(rbuf.data)), replace=False)
+    indices = np.random.choice(
+        len(rbuf.data), min(num_samples, len(rbuf.data)), replace=False
+    )
 
     for idx in indices:
         (board_tensor, extra_features), action_distribution = rbuf.data[idx]
 
         print(f"\nSample {idx + 1}:")
         show_board(board_tensor.numpy().reshape(-1, board_tensor.shape[-1]), board_size)
-        print("Extra Features:", extra_features.numpy() if isinstance(extra_features, torch.Tensor) else extra_features)
+        print(
+            "Extra Features:",
+            (
+                extra_features.numpy()
+                if isinstance(extra_features, torch.Tensor)
+                else extra_features
+            ),
+        )
         plot_action_distribution(action_distribution, board_size)
         print("-" * 40)

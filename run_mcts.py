@@ -26,6 +26,7 @@ def simulate_game(
         pygame.display.update()
 
     print("Ships to look for", current_state.placing.list_of_ships)
+    move_count = 0
 
     while not game_manager.is_terminal(current_state):
         if gui:
@@ -53,8 +54,9 @@ def simulate_game(
         )
 
         current_state = game_manager.next_state(current_state, move)
+        move_count += 1
 
-    return current_state.move_count
+    return move_count
 
 
 def train_models(
@@ -109,7 +111,7 @@ def train_models(
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
     if train_model:
         search_agent.strategy.plot_metrics()
-
+    mcts.print_tree()
     visualize.plot_fitness(move_count, game_manager.size)
 
 
@@ -196,19 +198,19 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     main(
-        board_size=5,
-        sizes=[2, 2, 1],
+        board_size=3,
+        sizes=[2, 1],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=100,
+        simulations_number=1000,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=500,
+        number_actual_games=2,
         batch_size=100,
         device="cpu",
         load_rbuf=False,
         graphic_visualiser=False,
         save_model=False,
         train_model=False,
-        save_rbuf=True,
+        save_rbuf=False,
     )

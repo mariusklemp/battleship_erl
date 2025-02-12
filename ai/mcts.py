@@ -113,8 +113,8 @@ class MCTS:
         legal_moves = node.untried_moves
         # Use the pruning function to filter them based on ship-placement constraints.
         state = copy.deepcopy(node.state)
-        moves_to_expand = self.prune_moves(legal_moves, state)
-
+        # moves_to_expand = self.prune_moves(legal_moves, state)
+        moves_to_expand = legal_moves
         # If no moves remain after pruning, fallback to the original list (or handle appropriately)
         if not moves_to_expand:
             moves_to_expand = legal_moves
