@@ -14,7 +14,7 @@ import torch
 
 
 def simulate_game(
-    game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
+        game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
 ):
     """Simulate a Battleship game and return the move count."""
     placement_agent.new_placements()
@@ -25,7 +25,8 @@ def simulate_game(
         gui.update_board(current_state)
         pygame.display.update()
 
-    print("Ships to look for", current_state.placing.show_ships())
+    print("Ships to look for:")
+    current_state.placing.show_ships()
     move_count = 0
 
     while not game_manager.is_terminal(current_state):
@@ -52,6 +53,7 @@ def simulate_game(
                 current_node.action_distribution(board_size=game_manager.size),
             )
         )
+        visualize.print_rbuf(rbuf, num_samples=3, board_size=game_manager.size)
 
         current_state = game_manager.next_state(current_state, move)
         move_count += 1
@@ -60,20 +62,20 @@ def simulate_game(
 
 
 def train_models(
-    game_manager,
-    mcts,
-    rbuf,
-    search_agent,
-    number_actual_games,
-    batch_size,
-    M,
-    device,
-    graphic_visualiser,
-    save_model,
-    train_model,
-    save_rbuf,
-    board_size,
-    placement_agent,
+        game_manager,
+        mcts,
+        rbuf,
+        search_agent,
+        number_actual_games,
+        batch_size,
+        M,
+        device,
+        graphic_visualiser,
+        save_model,
+        train_model,
+        save_rbuf,
+        board_size,
+        placement_agent,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -118,31 +120,31 @@ def train_models(
 
 
 def main(
-    board_size,
-    sizes,
-    strategy_placement,
-    strategy_search,
-    simulations_number,
-    exploration_constant,
-    M,
-    number_actual_games,
-    batch_size,
-    device,
-    load_rbuf,
-    graphic_visualiser,
-    save_model,
-    train_model,
-    save_rbuf,
+        board_size,
+        sizes,
+        strategy_placement,
+        strategy_search,
+        simulations_number,
+        exploration_constant,
+        M,
+        number_actual_games,
+        batch_size,
+        device,
+        load_rbuf,
+        graphic_visualiser,
+        save_model,
+        train_model,
+        save_rbuf,
 ):
     layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size**2,
+        output_size=board_size ** 2,
         device="cpu",
         layer_config=layer_config,
-        extra_input_size=6,
+        extra_input_size=5,
     )
 
     search_agent = SearchAgent(
@@ -200,19 +202,19 @@ if __name__ == "__main__":
     print(f"Using device: {device}")
 
     main(
-        board_size=3,
-        sizes=[2],
+        board_size=5,
+        sizes=[4, 3, 3, 2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=1000,
+        simulations_number=100,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=1000,
+        number_actual_games=100,
         batch_size=100,
         device="cpu",
-        load_rbuf=True,
+        load_rbuf=False,
         graphic_visualiser=False,
         save_model=True,
-        train_model=True,
+        train_model=False,
         save_rbuf=True,
     )

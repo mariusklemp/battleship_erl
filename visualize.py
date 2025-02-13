@@ -114,15 +114,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-    config,
-    genome,
-    view=False,
-    filename=None,
-    node_names=None,
-    show_disabled=True,
-    prune_unused=False,
-    node_colors=None,
-    fmt="svg",
+        config,
+        genome,
+        view=False,
+        filename=None,
+        node_names=None,
+        show_disabled=True,
+        prune_unused=False,
+        node_colors=None,
+        fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -238,7 +238,7 @@ def plot_fitness(move_count, board_size):
         games, moves, color="#E6E6E6", label="Moves per game", alpha=0.5, linewidth=1
     )
     ax1.plot(
-        games[moving_avg_window - 1 :],
+        games[moving_avg_window - 1:],
         moving_avg,
         color="#2E86C1",
         label=f"Moving average (window={moving_avg_window})",
@@ -310,7 +310,6 @@ def plot_fitness(move_count, board_size):
     plt.show()
 
 
-
 def plot_action_distribution(action_distribution, board_size):
     """
     Prints the action distribution in a readable grid format with 3 decimal precision and dynamic colors.
@@ -328,11 +327,11 @@ def plot_action_distribution(action_distribution, board_size):
     # Define dynamic thresholds as fractions of the maximum value.
     # You can adjust these fractions to change the color boundaries.
     threshold_very_high = 0.9 * max_val
-    threshold_high      = 0.75 * max_val
-    threshold_med_high  = 0.6 * max_val
-    threshold_med       = 0.45 * max_val
-    threshold_med_low   = 0.3 * max_val
-    threshold_low       = 0.15 * max_val
+    threshold_high = 0.75 * max_val
+    threshold_med_high = 0.6 * max_val
+    threshold_med = 0.45 * max_val
+    threshold_med_low = 0.3 * max_val
+    threshold_low = 0.15 * max_val
 
     def get_colored_value(value):
         if value >= threshold_very_high:
@@ -358,8 +357,6 @@ def plot_action_distribution(action_distribution, board_size):
         print(" | ".join(row_values))
 
     print("-" * (board_size * 7))  # Separator line
-
-
 
 
 def show_board(board, board_size):

@@ -1,5 +1,3 @@
-from strategies.search.NNSearch import NNSearch
-
 from strategies.search.NEAT_search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
 from strategies.search.probability import ProbabilisticStrategy
@@ -22,6 +20,7 @@ class SearchAgent:
         elif strategy == "probabilistic":
             return ProbabilisticStrategy(self)
         elif strategy == "nn_search":
+            from strategies.search.NNSearch import NNSearch
             return NNSearch(self, net, optimizer, lr)
         elif strategy == "neat":
             return NEAT_search(self, net)
