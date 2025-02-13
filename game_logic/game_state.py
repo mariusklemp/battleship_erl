@@ -42,7 +42,7 @@ class GameState:
         ship_counts = Counter(
             self.remaining_ships
         )  # Changed to use remaining_ships like state_tensor
-        extra_features = [ship_counts.get(i, 0) for i in range(1, 7)]
+        extra_features = [ship_counts.get(i, 0) for i in range(1, 6)]
         extra_tensor = torch.tensor(extra_features, dtype=torch.float32)
 
         return canonical_board, extra_tensor, rotation
