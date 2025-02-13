@@ -64,13 +64,15 @@ class NNSearch(nn.Module, Strategy):
         probabilities_np = probabilities.detach().numpy()
 
         # Choose a move based on the probability distribution
-        move = np.random.choice(self.search_agent.board_size ** 2, p=probabilities_np)
+        move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
         return move
 
     def calculate_accuracy(self, predicted_values, target_values):
         predicted_probs = nn.functional.softmax(predicted_values, dim=1)
         top1_pred = predicted_probs.argmax(dim=1)
-        top3_pred = predicted_probs.topk(k=min(3, predicted_probs.size(1)), dim=1).indices
+        top3_pred = predicted_probs.topk(
+            k=min(3, predicted_probs.size(1)), dim=1
+        ).indices
 
         # If target_values is already 1D (class indices), use it directly.
         if target_values.dim() == 1:
@@ -79,7 +81,9 @@ class NNSearch(nn.Module, Strategy):
             true_moves = target_values.argmax(dim=1)
 
         top1_accuracy = (top1_pred == true_moves).float().mean()
-        top3_accuracy = (torch.any(top3_pred == true_moves.unsqueeze(1), dim=1).float().mean())
+        top3_accuracy = (
+            torch.any(top3_pred == true_moves.unsqueeze(1), dim=1).float().mean()
+        )
         return top1_accuracy, top3_accuracy
 
     def train(self, training_data, validation_data):
@@ -91,7 +95,7 @@ class NNSearch(nn.Module, Strategy):
 
         # Stack and reshape board tensors: (batch, 4, board_size, board_size)
         board_tensor = torch.stack(board_tensors).squeeze(1)
-        board_size = int(board_tensor.shape[-1] ** 0.5)
+        board_size = int(board_tensor.shape[-1])
         board_tensor = board_tensor.view(-1, 4, board_size, board_size)
 
         # Stack extra features: (batch, extra_input_size)
@@ -104,7 +108,6 @@ class NNSearch(nn.Module, Strategy):
             target_values = target_values.argmax(axis=1)
         target_values_tensor = torch.tensor(target_values, dtype=torch.long)
 
-
         self.optimizer.zero_grad()
         predicted_values = self.net(board_tensor, extra_tensor)
         policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
@@ -113,7 +116,9 @@ class NNSearch(nn.Module, Strategy):
         self.optimizer.step()
 
         # Calculate and store accuracies
-        top1_acc, top3_acc = self.calculate_accuracy(predicted_values, target_values_tensor)
+        top1_acc, top3_acc = self.calculate_accuracy(
+            predicted_values, target_values_tensor
+        )
         self.training_losses.append(policy_loss.item())
         self.top1_accuracy_history.append(top1_acc.item())
         self.top3_accuracy_history.append(top3_acc.item())
@@ -129,7 +134,7 @@ class NNSearch(nn.Module, Strategy):
             states, target_values = zip(*validation_data)
             board_tensors, extra_features = zip(*states)
             board_tensor = torch.stack(board_tensors).squeeze(1)
-            board_size = int(board_tensor.shape[-1] ** 0.5)
+            board_size = int(board_tensor.shape[-1])
             board_tensor = board_tensor.view(-1, 4, board_size, board_size)
             extra_tensor = torch.stack(extra_features)
 
@@ -142,7 +147,9 @@ class NNSearch(nn.Module, Strategy):
 
             predicted_values = self.net(board_tensor, extra_tensor)
             policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
-            top1_acc, top3_acc = self.calculate_accuracy(predicted_values, target_values_tensor)
+            top1_acc, top3_acc = self.calculate_accuracy(
+                predicted_values, target_values_tensor
+            )
             self.validation_losses.append(policy_loss.item())
             self.val_top1_accuracy_history.append(top1_acc.item())
             self.val_top3_accuracy_history.append(top3_acc.item())
@@ -183,9 +190,9 @@ if __name__ == "__main__":
 
     board_size = 5
     net = ANET(
-         board_size=board_size,
+        board_size=board_size,
         activation="relu",
-        output_size=board_size ** 2,
+        output_size=board_size**2,
         device="cpu",
         layer_config=layer_config,
         extra_input_size=5,

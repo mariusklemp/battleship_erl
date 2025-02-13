@@ -38,7 +38,7 @@ def canonicalize_action_distribution(
 
 
 def simulate_game(
-        game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
+    game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
 ):
     """Simulate a Battleship game and return the move count."""
     placement_agent.new_placements()
@@ -265,17 +265,17 @@ if __name__ == "__main__":
         sizes=[3, 2, 2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=1000,
+        simulations_number=200,
         exploration_constant=1.41,
         M=10,
-        epochs=10,
-        number_actual_games=10,
+        epochs=100,
+        number_actual_games=1000,
         batch_size=100,
         device="cpu",
-        load_rbuf=False,
+        load_rbuf=True,
         graphic_visualiser=False,
-        save_model=False,
-        train_model=False,
-        save_rbuf=True,
-        play_game=True,
+        save_model=True,
+        train_model=True,
+        save_rbuf=False,
+        play_game=False,
     )

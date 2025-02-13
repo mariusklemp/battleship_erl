@@ -65,17 +65,7 @@ class Node:
     def best_child(self, c_param=1.4):
         best_score = -float("inf")
         best_moves = []
-
-        # If this is early in the game (few visits), increase exploration
-        if self.visits < 10:  # Adjust this threshold as needed
-            c_param *= 2  # Double the exploration parameter for early moves
-
         for child_node in self.children:
-            # For nodes with very few visits, add some noise to encourage exploration
-            if child_node.visits < 3:  # Adjust this threshold as needed
-                exploration_bonus = random.uniform(0, 0.1)  # Small random bonus
-            else:
-                exploration_bonus = 0
 
             # Calculate score using UCB1 formula
             move_score = child_node.fitness / child_node.visits + c_param * math.sqrt(
