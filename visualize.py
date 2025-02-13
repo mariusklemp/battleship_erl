@@ -235,7 +235,7 @@ def plot_fitness(move_count, board_size):
 
     # Main plot
     ax1.plot(
-        games, moves, color="#E6E6E6", label="Moves per game", alpha=0.5, linewidth=1
+        games, moves, color="#FFFF00", label="Moves per game", alpha=0.5, linewidth=1
     )
     ax1.plot(
         games[moving_avg_window - 1:],

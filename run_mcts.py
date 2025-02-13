@@ -11,6 +11,30 @@ import json
 import visualize
 from gui import GUI
 import torch
+import numpy as np
+
+
+def canonicalize_action_distribution(
+    action_dist: np.ndarray, board_size: int, rotation: int
+):
+    """
+    Rotate the action distribution (a flat NumPy array of length board_size^2)
+    by the given number of 90° counterclockwise rotations.
+
+    Args:
+        action_dist: 1D NumPy array representing the probability distribution.
+        board_size: int, the size of the board.
+        rotation: int, number of 90° rotations applied during board canonicalization.
+
+    Returns:
+        A 1D NumPy array of the rotated (canonicalized) action distribution.
+    """
+    # Reshape to a 2D grid.
+    dist_2d = action_dist.reshape(board_size, board_size)
+    # Apply the rotation (np.rot90 rotates counterclockwise by default).
+    canonical_dist_2d = np.rot90(dist_2d, k=rotation)
+    # Flatten back to a 1D array.
+    return canonical_dist_2d.flatten()
 
 
 def simulate_game(
@@ -39,21 +63,47 @@ def simulate_game(
 
         move = best_child.move
 
-        # Get both board tensor and extra features
-        board_tensor, extra_features = current_node.state.state_tensor()
-        visualize.show_board(current_state.board, board_size=game_manager.size)
-        visualize.plot_action_distribution(
-            current_node.action_distribution(board_size=game_manager.size),
-            game_manager.size,
+        # Get the original board state and action distribution
+        original_board = current_node.state.board
+        original_action_dist = current_node.action_distribution(
+            board_size=game_manager.size
         )
-        # Add move to rbuf with both board and extra features
+
+        # Assume state_tensor_canonical returns (canonical_board, extra_features, rotation)
+        board_tensor, extra_features, rotation = (
+            current_node.state.state_tensor_canonical()
+        )
+
+        # Retrieve the raw action distribution (a NumPy array).
+        action_distribution = current_node.action_distribution(
+            board_size=game_manager.size
+        )
+
+        # Check if we have a valid action distribution (not None)
+        if action_distribution is not None:
+            # Canonicalize the action distribution using the rotation value.
+            canonical_action_distribution = canonicalize_action_distribution(
+                action_distribution, board_size=game_manager.size, rotation=rotation
+            )
+        else:
+            canonical_action_distribution = (
+                action_distribution  # or handle appropriately
+            )
+
+        # Visualize original and canonicalized versions
+        print("\nOriginal Board:")
+        visualize.show_board(original_board, board_size=game_manager.size)
+
+        print("\nOriginal Action Distribution:")
+        visualize.plot_action_distribution(original_action_dist, game_manager.size)
+
+        # Add the canonical state and action distribution to the replay buffer.
         rbuf.add_data_point(
             (
-                (board_tensor, extra_features),  # Input tuple containing both tensors
-                current_node.action_distribution(board_size=game_manager.size),
+                (board_tensor, extra_features),  # The canonical input state.
+                canonical_action_distribution,  # The canonicalized action distribution.
             )
         )
-        visualize.print_rbuf(rbuf, num_samples=3, board_size=game_manager.size)
 
         current_state = game_manager.next_state(current_state, move)
         move_count += 1
@@ -62,20 +112,22 @@ def simulate_game(
 
 
 def train_models(
-        game_manager,
-        mcts,
-        rbuf,
-        search_agent,
-        number_actual_games,
-        batch_size,
-        M,
-        device,
-        graphic_visualiser,
-        save_model,
-        train_model,
-        save_rbuf,
-        board_size,
-        placement_agent,
+    game_manager,
+    mcts,
+    rbuf,
+    search_agent,
+    number_actual_games,
+    batch_size,
+    M,
+    device,
+    graphic_visualiser,
+    save_model,
+    train_model,
+    save_rbuf,
+    board_size,
+    placement_agent,
+    play_game,
+    epochs,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -87,23 +139,24 @@ def train_models(
         gui = GUI(board_size)
 
     for i in tqdm(range(number_actual_games)):
-        move_count.append(
-            simulate_game(
-                game_manager,
-                search_agent,
-                mcts,
-                rbuf,
-                gui,
-                placement_agent,
+        if play_game:
+            move_count.append(
+                simulate_game(
+                    game_manager,
+                    search_agent,
+                    mcts,
+                    rbuf,
+                    gui,
+                    placement_agent,
+                )
             )
-        )
-        print(f"Finished game {i + 1} with {move_count[-1]} moves.")
-        print("Replay buffer length:", len(rbuf.data))
-        # visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
+            print(f"Finished game {i + 1} with {move_count[-1]} moves.")
+            print("Replay buffer length:", len(rbuf.data))
+            # visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
 
         if train_model:
             batch = rbuf.get_training_set(batch_size)
-            for _ in range(20):
+            for _ in range(epochs):
                 search_agent.strategy.train(batch, rbuf.get_validation_set())
 
         if save_model and ((i + 1) % (number_actual_games / M) == 0):
@@ -114,34 +167,38 @@ def train_models(
     if train_model:
         search_agent.strategy.plot_metrics()
 
-    print(len(mcts.root_node.children))
+    if play_game:
+        print(len(mcts.root_node.children))
 
-    visualize.plot_fitness(move_count, game_manager.size)
+    if play_game:
+        visualize.plot_fitness(move_count, game_manager.size)
 
 
 def main(
-        board_size,
-        sizes,
-        strategy_placement,
-        strategy_search,
-        simulations_number,
-        exploration_constant,
-        M,
-        number_actual_games,
-        batch_size,
-        device,
-        load_rbuf,
-        graphic_visualiser,
-        save_model,
-        train_model,
-        save_rbuf,
+    board_size,
+    sizes,
+    strategy_placement,
+    strategy_search,
+    simulations_number,
+    exploration_constant,
+    M,
+    epochs,
+    number_actual_games,
+    batch_size,
+    device,
+    load_rbuf,
+    graphic_visualiser,
+    save_model,
+    train_model,
+    save_rbuf,
+    play_game,
 ):
     layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size ** 2,
+        output_size=board_size**2,
         device="cpu",
         layer_config=layer_config,
         extra_input_size=5,
@@ -189,6 +246,8 @@ def main(
         save_rbuf,
         board_size,
         placement_agent,
+        play_game,
+        epochs,
     )
 
 
@@ -203,18 +262,20 @@ if __name__ == "__main__":
 
     main(
         board_size=5,
-        sizes=[4, 3, 3, 2],
+        sizes=[3, 2, 2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=100,
+        simulations_number=1000,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=100,
+        epochs=10,
+        number_actual_games=40,
         batch_size=100,
         device="cpu",
-        load_rbuf=False,
+        load_rbuf=True,
         graphic_visualiser=False,
         save_model=True,
-        train_model=False,
-        save_rbuf=True,
+        train_model=True,
+        save_rbuf=False,
+        play_game=False,
     )

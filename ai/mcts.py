@@ -78,10 +78,8 @@ class Node:
                 exploration_bonus = 0
 
             # Calculate score using UCB1 formula
-            move_score = (
-                child_node.fitness / child_node.visits
-                + c_param * math.sqrt(math.log(self.visits) / child_node.visits)
-                + exploration_bonus
+            move_score = child_node.fitness / child_node.visits + c_param * math.sqrt(
+                math.log(self.visits / child_node.visits)
             )
 
             if move_score > best_score:

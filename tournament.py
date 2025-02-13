@@ -197,9 +197,9 @@ def main(
 
 if __name__ == "__main__":
     main(
-        board_size=3,
+        board_size=5,
         placing_strategy="random",
-        ship_sizes=[2],
+        ship_sizes=[2, 2, 1],
         num_games=1000,
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],

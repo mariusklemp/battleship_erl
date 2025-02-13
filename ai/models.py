@@ -108,7 +108,7 @@ class ANET(nn.Module):
                     return nn.Linear(layer["in_features"], self.output_size)
                 elif layer.get("dynamic", False):
                     return nn.Linear(
-                        layer["in_features"] * self.board_size * self.board_size,
+                        layer["in_features"] * self.board_size**2,
                         layer["out_features"],
                     )
                 else:
