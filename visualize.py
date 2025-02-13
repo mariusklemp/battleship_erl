@@ -216,36 +216,56 @@ def plot_fitness(move_count, board_size):
     plt.show()
 
 
+
 def plot_action_distribution(action_distribution, board_size):
     """
-    Prints the action distribution in a readable grid format with 3 decimal precision and colors.
+    Prints the action distribution in a readable grid format with 3 decimal precision and dynamic colors.
+    This version uses additional thresholds for a more detailed "heatmap" effect.
 
     :param action_distribution: 1D NumPy array containing the probability of each action.
     :param board_size: The size of the Battleship board (assumed to be square).
     """
+    # Reshape the distribution into a grid.
     action_grid = np.array(action_distribution).reshape((board_size, board_size))
 
-    # Define color map (ANSI escape codes)
+    # Compute the maximum probability value.
+    max_val = np.max(action_grid)
+
+    # Define dynamic thresholds as fractions of the maximum value.
+    # You can adjust these fractions to change the color boundaries.
+    threshold_very_high = 0.9 * max_val
+    threshold_high      = 0.75 * max_val
+    threshold_med_high  = 0.6 * max_val
+    threshold_med       = 0.45 * max_val
+    threshold_med_low   = 0.3 * max_val
+    threshold_low       = 0.15 * max_val
+
     def get_colored_value(value):
-        if value > 0.05:
-            return f"\033[91m{value:.3f}\033[0m"  # Red for high probability
-        elif value > 0.03:
-            return f"\033[93m{value:.3f}\033[0m"  # Yellow for medium probability
-        elif value > 0.01:
-            return f"\033[92m{value:.3f}\033[0m"  # Green for low probability
+        if value >= threshold_very_high:
+            return f"\033[95m{value:.3f}\033[0m"  # Magenta for very high values
+        elif value >= threshold_high:
+            return f"\033[91m{value:.3f}\033[0m"  # Red for high values
+        elif value >= threshold_med_high:
+            return f"\033[93m{value:.3f}\033[0m"  # Yellow for medium-high values
+        elif value >= threshold_med:
+            return f"\033[92m{value:.3f}\033[0m"  # Green for medium values
+        elif value >= threshold_med_low:
+            return f"\033[96m{value:.3f}\033[0m"  # Cyan for medium-low values
+        elif value >= threshold_low:
+            return f"\033[94m{value:.3f}\033[0m"  # Blue for low values
         else:
-            return f"\033[90m{value:.3f}\033[0m"  # Grey for very low probability
+            return f"\033[90m{value:.3f}\033[0m"  # Grey for very low values
 
     print("\nMCTS Action Distribution:")
-    print("-" * (board_size * 7))  # Formatting line
+    print("-" * (board_size * 7))  # Separator line
 
     for row in range(board_size):
-        row_values = [
-            get_colored_value(action_grid[row, col]) for col in range(board_size)
-        ]
-        print(" | ".join(row_values))  # Print row with values separated by "|"
+        row_values = [get_colored_value(action_grid[row, col]) for col in range(board_size)]
+        print(" | ".join(row_values))
 
-    print("-" * (board_size * 7))  # Formatting line
+    print("-" * (board_size * 7))  # Separator line
+
+
 
 
 def show_board(board, board_size):
