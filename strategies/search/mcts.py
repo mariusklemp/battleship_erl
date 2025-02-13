@@ -11,7 +11,6 @@ class MCTSStrategy(Strategy):
         self.mcts = None
 
     def find_move(self, state):
-        self.search_agent.move_count += 1
 
         current_node = self.mcts.run(state, self.search_agent)
         # Picks the best move fully exploitation

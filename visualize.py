@@ -207,12 +207,106 @@ def plot_fitness(move_count, board_size):
         move_count (list): List of moves taken in each game
         board_size (int): Size of the game board
     """
-    plt.figure(figsize=(10, 5))
-    plt.plot(move_count, label="Moves per game")
-    plt.xlabel("Game")
-    plt.ylabel("Moves")
-    plt.title("Moves per game")
-    plt.legend()
+    # Convert to numpy array for easier manipulation
+    moves = np.array(move_count)
+    games = np.arange(len(moves))
+
+    # Calculate statistics
+    moving_avg_window = min(20, len(moves))  # Adaptive window size
+    moving_avg = np.convolve(
+        moves, np.ones(moving_avg_window) / moving_avg_window, mode="valid"
+    )
+    overall_avg = np.mean(moves)
+    best_score = np.min(moves)
+    worst_score = np.max(moves)
+
+    # Create the plot with a modern style
+    plt.style.use("bmh")  # Using built-in style
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 8), height_ratios=[3, 1])
+    fig.patch.set_facecolor("white")  # Set background color
+
+    # Set title with custom styling
+    fig.suptitle(
+        f"Battleship Performance Analysis (Board Size: {board_size}x{board_size})",
+        fontsize=14,
+        fontweight="bold",
+        y=0.95,
+    )
+
+    # Main plot
+    ax1.plot(
+        games, moves, color="#E6E6E6", label="Moves per game", alpha=0.5, linewidth=1
+    )
+    ax1.plot(
+        games[moving_avg_window - 1 :],
+        moving_avg,
+        color="#2E86C1",
+        label=f"Moving average (window={moving_avg_window})",
+        linewidth=2,
+    )
+    ax1.axhline(
+        y=overall_avg,
+        color="#E74C3C",
+        linestyle="--",
+        label=f"Overall average: {overall_avg:.1f}",
+        linewidth=1.5,
+    )
+
+    # Add min/max bands
+    ax1.fill_between(
+        games,
+        np.minimum.accumulate(moves),
+        np.maximum.accumulate(moves),
+        alpha=0.1,
+        color="#7F8C8D",
+        label="Min-Max Range",
+    )
+
+    # Formatting for main plot
+    ax1.set_xlabel("Game Number", fontsize=10)
+    ax1.set_ylabel("Number of Moves", fontsize=10)
+    ax1.grid(True, alpha=0.3, linestyle="--")
+    ax1.legend(loc="upper right", framealpha=0.95, fontsize=9)
+    ax1.spines["top"].set_visible(False)
+    ax1.spines["right"].set_visible(False)
+
+    # Statistics subplot
+    stats_data = [
+        ("Best Score", best_score),
+        ("Worst Score", worst_score),
+        ("Average", overall_avg),
+        ("Last 20 Avg", np.mean(moves[-20:]) if len(moves) >= 20 else np.mean(moves)),
+    ]
+
+    # Create bar plot for statistics with custom colors
+    colors = ["#2ECC71", "#E74C3C", "#3498DB", "#9B59B6"]
+    bars = ax2.bar(
+        range(len(stats_data)), [x[1] for x in stats_data], color=colors, alpha=0.7
+    )
+    ax2.set_xticks(range(len(stats_data)))
+    ax2.set_xticklabels([x[0] for x in stats_data], fontsize=9)
+
+    # Add value labels on the bars
+    for bar in bars:
+        height = bar.get_height()
+        ax2.text(
+            bar.get_x() + bar.get_width() / 2.0,
+            height,
+            f"{height:.1f}",
+            ha="center",
+            va="bottom",
+            fontsize=9,
+            fontweight="bold",
+        )
+
+    # Formatting for stats plot
+    ax2.set_ylabel("Moves", fontsize=10)
+    ax2.grid(True, alpha=0.3, linestyle="--")
+    ax2.spines["top"].set_visible(False)
+    ax2.spines["right"].set_visible(False)
+
+    # Adjust layout and display
+    plt.tight_layout()
     plt.show()
 
 
