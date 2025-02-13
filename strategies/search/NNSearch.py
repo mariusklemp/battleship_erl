@@ -115,7 +115,7 @@ class NNSearch(nn.Module, Strategy):
         # Stack states and reshape to [batch_size, channels, height, width]
         board_tensor = torch.stack(board_tensors)
         board_tensor = board_tensor.squeeze(1)  # Remove the extra dimension
-        board_size = int(board_tensor.shape[-1] ** 0.5)
+        board_size = int(board_tensor.shape[-1])
         board_tensor = board_tensor.view(-1, 4, board_size, board_size)
 
         # Stack extra features
@@ -171,7 +171,7 @@ class NNSearch(nn.Module, Strategy):
             # Stack states and reshape to [batch_size, channels, height, width]
             board_tensor = torch.stack(board_tensors)
             board_tensor = board_tensor.squeeze(1)
-            board_size = int(board_tensor.shape[-1] ** 0.5)
+            board_size = int(board_tensor.shape[-1])
             board_tensor = board_tensor.view(-1, 4, board_size, board_size)
 
             # Stack extra features
@@ -199,52 +199,38 @@ class NNSearch(nn.Module, Strategy):
             return policy_loss.item()
 
     def plot_metrics(self):
-        """Plot training metrics with improved visualization."""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        """Plot training metrics in a simple, clear format."""
+        plt.figure(figsize=(10, 5))
 
-        # Plot losses
-        ax1.plot(self.training_losses, "b-", label="Training Loss", alpha=0.7)
-        ax1.plot(self.validation_losses, "r-", label="Validation Loss", alpha=0.7)
-        ax1.set_title("Loss Evolution", pad=10)
-        ax1.set_xlabel("Training Steps")
-        ax1.set_ylabel("Cross Entropy Loss")
-        ax1.grid(True, linestyle="--", alpha=0.6)
-        ax1.legend()
+        # Plot loss
+        plt.subplot(1, 2, 1)
+        plt.plot(self.training_losses, label="Training")
+        plt.plot(self.validation_losses, label="Validation")
+        plt.title("Loss")
+        plt.xlabel("Steps")
+        plt.ylabel("Cross Entropy Loss")
+        plt.legend()
+        plt.grid(True)
 
-        # Plot accuracies
-        ax2.plot(self.top1_accuracy_history, "b-", label="Top-1 Train", alpha=0.7)
-        ax2.plot(self.top3_accuracy_history, "b--", label="Top-3 Train", alpha=0.7)
-        ax2.plot(self.val_top1_accuracy_history, "r-", label="Top-1 Val", alpha=0.7)
-        ax2.plot(self.val_top3_accuracy_history, "r--", label="Top-3 Val", alpha=0.7)
-        ax2.set_title("Accuracy Evolution", pad=10)
-        ax2.set_xlabel("Training Steps")
-        ax2.set_ylabel("Accuracy")
-        ax2.grid(True, linestyle="--", alpha=0.6)
-        ax2.legend()
-
-        # Add summary statistics
-        if len(self.training_losses) > 0:
-            stats_text = (
-                f"Final Metrics:\n"
-                f"Train Loss: {self.training_losses[-1]:.3f}\n"
-                f"Val Loss: {self.validation_losses[-1]:.3f}\n"
-                f"Top-1 Train: {self.top1_accuracy_history[-1]:.3f}\n"
-                f"Top-3 Train: {self.top3_accuracy_history[-1]:.3f}\n"
-                f"Top-1 Val: {self.val_top1_accuracy_history[-1]:.3f}\n"
-                f"Top-3 Val: {self.val_top3_accuracy_history[-1]:.3f}"
-            )
-            fig.text(
-                0.98,
-                0.98,
-                stats_text,
-                fontsize=9,
-                verticalalignment="top",
-                horizontalalignment="right",
-                bbox=dict(boxstyle="round", facecolor="white", alpha=0.8),
-            )
+        # Plot top-1 accuracy
+        plt.subplot(1, 2, 2)
+        plt.plot(self.top1_accuracy_history, label="Training")
+        plt.plot(self.val_top1_accuracy_history, label="Validation")
+        plt.title("Top-1 Accuracy")
+        plt.xlabel("Steps")
+        plt.ylabel("Accuracy")
+        plt.legend()
+        plt.grid(True)
 
         plt.tight_layout()
         plt.show()
+
+        # Print final metrics
+        print("\nFinal Metrics:")
+        print(f"Training Loss: {self.training_losses[-1]:.3f}")
+        print(f"Validation Loss: {self.validation_losses[-1]:.3f}")
+        print(f"Training Accuracy: {self.top1_accuracy_history[-1]:.3f}")
+        print(f"Validation Accuracy: {self.val_top1_accuracy_history[-1]:.3f}")
 
     def save_model(self, path):
         self.net.save(path)

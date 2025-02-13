@@ -235,7 +235,7 @@ def plot_fitness(move_count, board_size):
 
     # Main plot
     ax1.plot(
-        games, moves, color="#E6E6E6", label="Moves per game", alpha=0.5, linewidth=1
+        games, moves, color="#FFFF00", label="Moves per game", alpha=0.5, linewidth=1
     )
     ax1.plot(
         games[moving_avg_window - 1 :],
@@ -321,11 +321,11 @@ def plot_action_distribution(action_distribution, board_size):
 
     # Define color map (ANSI escape codes)
     def get_colored_value(value):
-        if value > 0.05:
+        if value > 0.2:
             return f"\033[91m{value:.3f}\033[0m"  # Red for high probability
-        elif value > 0.03:
+        elif value > 0.1:
             return f"\033[93m{value:.3f}\033[0m"  # Yellow for medium probability
-        elif value > 0.01:
+        elif value > 0.05:
             return f"\033[92m{value:.3f}\033[0m"  # Green for low probability
         else:
             return f"\033[90m{value:.3f}\033[0m"  # Grey for very low probability
