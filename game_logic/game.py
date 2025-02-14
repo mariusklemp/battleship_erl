@@ -1,6 +1,8 @@
 import sys
 import pygame
 
+import visualize
+
 
 class Game:
     """
@@ -49,6 +51,7 @@ class Game:
             if self.player1_turn:
                 move = self.get_human_move(gui) if gui else self.player1_search.strategy.find_move(current_state_1)
             else:
+                visualize.show_board(current_state_2.board, self.game_manager2.size)
                 move = self.player2_search.strategy.find_move(current_state_2)
 
         try:

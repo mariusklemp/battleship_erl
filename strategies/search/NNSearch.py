@@ -93,7 +93,8 @@ class NNSearch(nn.Module, Strategy):
         # Apply softmax to convert logits to a probability distribution
         probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
-        print("Probabilities:", probabilities_np)
+        #print("Probabilities:", probabilities_np)
+        visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
@@ -283,7 +284,7 @@ if __name__ == "__main__":
 
     # Train for multiple iterations, training on each batch multiple times.
     for epoch in range(200):
-        training_set = rbuf.get_training_set(batch_size=20)
+        training_set = rbuf.get_training_set(batch_size=50)
         print(f"Epoch {epoch + 1}")
         search_agent.strategy.train_model(training_set)
         search_agent.strategy.validate_model(validation_set)

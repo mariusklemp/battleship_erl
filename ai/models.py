@@ -95,8 +95,6 @@ class ANET(nn.Module):
         # Concatenate the extra channel to the board input along the channel dimension.
         game_state = torch.cat([game_state, board_extra], dim=1)
 
-        print(game_state)
-
         if hasattr(self, "logits"):
             policy = self.logits(game_state)
         else:
