@@ -53,7 +53,10 @@ class Game:
 
         try:
             # Validate move
-            assert self.is_move_possible(move), "Move has already been made"
+            if self.player1_turn:
+                assert self.is_move_possible(move, current_state_1), "Move has already been made"
+            else:
+                assert self.is_move_possible(move, current_state_2), "Move has already been made"
 
             if self.single_agent_mode or self.player1_turn:
                 current_state_1 = self.game_manager1.next_state(current_state_1, move)
@@ -83,19 +86,12 @@ class Game:
                 return gui.pos_to_index(pos, self)
         return None
 
-
-    def is_move_possible(self, move):
+    def is_move_possible(self, move, state):
         """Checks if a move is valid (i.e., not already played)."""
         if move is None:
             return False
 
-        # Single-agent mode: Only check Player 1's board
-        if self.single_agent_mode:
-            return self.game_manager1.board[0][move] == 0
-
-        # Multiplayer mode: Check the appropriate player's board
-        game = self.game_manager2 if self.player1_turn else self.game_manager1
-        return game.board[0][move] == 0  # Move is valid if the board is empty at that position
+        return state.board[0][move] == 0  # Move is valid if the board is empty at that position
 
     def check_game_over(self, state1, state2):
         """Checks if the game is over."""
@@ -107,4 +103,3 @@ class Game:
             if self.game_manager2.is_terminal(state2):
                 self.game_over = True
                 self.winner = f'{self.player2_search.strategy.name}'
-

@@ -10,17 +10,17 @@ from ai.models import ANET
 import json
 
 
-def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
+def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file_path):
     """Initializes Search and Placement Agents."""
     layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size**2,
+        output_size=board_size ** 2,
         device="cpu",
         layer_config=layer_config,
-        extra_input_size=6,
+        extra_input_size=5,
     )
     search_agent = SearchAgent(
         board_size=board_size,
@@ -29,6 +29,10 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
         optimizer="adam",
         lr=0.001,
     )
+
+    if file_path:
+        search_agent.strategy.load_model(file_path)
+
     # search_agent.strategy.load_model("models/model_100.pth")
     placement_agent = PlacementAgent(
         board_size=board_size,
@@ -39,13 +43,15 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy):
 
 
 def initialize_game(
-    board_size,
-    sizes,
-    human_player,
-    player1_search_strategy,
-    player1_placing_strategy,
-    player2_search_strategy=None,
-    player2_placing_strategy=None,
+        board_size,
+        sizes,
+        human_player,
+        file_path_1,
+        file_path_2,
+        player1_search_strategy,
+        player1_placing_strategy,
+        player2_search_strategy=None,
+        player2_placing_strategy=None,
 ):
     """
     Initializes and runs a Battleship game.
@@ -54,28 +60,28 @@ def initialize_game(
 
     # Player 1 (Search 1 vs Placing 2)
     search_agent_1, placement_agent_1 = initialize_agents(
-        board_size, sizes, player1_search_strategy, player1_placing_strategy
+        board_size, sizes, player1_search_strategy, player1_placing_strategy, file_path_1
     )
 
     # If player2_search_strategy is None, assume single-player mode
     if player2_search_strategy:
         search_agent_2, placement_agent_2 = initialize_agents(
-            board_size, sizes, player2_search_strategy, player2_placing_strategy
+            board_size, sizes, player2_search_strategy, player2_placing_strategy, file_path_2
         )
         game_manager_1 = GameManager(
-            size=board_size, placing=placement_agent_2
+            size=board_size
         )  # Player 1 attacks Player 2’s board
         game_manager_2 = GameManager(
-            size=board_size, placing=placement_agent_1
+            size=board_size
         )  # Player 2 attacks Player 1’s board
         game = Game(game_manager_1, search_agent_1, game_manager_2, search_agent_2)
-        current_state_1 = game.game_manager1.initial_state()
-        current_state_2 = game.game_manager2.initial_state()
+        current_state_1 = game.game_manager1.initial_state(placement_agent_1)
+        current_state_2 = game.game_manager2.initial_state(placement_agent_2)
     else:
         # Single-player mode (AI vs AI or Human vs AI)
-        game_manager = GameManager(size=board_size, placing=placement_agent_1)
+        game_manager = GameManager(size=board_size)
         game = Game(game_manager, search_agent_1)
-        current_state_1 = game.game_manager1.initial_state()
+        current_state_1 = game.game_manager1.initial_state(placement_agent_1)
         current_state_2 = None  # Not used in single-player mode
 
     # Initialize MCTS for AI players
@@ -130,9 +136,11 @@ def initialize_game(
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
     initialize_game(
-        board_size=3,
-        sizes=[2],
+        board_size=5,
+        sizes=[3, 2, 2],
         human_player=True,
+        file_path_1="models/model.pth",
+        file_path_2="models/model.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",
@@ -142,5 +150,5 @@ if __name__ == "__main__":
     # Example: Human vs AI
     # initialize_game(board_size=5, sizes=[2, 1, 2],
     #                 human_player=True,
-    #                 player1_search_strategy="mcts",
+    #                 player1_search_strategy="nn_search",
     #                 player1_placing_strategy="random")

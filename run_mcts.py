@@ -157,7 +157,8 @@ def train_models(
         if train_model:
             batch = rbuf.get_training_set(batch_size)
             for _ in range(epochs):
-                search_agent.strategy.train(batch, rbuf.get_validation_set())
+                search_agent.strategy.train_model(batch)
+                search_agent.strategy.validate_model(rbuf.validation_set)
 
         if save_model and ((i + 1) % (number_actual_games / M) == 0):
             search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
