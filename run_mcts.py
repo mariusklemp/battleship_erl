@@ -15,7 +15,7 @@ import numpy as np
 
 
 def canonicalize_action_distribution(
-    action_dist: np.ndarray, board_size: int, rotation: int
+        action_dist: np.ndarray, board_size: int, rotation: int
 ):
     """
     Rotate the action distribution (a flat NumPy array of length board_size^2)
@@ -38,7 +38,7 @@ def canonicalize_action_distribution(
 
 
 def simulate_game(
-    game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
+        game_manager, search_agent, mcts, rbuf, gui=None, placement_agent=None
 ):
     """Simulate a Battleship game and return the move count."""
     placement_agent.new_placements()
@@ -112,22 +112,22 @@ def simulate_game(
 
 
 def train_models(
-    game_manager,
-    mcts,
-    rbuf,
-    search_agent,
-    number_actual_games,
-    batch_size,
-    M,
-    device,
-    graphic_visualiser,
-    save_model,
-    train_model,
-    save_rbuf,
-    board_size,
-    placement_agent,
-    play_game,
-    epochs,
+        game_manager,
+        mcts,
+        rbuf,
+        search_agent,
+        number_actual_games,
+        batch_size,
+        M,
+        device,
+        graphic_visualiser,
+        save_model,
+        train_model,
+        save_rbuf,
+        board_size,
+        placement_agent,
+        play_game,
+        epochs,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -159,12 +159,11 @@ def train_models(
 
         if train_model:
             batch = rbuf.get_training_set(batch_size)
-            search_agent.strategy.train(batch, rbuf.get_validation_set(), device=device)
-            search_agent.strategy.validate_model(rbuf.validation_set, device=device)
-
+            search_agent.strategy.train_model(batch)
+            search_agent.strategy.validate_model(rbuf.validation_set)
 
     if save_model and ((i + 1) % (number_actual_games / M) == 0):
-            search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
+        search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
@@ -179,30 +178,30 @@ def train_models(
 
 
 def main(
-    board_size,
-    sizes,
-    strategy_placement,
-    strategy_search,
-    simulations_number,
-    exploration_constant,
-    M,
-    epochs,
-    number_actual_games,
-    batch_size,
-    device,
-    load_rbuf,
-    graphic_visualiser,
-    save_model,
-    train_model,
-    save_rbuf,
-    play_game,
+        board_size,
+        sizes,
+        strategy_placement,
+        strategy_search,
+        simulations_number,
+        exploration_constant,
+        M,
+        epochs,
+        number_actual_games,
+        batch_size,
+        device,
+        load_rbuf,
+        graphic_visualiser,
+        save_model,
+        train_model,
+        save_rbuf,
+        play_game,
 ):
     layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size**2,
+        output_size=board_size ** 2,
         device="cpu",
         layer_config=layer_config,
         extra_input_size=5,

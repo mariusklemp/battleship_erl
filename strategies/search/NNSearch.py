@@ -124,9 +124,7 @@ class NNSearch(nn.Module, Strategy):
         )
         return top1_accuracy, top3_accuracy
 
-    def train_model(self, training_data, device=None):
-        if device is None:
-            device = self.device
+    def train_model(self, training_data):
 
         error_history = []
         for batch_idx, (state, target) in enumerate(training_data):
