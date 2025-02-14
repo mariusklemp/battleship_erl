@@ -51,12 +51,12 @@ class NNSearch(nn.Module, Strategy):
 
     # ===== Helper Functions =====
 
-    def _reshape_board(self, board_tensor, device):
+    def _reshape_board(self, board_tensor):
         """Reshape board_tensor to (batch, 4, board_size, board_size)."""
         board_size = int(board_tensor.shape[-1])
-        return board_tensor.view(-1, 4, board_size, board_size).to(device)
+        return board_tensor.view(-1, 4, board_size, board_size).to(self.device)
 
-    def _convert_target(self, target, device):
+    def _convert_target(self, target):
         """
         Convert target (assumed to be a probability distribution)
         to a float tensor and add a batch dimension if needed.
@@ -64,7 +64,7 @@ class NNSearch(nn.Module, Strategy):
         target_tensor = torch.tensor(target, dtype=torch.float32)
         if target_tensor.dim() == 1:
             target_tensor = target_tensor.unsqueeze(0)
-        return target_tensor.to(device)
+        return target_tensor.to(self.device)
 
     def _apply_illegal_mask(self, output, board_tensor):
         """
@@ -82,12 +82,8 @@ class NNSearch(nn.Module, Strategy):
         # Reshape board tensor to (batch, 4, board_size, board_size)
         board_tensor = self._reshape_board(board_tensor)
 
-        print("Finding move on board tensor:", board_tensor)
-        print("Finding move on extra features:", extra_features)
-
         # Forward pass to get raw output (logits)
         output = self.net(board_tensor, extra_features).view(1, -1)
-        print("Output before masking:", output)
         output = output.cpu()
 
         # Mask the output based on the 'unknown' layer (first channel in state.board)
@@ -97,7 +93,7 @@ class NNSearch(nn.Module, Strategy):
         # Apply softmax to convert logits to a probability distribution
         probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
-        print("Probabilities after masking:", probabilities_np)
+        print("Probabilities:", probabilities_np)
 
         # Choose a move based on the probability distribution
         if topp:
@@ -138,10 +134,7 @@ class NNSearch(nn.Module, Strategy):
 
             # Unpack state into board tensor and extra features.
             board_tensor, extra_features = state
-            board_tensor = self._reshape_board(board_tensor, device)
-
-            print("Board tensor:", board_tensor)
-            print("Extra features:", extra_features)
+            board_tensor = self._reshape_board(board_tensor)
 
             # Forward pass: get network output (raw logits)
             output = self.net(board_tensor, extra_features)
@@ -152,10 +145,11 @@ class NNSearch(nn.Module, Strategy):
             print("Output after masking:", probabilities)
 
             # Convert target to a tensor.
-            target_tensor = self._convert_target(target, device)
+            target_tensor = self._convert_target(target)
             print("Target tensor:", target_tensor)
 
             # Compute loss using soft cross-entropy.
+            # TODO Check if this is the correct loss function.
             loss = -(target_tensor * torch.log(probabilities + 1e-8)).sum(dim=-1).mean()
             print("Loss:", loss)
             error_history.append(loss)
@@ -192,6 +186,7 @@ class NNSearch(nn.Module, Strategy):
                 target_tensor = self._convert_target(target)
 
                 # Compute soft cross-entropy loss.
+                # TODO Check if this is the correct loss function.
                 loss = -(target_tensor * torch.log(probabilities + 1e-8)).sum(dim=-1).mean()
 
                 error_history.append(loss)
@@ -268,7 +263,6 @@ if __name__ == "__main__":
         output_size=board_size ** 2,
         device="cpu",
         layer_config=layer_config,
-        extra_input_size=5,
     )
 
     # Create the search agent.
