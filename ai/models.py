@@ -18,75 +18,71 @@ def activation_function(activation: str):
 
 class ANET(nn.Module):
     def __init__(
-            self,
-            board_size,
-            output_size,
-            activation,
-            extra_input_size,
-            device=torch.device("cpu"),
-            layer_config=None,
+        self,
+        board_size,
+        output_size,
+        activation,
+        device=torch.device("cpu"),
+        layer_config=None,
     ):
+        """
+        Parameters:
+          board_size: Dimension of the square board (e.g., 5 for a 5x5 board)
+          output_size: Number of outputs (e.g., 25 for a 5x5 board move distribution)
+          activation: String specifying the activation function
+          device: Torch device to use
+          layer_config: Optional JSON-like configuration for the layers
+        """
         super(ANET, self).__init__()
         self.board_size = board_size
         self.activation_func = activation_function(activation)
         self.device = device
         self.output_size = output_size
-        self.extra_input_size = extra_input_size
 
-        # Early fusion: Increase input channels by extra_input_size.
-        # Board originally has 4 channels, so new input channels = 4 + extra_input_size.
-        input_channels = 4 + self.extra_input_size
+        # Since extra features are removed, we use only 4 channels for the board.
+        input_channels = 4
 
         if layer_config is None:
-            # Shared layers with early-fused input
+            # Board branch: process board with CNN layers.
             self.conv1 = nn.Conv2d(input_channels, 128, kernel_size=3, padding=1)
             self.conv2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
             self.flatten = nn.Flatten()
+            self.fc_board = nn.Linear(128 * board_size * board_size, 1024)
 
-            # Policy head (and value head if needed)
-            self.fc_shared = nn.Linear(128 * board_size * board_size, 1024)
+            # Final layers: policy and value heads.
             self.fc_policy = nn.Linear(1024, output_size)
             self.fc_value = nn.Linear(1024, 1)
-
             self.dropout = nn.Dropout(p=0.3)
             self.apply(self.init_weights)
         else:
             self.layer_config = layer_config
             self.logits = nn.Sequential(*self.getLayers())
 
-    def forward(self, game_state: torch.Tensor, extra_input: torch.Tensor):
+        # Move the model to the specified device.
+        self.to(device)
+
+    def forward(self, game_state: torch.Tensor):
         """
         Parameters:
           game_state: Tensor of shape (batch, 4, board_size, board_size)
-          extra_input: Tensor of shape (batch, extra_input_size) e.g., [0, 1, 1, 1, 0]
+        Returns:
+          policy: Tensor of shape (batch, output_size)
         """
+        # Ensure the game state is on the correct device.
         game_state = game_state.to(self.device)
-        extra_input = extra_input.to(self.device)
-
-        # Expand extra_input spatially:
-        # extra_input: (batch, extra_input_size) -> (batch, extra_input_size, 1, 1)
-        # Then expand to match board spatial dimensions (board_size x board_size)
-        batch, _, h, w = game_state.size()
-        extra_expanded = extra_input.unsqueeze(-1).unsqueeze(-1).expand(batch, self.extra_input_size, h, w)
-
-        # Early fusion: Concatenate along the channel dimension
-        fused_input = torch.cat([game_state, extra_expanded], dim=1)  # (batch, 4+extra_input_size, h, w)
 
         if hasattr(self, "logits"):
-            policy = self.logits(fused_input)
+            policy = self.logits(game_state)
         else:
-            # Process through convolutional layers
-            x = self.conv1(fused_input)
+            # Process board input through convolutional layers.
+            x = self.conv1(game_state)
             x = self.activation_func(x)
             x = self.conv2(x)
             x = self.activation_func(x)
             x = self.flatten(x)
-
-            board_features = self.fc_shared(x)
+            board_features = self.fc_board(x)
             board_features = self.activation_func(board_features)
             board_features = self.dropout(board_features)
-
-            # Final policy layer (and value head if used)
             policy = self.fc_policy(board_features)
 
         return policy
@@ -134,3 +130,24 @@ class ANET(nn.Module):
 
     def save(self, path: str):
         torch.save(self.state_dict(), path)
+
+
+# Example usage:
+if __name__ == "__main__":
+    # Suppose we have a batch of 8 examples on a 5x5 board with 4 channels,
+    # and 25 output classes.
+    batch_size = 8
+    board_size = 5
+    output_size = board_size * board_size  # 25 possible moves
+
+    net = ANET(
+        board_size=board_size,
+        output_size=output_size,
+        activation="relu",
+        extra_input_size=0,
+    )
+    # Create a dummy board state: (batch, 4, board_size, board_size)
+    game_state = torch.randn(batch_size, 4, board_size, board_size)
+    # Forward pass.
+    logits = net(game_state)
+    print("Output logits shape:", logits.shape)  # Expected: [8, 25]

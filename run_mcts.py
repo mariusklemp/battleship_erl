@@ -138,6 +138,9 @@ def train_models(
         pygame.display.set_caption("Battleship")
         gui = GUI(board_size)
 
+    if save_model:
+        search_agent.strategy.save_model(f"models/model_{0}.pth")
+
     for i in tqdm(range(number_actual_games)):
         if play_game:
             move_count.append(
@@ -152,12 +155,11 @@ def train_models(
             )
             print(f"Finished game {i + 1} with {move_count[-1]} moves.")
             print("Replay buffer length:", len(rbuf.data))
-            # visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
+            visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
 
         if train_model:
             batch = rbuf.get_training_set(batch_size)
-            for _ in range(epochs):
-                search_agent.strategy.train(batch, rbuf.get_validation_set())
+            search_agent.strategy.train(batch, rbuf.get_validation_set(), device=device)
 
         if save_model and ((i + 1) % (number_actual_games / M) == 0):
             search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
@@ -201,7 +203,6 @@ def main(
         output_size=board_size**2,
         device="cpu",
         layer_config=layer_config,
-        extra_input_size=5,
     )
 
     search_agent = SearchAgent(
@@ -252,12 +253,19 @@ def main(
 
 
 if __name__ == "__main__":
-
-    device = "cpu"
-    if torch.cuda.is_available():
-        device = "cuda"
+    # Device setup with proper MPS handling
     if torch.backends.mps.is_available():
-        device = "mps"
+        device = torch.device("mps")
+        for _ in range(100):
+            torch.matmul(
+                torch.rand(500, 500).to(device), torch.rand(500, 500).to(device)
+            )
+
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+
+    else:
+        device = torch.device("cpu")
     print(f"Using device: {device}")
 
     main(
@@ -265,17 +273,17 @@ if __name__ == "__main__":
         sizes=[3, 2, 2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=200,
+        simulations_number=300,
         exploration_constant=1.41,
         M=10,
-        epochs=100,
-        number_actual_games=1000,
+        epochs=20,
+        number_actual_games=5000,
         batch_size=100,
-        device="cpu",
+        device=device,
         load_rbuf=True,
         graphic_visualiser=False,
         save_model=True,
         train_model=True,
-        save_rbuf=False,
+        save_rbuf=True,
         play_game=False,
     )

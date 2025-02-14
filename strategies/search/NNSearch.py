@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
-
+import visualize
 from RBUF import RBUF
 from ai.models import ANET
 from strategies.search.strategy import Strategy
@@ -27,11 +27,16 @@ def get_optimizer(optimizer: str, model, lr: float) -> torch.optim.Optimizer:
 
 
 class NNSearch(nn.Module, Strategy):
-    def __init__(self, search_agent, net, optimizer="adam", lr=0.001):
+    def __init__(self, search_agent, net, optimizer="adam", lr=0.001, name="nn_search"):
         super().__init__()
-        self.name = "nn_search"
+        self.name = name
         self.search_agent = search_agent
         self.net = net
+        self.device = net.device  # Get device from the network
+
+        # Ensure the network is on the correct device
+        self.net = self.net.to(self.device)
+
         self.optimizer = get_optimizer(optimizer, self.net, lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
@@ -43,17 +48,22 @@ class NNSearch(nn.Module, Strategy):
         self.val_top1_accuracy_history = []
         self.val_top3_accuracy_history = []
 
-    def find_move(self, state):
+    def find_move(self, state, topp=False):
         # Get both board tensor and extra features from state
         board_tensor, extra_features = state.state_tensor()
 
         # Reshape board tensor to (batch_size, channels, height, width)
         board_size = self.search_agent.board_size
-        board_tensor = board_tensor.view(1, 4, board_size, board_size)
-        extra_features = extra_features.unsqueeze(0)  # Add batch dimension
+        board_tensor = board_tensor.view(1, 4, board_size, board_size).to(self.device)
+        extra_features = extra_features.unsqueeze(0).to(
+            self.device
+        )  # Add batch dimension
 
         # Forward pass to get raw output (logits)
-        output = self.net(board_tensor, extra_features).view(1, -1)
+        output = self.net(board_tensor).view(1, -1)
+
+        # Move output back to CPU for numpy operations
+        output = output.cpu()
 
         # Mask the output based on the 'unknown' layer (first channel in state.board)
         unknown_layer = torch.tensor(state.board[0], dtype=torch.float32).view(1, -1)
@@ -64,7 +74,13 @@ class NNSearch(nn.Module, Strategy):
         probabilities_np = probabilities.detach().numpy()
 
         # Choose a move based on the probability distribution
-        move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
+        if topp:
+            visualize.plot_action_distribution(
+                probabilities_np, self.search_agent.board_size
+            )
+            move = np.argmax(probabilities_np)
+        else:
+            move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
         return move
 
     def calculate_accuracy(self, predicted_values, target_values):
@@ -86,74 +102,117 @@ class NNSearch(nn.Module, Strategy):
         )
         return top1_accuracy, top3_accuracy
 
-    def train(self, training_data, validation_data):
+    def train(self, training_data, validation_data, device=None):
+        if device is None:
+            device = self.device
+
         self.net.train()
         states, target_values = zip(*training_data)
 
-        # Unpack each state into board tensor and extra features.
+        # Unpack each state into board tensor and extra features
         board_tensors, extra_features = zip(*states)
 
         # Stack and reshape board tensors: (batch, 4, board_size, board_size)
         board_tensor = torch.stack(board_tensors).squeeze(1)
         board_size = int(board_tensor.shape[-1])
-        board_tensor = board_tensor.view(-1, 4, board_size, board_size)
+        board_tensor = board_tensor.view(-1, 4, board_size, board_size).to(device)
 
-        # Stack extra features: (batch, extra_input_size)
-        extra_tensor = torch.stack(extra_features)
+        # Stack extra features and move to device
+        extra_tensor = torch.stack(extra_features).to(device)
 
-        # Convert target values to a tensor (assuming they might be one-hot)
+        # Convert target values to a tensor and move to device
         target_values = np.array(target_values)
-        # If the target has more than one dimension (i.e. is one-hot), convert to class indices
         if target_values.ndim > 1 and target_values.shape[1] > 1:
             target_values = target_values.argmax(axis=1)
-        target_values_tensor = torch.tensor(target_values, dtype=torch.long)
+        target_values_tensor = torch.tensor(target_values, dtype=torch.long).to(device)
 
+        # Zero gradients before forward pass
         self.optimizer.zero_grad()
-        predicted_values = self.net(board_tensor, extra_tensor)
-        policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
 
-        policy_loss.backward()
-        self.optimizer.step()
+        try:
+            # Forward pass
+            predicted_values = self.net(board_tensor)
 
-        # Calculate and store accuracies
-        top1_acc, top3_acc = self.calculate_accuracy(
-            predicted_values, target_values_tensor
-        )
-        self.training_losses.append(policy_loss.item())
-        self.top1_accuracy_history.append(top1_acc.item())
-        self.top3_accuracy_history.append(top3_acc.item())
+            # Compute loss
+            criterion = nn.CrossEntropyLoss()
+            policy_loss = criterion(predicted_values, target_values_tensor)
 
-        # Validate if validation_data is provided
-        if validation_data:
-            val_loss = self.validate(validation_data)
-            self.scheduler.step(val_loss)
+            # Backward pass and optimization
+            policy_loss.backward()
+            self.optimizer.step()
 
-    def validate(self, validation_data):
-        self.net.eval()
-        with torch.no_grad():
-            states, target_values = zip(*validation_data)
-            board_tensors, extra_features = zip(*states)
-            board_tensor = torch.stack(board_tensors).squeeze(1)
-            board_size = int(board_tensor.shape[-1])
-            board_tensor = board_tensor.view(-1, 4, board_size, board_size)
-            extra_tensor = torch.stack(extra_features)
-
-            # Convert target values to a tensor (assuming they might be one-hot)
-            target_values = np.array(target_values)
-            # If the target has more than one dimension (i.e. is one-hot), convert to class indices
-            if target_values.ndim > 1 and target_values.shape[1] > 1:
-                target_values = target_values.argmax(axis=1)
-            target_values_tensor = torch.tensor(target_values, dtype=torch.long)
-
-            predicted_values = self.net(board_tensor, extra_tensor)
-            policy_loss = nn.CrossEntropyLoss()(predicted_values, target_values_tensor)
+            # Calculate and store accuracies
             top1_acc, top3_acc = self.calculate_accuracy(
                 predicted_values, target_values_tensor
             )
-            self.validation_losses.append(policy_loss.item())
-            self.val_top1_accuracy_history.append(top1_acc.item())
-            self.val_top3_accuracy_history.append(top3_acc.item())
-            return policy_loss.item()
+            self.training_losses.append(policy_loss.item())
+            self.top1_accuracy_history.append(top1_acc.item())
+            self.top3_accuracy_history.append(top3_acc.item())
+
+        except RuntimeError as e:
+            if "MPS" in str(e):
+                # Fallback to CPU if MPS operation fails
+                self.device = torch.device("cpu")
+                self.net = self.net.to(self.device)
+                return self.train(training_data, validation_data, self.device)
+            else:
+                raise e
+
+        # Validate if validation_data is provided
+        if validation_data:
+            val_loss = self.validate(validation_data, device)
+            self.scheduler.step(val_loss)
+
+    def validate(self, validation_data, device=None):
+        if device is None:
+            device = self.device
+
+        self.net.eval()
+        with torch.no_grad():
+            try:
+                states, target_values = zip(*validation_data)
+                board_tensors, extra_features = zip(*states)
+
+                # Process board tensors
+                board_tensor = torch.stack(board_tensors).squeeze(1)
+                board_size = int(board_tensor.shape[-1])
+                board_tensor = board_tensor.view(-1, 4, board_size, board_size).to(
+                    device
+                )
+
+                # Process extra features
+                extra_tensor = torch.stack(extra_features).to(device)
+
+                # Process target values
+                target_values = np.array(target_values)
+                if target_values.ndim > 1 and target_values.shape[1] > 1:
+                    target_values = target_values.argmax(axis=1)
+                target_values_tensor = torch.tensor(target_values, dtype=torch.long).to(
+                    device
+                )
+
+                predicted_values = self.net(board_tensor)
+                policy_loss = nn.CrossEntropyLoss()(
+                    predicted_values, target_values_tensor
+                )
+
+                top1_acc, top3_acc = self.calculate_accuracy(
+                    predicted_values, target_values_tensor
+                )
+                self.validation_losses.append(policy_loss.item())
+                self.val_top1_accuracy_history.append(top1_acc.item())
+                self.val_top3_accuracy_history.append(top3_acc.item())
+
+                return policy_loss.item()
+
+            except RuntimeError as e:
+                if "MPS" in str(e):
+                    # Fallback to CPU if MPS operation fails
+                    self.device = torch.device("cpu")
+                    self.net = self.net.to(self.device)
+                    return self.validate(validation_data, self.device)
+                else:
+                    raise e
 
     def plot_metrics(self):
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))

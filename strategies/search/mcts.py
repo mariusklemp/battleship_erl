@@ -10,14 +10,11 @@ class MCTSStrategy(Strategy):
         self.name = "mcts"
         self.mcts = None
 
-    def find_move(self, state):
+    def find_move(self, state, topp=False):
 
         current_node = self.mcts.run(state, self.search_agent)
         # Picks the best move fully exploitation
         best_child = current_node.best_child(c_param=0)
-
-        print("__Board__")
-        state.placing.show_ships()
         # show_board(current_node.state.board, self.search_agent.board_size)
         #   action_distribution = current_node.action_distribution(
         #    board_size=self.search_agent.board_size

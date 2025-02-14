@@ -1,61 +1,50 @@
 {
-    "layers": [
-      {
-        "type": "Conv2d",
-        "in_channels": 9,
-        "out_channels": 128,
-        "kernel_size": 3,
-        "stride": 1,
-        "padding": 1
-      },
-      {
-        "type": "Dropout",
-        "p": 0.4
-      },
-      {
-        "type": "activation"
-      },
-      {
-        "type": "Conv2d",
-        "in_channels": 128,
-        "out_channels": 128,
-        "kernel_size": 3,
-        "stride": 1,
-        "padding": 1
-      },
-      {
-        "type": "Dropout",
-        "p": 0.4
-      },
-      {
-        "type": "activation"
-      },
-      {
-        "type": "Conv2d",
-        "in_channels": 128,
-        "out_channels": 128,
-        "kernel_size": 3,
-        "stride": 1,
-        "padding": 1
-      },
-      {
-        "type": "activation"
-      },
-      {
-        "type": "Flatten"
-      },
-      {
-        "type": "Linear",
-        "in_features": 128,
-        "out_features": 1024,
-        "dynamic": true,
-        "last": false
-      },
-      {
-        "type": "Linear",
-        "in_features": 1024,
-        "dynamic": false,
-        "last": true
-      }
-    ]
-  }
+  "layers": [
+    {
+      "type": "Conv2d",
+      "in_channels": 4,
+      "out_channels": 32,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1
+    },
+    {
+      "type": "activation"
+    },
+    {
+      "type": "Conv2d",
+      "in_channels": 32,
+      "out_channels": 64,
+      "kernel_size": 3,
+      "stride": 1,
+      "padding": 1
+    },
+    {
+      "type": "activation"
+    },
+    {
+      "type": "Flatten"
+    },
+    {
+      "type": "Linear",
+      "in_features": 64,
+      "out_features": 128,
+      "dynamic": true,
+      "last": false
+    },
+    {
+      "type": "activation"
+    },
+    {
+      "type": "Dropout",
+      "p": 0.3
+    },
+    {
+      "type": "Linear",
+      "in_features": 128,
+      "out_features": 25,
+      "dynamic": false,
+      "last": true
+    }
+  ]
+}
