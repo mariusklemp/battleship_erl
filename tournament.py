@@ -50,7 +50,7 @@ class Tournament:
         """Initializes a SearchAgent that uses a neural network.
         Model number is based on tournament parameters.
         """
-        model_number = int(self.num_games / self.num_players * (i + 1))
+        model_number = int(self.num_games / self.num_players * (i))
         print(f"[DEBUG] Loading model: {model_number}")
         path = f"models/model_{model_number}.pth"
 
@@ -59,6 +59,7 @@ class Tournament:
             strategy="nn_search",
             net=default_net,
             optimizer="adam",
+            name=f"nn_{model_number}",
             lr=0.001,
         )
         search_agent.strategy.load_model(path)
@@ -78,11 +79,10 @@ class Tournament:
             output_size=self.board_size**2,
             device="cpu",
             layer_config=layer_config,
-            extra_input_size=6,
         )
 
         # For each strategy in the provided list, create a player.
-        for i in range(self.num_players):
+        for i in range(0, self.num_players + 1):
             agent, identifier = self.set_nn_agent(i, default_net)
             self.players[identifier] = agent
             self.result[identifier] = (
@@ -120,8 +120,9 @@ class Tournament:
         """Plays one game with the given search agent and returns the move count."""
         current_state = game_manager.initial_state(placing=self.placement_agent)
         while not game_manager.is_terminal(current_state):
-            # visualize.show_board(current_state, board_size=game_manager.size)
-            move = search_agent.strategy.find_move(current_state)
+            visualize.show_board(current_state.board, board_size=game_manager.size)
+
+            move = search_agent.strategy.find_move(current_state, topp=True)
             current_state = game_manager.next_state(current_state, move)
         return current_state.move_count
 
@@ -186,7 +187,7 @@ def main(
     )
     tournament.init_players()
 
-    for i in tqdm(range(int(num_games)), desc="Tournament Progress"):
+    for i in tqdm(range(int(num_games / 10)), desc="Tournament Progress"):
         placement_agent.new_placements()
         for identifier, search_agent in tournament.players.items():
             move_count = tournament.play(search_agent, game_manager)
@@ -199,7 +200,7 @@ if __name__ == "__main__":
     main(
         board_size=5,
         placing_strategy="random",
-        ship_sizes=[2, 2, 1],
+        ship_sizes=[3, 2, 2],
         num_games=1000,
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],

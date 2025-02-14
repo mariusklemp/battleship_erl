@@ -9,7 +9,7 @@ class HuntDownStrategy(Strategy):
         super().__init__(search_agent)
         self.name = "hunt_down"
 
-    def find_move(self, state):
+    def find_move(self, state, topp=False):
 
         sunk = {i for i, square in enumerate(state.board[3]) if square == 1}
         hits_not_sunk = [

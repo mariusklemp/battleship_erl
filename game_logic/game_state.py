@@ -11,9 +11,17 @@ class GameState:
 
     def state_tensor(self):
         """Returns both the board tensor and extra features tensor."""
-        # Board tensor: shape (1, 4, board_size, board_size)
-        board_tensor = torch.tensor(self.board, dtype=torch.float32).unsqueeze(0)
+        # Board tensor: shape (4, board_size, board_size)
+        board_size = int((len(self.board[0])) ** 0.5)
+        board_tensor = torch.tensor(self.board, dtype=torch.float32)
 
+        # Reshape from (4, board_size*board_size) to (4, board_size, board_size)
+        board_tensor = board_tensor.view(4, board_size, board_size)
+
+        # Add batch dimension: (1, 4, board_size, board_size)
+        board_tensor = board_tensor.unsqueeze(0)
+
+        # Create extra features tensor
         ship_counts = Counter(self.remaining_ships)
         feature_vector = [ship_counts.get(i, 0) for i in range(1, 6)]
         extra_tensor = torch.tensor(feature_vector, dtype=torch.float32)

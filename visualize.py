@@ -114,15 +114,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-        config,
-        genome,
-        view=False,
-        filename=None,
-        node_names=None,
-        show_disabled=True,
-        prune_unused=False,
-        node_colors=None,
-        fmt="svg",
+    config,
+    genome,
+    view=False,
+    filename=None,
+    node_names=None,
+    show_disabled=True,
+    prune_unused=False,
+    node_colors=None,
+    fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -238,7 +238,7 @@ def plot_fitness(move_count, board_size):
         games, moves, color="#FFFF00", label="Moves per game", alpha=0.5, linewidth=1
     )
     ax1.plot(
-        games[moving_avg_window - 1:],
+        games[moving_avg_window - 1 :],
         moving_avg,
         color="#2E86C1",
         label=f"Moving average (window={moving_avg_window})",
@@ -353,7 +353,9 @@ def plot_action_distribution(action_distribution, board_size):
     print("-" * (board_size * 7))  # Separator line
 
     for row in range(board_size):
-        row_values = [get_colored_value(action_grid[row, col]) for col in range(board_size)]
+        row_values = [
+            get_colored_value(action_grid[row, col]) for col in range(board_size)
+        ]
         print(" | ".join(row_values))
 
     print("-" * (board_size * 7))  # Separator line
@@ -403,7 +405,8 @@ def print_rbuf(rbuf, num_samples, board_size):
     Pretty-print a few samples from the replay buffer.
 
     :param rbuf: The replay buffer object.
-    :param num_samples: The number of samples to print (default: 5).
+    :param num_samples: The number of samples to print.
+    :param board_size: The size of the board (assumed square).
     """
     print("\n--- Replay Buffer Contents ---")
     print(f"Total stored samples: {len(rbuf.data)}")
@@ -420,8 +423,17 @@ def print_rbuf(rbuf, num_samples, board_size):
     for idx in indices:
         (board_tensor, extra_features), action_distribution = rbuf.data[idx]
 
+        # Convert board tensor to numpy and reshape to the correct format
+        # From (1, 4, board_size, board_size) to (4, board_size * board_size)
+        board_array = board_tensor.squeeze(0).numpy()  # Remove batch dimension
+        board_array = board_array.reshape(
+            4, -1
+        )  # Reshape to (4, board_size * board_size)
+
         print(f"\nSample {idx + 1}:")
-        show_board(board_tensor.numpy().reshape(-1, board_tensor.shape[-1]), board_size)
+        print("Board Shape:", board_tensor.shape)
+        show_board(board_array, board_size)
+
         print(
             "Extra Features:",
             (
@@ -430,5 +442,6 @@ def print_rbuf(rbuf, num_samples, board_size):
                 else extra_features
             ),
         )
-        # plot_action_distribution(action_distribution, board_size)
+        print("Action Distribution Shape:", action_distribution.shape)
+        plot_action_distribution(action_distribution, board_size)
         print("-" * 40)

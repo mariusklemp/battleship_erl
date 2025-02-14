@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import torch.nn.functional as F
 
+import visualize
 from RBUF import RBUF
 from ai.models import ANET
 from strategies.search.strategy import Strategy
@@ -27,11 +28,16 @@ def get_optimizer(optimizer: str, model, lr: float) -> torch.optim.Optimizer:
 
 
 class NNSearch(nn.Module, Strategy):
-    def __init__(self, search_agent, net, optimizer="adam", lr=0.001):
+    def __init__(self, search_agent, net, optimizer="adam", lr=0.001, name="nn_search"):
         super().__init__()
-        self.name = "nn_search"
+        self.name = name
         self.search_agent = search_agent
         self.net = net
+        self.device = net.device  # Get device from the network
+
+        # Ensure the network is on the correct device
+        self.net = self.net.to(self.device)
+
         self.optimizer = get_optimizer(optimizer, self.net, lr)
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
             self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
@@ -45,12 +51,12 @@ class NNSearch(nn.Module, Strategy):
 
     # ===== Helper Functions =====
 
-    def _reshape_board(self, board_tensor):
+    def _reshape_board(self, board_tensor, device):
         """Reshape board_tensor to (batch, 4, board_size, board_size)."""
         board_size = int(board_tensor.shape[-1])
-        return board_tensor.view(-1, 4, board_size, board_size)
+        return board_tensor.view(-1, 4, board_size, board_size).to(device)
 
-    def _convert_target(self, target):
+    def _convert_target(self, target, device):
         """
         Convert target (assumed to be a probability distribution)
         to a float tensor and add a batch dimension if needed.
@@ -58,7 +64,7 @@ class NNSearch(nn.Module, Strategy):
         target_tensor = torch.tensor(target, dtype=torch.float32)
         if target_tensor.dim() == 1:
             target_tensor = target_tensor.unsqueeze(0)
-        return target_tensor
+        return target_tensor.to(device)
 
     def _apply_illegal_mask(self, output, board_tensor):
         """
@@ -69,7 +75,7 @@ class NNSearch(nn.Module, Strategy):
         output[0, illegal_mask] = float("-inf")
         return output
 
-    def find_move(self, state):
+    def find_move(self, state, topp=False):
         # Get both board tensor and extra features from state
         board_tensor, extra_features = state.state_tensor()
 
@@ -82,24 +88,33 @@ class NNSearch(nn.Module, Strategy):
         # Forward pass to get raw output (logits)
         output = self.net(board_tensor, extra_features).view(1, -1)
         print("Output before masking:", output)
+        output = output.cpu()
 
-        # Mask illegal moves (using the first channel of state.board)
+        # Mask the output based on the 'unknown' layer (first channel in state.board)
         unknown_layer = torch.tensor(state.board[0], dtype=torch.float32).view(1, -1)
         output[unknown_layer == 1] = float("-inf")
 
-        # Compute probability distribution
-        probabilities = F.softmax(output, dim=-1).squeeze(0)
+        # Apply softmax to convert logits to a probability distribution
+        probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
         print("Probabilities after masking:", probabilities_np)
 
         # Choose a move based on the probability distribution
-        move = np.random.choice(self.search_agent.board_size ** 2, p=probabilities_np)
+        if topp:
+            visualize.plot_action_distribution(
+                probabilities_np, self.search_agent.board_size
+            )
+            move = np.argmax(probabilities_np)
+        else:
+            move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
         return move
 
     def calculate_accuracy(self, predicted_values, target_values):
-        predicted_probs = F.softmax(predicted_values, dim=1)
+        predicted_probs = nn.functional.softmax(predicted_values, dim=1)
         top1_pred = predicted_probs.argmax(dim=1)
-        top3_pred = predicted_probs.topk(k=min(3, predicted_probs.size(1)), dim=1).indices
+        top3_pred = predicted_probs.topk(
+            k=min(3, predicted_probs.size(1)), dim=1
+        ).indices
 
         # If target_values is already 1D (class indices), use it directly.
         if target_values.dim() == 1:
@@ -108,17 +123,22 @@ class NNSearch(nn.Module, Strategy):
             true_moves = target_values.argmax(dim=1)
 
         top1_accuracy = (top1_pred == true_moves).float().mean()
-        top3_accuracy = (torch.any(top3_pred == true_moves.unsqueeze(1), dim=1).float().mean())
+        top3_accuracy = (
+            torch.any(top3_pred == true_moves.unsqueeze(1), dim=1).float().mean()
+        )
         return top1_accuracy, top3_accuracy
 
-    def train_model(self, training_data):
+    def train_model(self, training_data, device=None):
+        if device is None:
+            device = self.device
+
         error_history = []
         for batch_idx, (state, target) in enumerate(training_data):
             print(f"Training batch {batch_idx + 1}")
 
             # Unpack state into board tensor and extra features.
             board_tensor, extra_features = state
-            board_tensor = self._reshape_board(board_tensor)
+            board_tensor = self._reshape_board(board_tensor, device)
 
             print("Board tensor:", board_tensor)
             print("Extra features:", extra_features)
@@ -132,7 +152,7 @@ class NNSearch(nn.Module, Strategy):
             print("Output after masking:", probabilities)
 
             # Convert target to a tensor.
-            target_tensor = self._convert_target(target)
+            target_tensor = self._convert_target(target, device)
             print("Target tensor:", target_tensor)
 
             # Compute loss using soft cross-entropy.
