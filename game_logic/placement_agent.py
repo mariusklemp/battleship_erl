@@ -34,7 +34,7 @@ class PlacementAgent:
             return RandomPlacing(self)
         elif strategy == "nn_placing":
             return NNPlacing(self)
-        elif strategy == "custom":
+        elif strategy == "chromosome":
             return CustomPlacing(self, chromosome)
         else:
             raise ValueError("Unknown strategy")
