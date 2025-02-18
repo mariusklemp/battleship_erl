@@ -1,5 +1,6 @@
 import random
 
+
 def is_gene_valid(board, col, row, direction, board_size, size):
     """
     Check if placing a ship with the given gene is valid on the board.
@@ -28,7 +29,7 @@ def is_gene_valid(board, col, row, direction, board_size, size):
     return True
 
 
-def mark_board(board, gene, board_size, size):
+def mark_board(board, gene, size):
     """
     Mark the board cells as occupied by a ship defined by the gene.
 
