@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+
 def activation_function(activation: str):
     """Utility function to return an activation function module."""
     if activation == "relu":
@@ -14,15 +15,16 @@ def activation_function(activation: str):
     else:
         raise ValueError(f"Unsupported activation function: {activation}")
 
+
 class ANET(nn.Module):
     def __init__(
-            self,
-            board_size,
-            output_size,
-            activation,
-            device=torch.device("cpu"),
-            layer_config=None,
-            extra_input_size=5,  # signal that extra features exist
+        self,
+        board_size,
+        output_size,
+        activation,
+        device,
+        layer_config=None,
+        extra_input_size=5,  # signal that extra features exist
     ):
         """
         Parameters:
@@ -90,12 +92,15 @@ class ANET(nn.Module):
 
         # Convert extra_features to a board (of shape [board_size, board_size])
         board_extra = self.extra_features_to_board(extra_features)
-        board_extra = board_extra.unsqueeze(0).unsqueeze(0).repeat(game_state.shape[0], 1, 1, 1).to(self.device)
+        board_extra = (
+            board_extra.unsqueeze(0)
+            .unsqueeze(0)
+            .repeat(game_state.shape[0], 1, 1, 1)
+            .to(self.device)
+        )
 
         # Concatenate the extra channel to the board input along the channel dimension.
         game_state = torch.cat([game_state, board_extra], dim=1)
-
-        print(game_state)
 
         if hasattr(self, "logits"):
             policy = self.logits(game_state)
@@ -131,13 +136,17 @@ class ANET(nn.Module):
                     return nn.Linear(
                         layer["in_features"] * self.board_size**2,
                         layer["out_features"],
-                        )
+                    )
                 else:
                     return nn.Linear(layer["in_features"], layer["out_features"])
             case "Dropout":
                 return nn.Dropout(p=layer["p"])
             case "activation":
                 return self.activation_func
+            case "BatchNorm2d":
+                return nn.BatchNorm2d(layer["num_features"])
+            case "BatchNorm1d":
+                return nn.BatchNorm1d(layer["num_features"])
             case _:
                 raise ValueError(f"Unsupported layer type: {layer}")
 
