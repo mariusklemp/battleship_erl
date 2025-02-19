@@ -22,7 +22,7 @@ class SearchAgent:
         elif strategy == "nn_search":
             from strategies.search.NNSearch import NNSearch
 
-            return NNSearch(self, net, optimizer, lr, name)
+            return NNSearch(self, net, optimizer, lr)
         elif strategy == "neat":
             return NEAT_search(self, net)
         elif strategy == "mcts":

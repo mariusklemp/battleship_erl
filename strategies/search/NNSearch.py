@@ -29,9 +29,9 @@ def get_optimizer(optimizer: str, model, lr: float) -> torch.optim.Optimizer:
 
 
 class NNSearch(nn.Module, Strategy):
-    def __init__(self, search_agent, net, optimizer="adam", lr=0.001, name="nn_search"):
+    def __init__(self, search_agent, net, optimizer="adam", lr=0.001):
         super().__init__()
-        self.name = name
+        self.name = "nn_search"
         self.search_agent = search_agent
         self.net = net
         self.device = net.device  # Get device from the network
@@ -95,6 +95,7 @@ class NNSearch(nn.Module, Strategy):
         probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
         # print("Probabilities:", probabilities_np)
+        # visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
