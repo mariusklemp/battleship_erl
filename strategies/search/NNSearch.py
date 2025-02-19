@@ -40,8 +40,13 @@ class NNSearch(nn.Module, Strategy):
         self.net = self.net.to(self.device)
 
         self.optimizer = get_optimizer(optimizer, self.net, lr)
+        self.criterion = nn.CrossEntropyLoss()
         self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer, mode="min", factor=0.5, patience=5, verbose=True
+            self.optimizer,
+            mode="min",
+            factor=0.7,
+            patience=10,
+            verbose=True,
         )
         self.avg_error_history = []
         self.avg_validation_history = []
@@ -127,51 +132,39 @@ class NNSearch(nn.Module, Strategy):
         return top1_accuracy, top3_accuracy
 
     def train_model(self, training_data):
-        self.net.train()  # Set model to training mode
+        self.net.train()
         total_loss = 0
         total_batches = len(training_data)
 
         for batch_idx, (state, target) in enumerate(training_data):
-            # Unpack state into board tensor and extra features
             board_tensor, extra_features = state
             board_tensor = self._reshape_board(board_tensor)
             target_tensor = self._convert_target(target)
 
-            # Zero gradients
             self.optimizer.zero_grad()
-
-            # Forward pass
             output = self.net(board_tensor, extra_features)
-
-            # Apply illegal move masking
             output = self._apply_illegal_mask(output, board_tensor)
 
-            # Compute loss using cross entropy loss
-            # We use log_softmax and nll_loss instead of softmax and cross entropy
-            # for better numerical stability
-            log_probabilities = F.log_softmax(output, dim=1)
-            loss = F.nll_loss(log_probabilities, target_tensor.argmax(dim=1))
+            # Add some noise to prevent getting stuck
+            if self.training:
+                noise = torch.randn_like(output) * 0.01
+                output = output + noise
 
-            # Backward pass and optimize
+            loss = self.criterion(output, target_tensor.argmax(dim=1))
             loss.backward()
 
-            # Clip gradients to prevent exploding gradients
-            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=1.0)
+            # Increased max_norm for gradient clipping
+            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=5.0)
 
             self.optimizer.step()
-
             total_loss += loss.item()
 
-            # Calculate accuracies
             top1_acc, top3_acc = self.calculate_accuracy(output, target_tensor)
             self.top1_accuracy_history.append(top1_acc.item())
             self.top3_accuracy_history.append(top3_acc.item())
 
-        # Store average loss for this epoch
         avg_loss = total_loss / total_batches
         self.avg_error_history.append(avg_loss)
-
-        # Update learning rate based on loss
         self.scheduler.step(avg_loss)
 
     def validate_model(self, validation_data):
@@ -192,9 +185,8 @@ class NNSearch(nn.Module, Strategy):
                 # Apply illegal move masking
                 output = self._apply_illegal_mask(output, board_tensor)
 
-                # Compute loss using cross entropy loss
-                log_probabilities = F.log_softmax(output, dim=1)
-                loss = F.nll_loss(log_probabilities, target_tensor.argmax(dim=1))
+                # Compute loss using CrossEntropyLoss
+                loss = self.criterion(output, target_tensor.argmax(dim=1))
 
                 total_loss += loss.item()
 
@@ -295,8 +287,35 @@ class NNSearch(nn.Module, Strategy):
         plt.show()
 
     def save_model(self, path):
+        print(f"Saving model to {path}")
+        # Save the model
         torch.save(self.net.state_dict(), path)
 
+        # Verify the save by loading and comparing
+        saved_state = torch.load(path)
+        current_state = self.net.state_dict()
+
+        # Compare a few parameters to ensure they're different from previous saves
+        for key in list(current_state.keys())[:3]:  # Check first 3 layers
+            print(f"Layer {key} mean value: {current_state[key].mean().item():.6f}")
+
     def load_model(self, path):
+        print(f"Loading model from {path}")
+        # Store previous state for comparison
+        previous_state = self.net.state_dict()
+
+        # Load new state
         self.net.load_state_dict(torch.load(path))
+        current_state = self.net.state_dict()
+
+        # Compare states
+        is_different = False
+        for key in current_state.keys():
+            if not torch.equal(previous_state[key], current_state[key]):
+                is_different = True
+                break
+
+        if not is_different:
+            print(f"WARNING: Loaded model {path} is identical to previous model!")
+
         self.net.eval()

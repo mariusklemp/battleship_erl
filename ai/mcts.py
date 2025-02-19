@@ -195,10 +195,34 @@ class MCTS:
     def backpropagate(self, node, move_count):
         while node is not None:
             node.visits += 1
-            node.fitness += (
-                self.actor.board_size**2 - move_count
-            ) / self.actor.board_size**2
 
+            # Calculate base score using less aggressive decay for move count
+            max_moves = self.actor.board_size**2
+            move_ratio = 1.0 - (
+                move_count / max_moves
+            )  # Linear decay instead of exponential
+
+            # Calculate hit ratio with smoothing to avoid division by zero
+            total_hits = sum(node.state.board[1])  # Sum of all hits
+            total_explored = sum(node.state.board[0])  # Sum of all explored cells
+            hit_ratio = total_hits / (
+                total_explored + 1e-6
+            )  # Add small epsilon to avoid division by zero
+
+            # Calculate remaining ships ratio
+            total_ships = len(node.state.remaining_ships)
+            initial_ships = len(node.state.placing.ship_sizes)
+            ship_ratio = (initial_ships - total_ships) / initial_ships
+
+            # Combine all factors with adjusted weights
+            fitness = (
+                0.5
+                * move_ratio  # Increased weight for move efficiency, using linear ratio
+                + 0.3 * hit_ratio  # Slightly reduced weight for accuracy
+                + 0.2 * ship_ratio  # Same weight for ships sunk
+            )
+
+            node.fitness += fitness
             node = node.parent
 
     def run(
