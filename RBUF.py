@@ -11,13 +11,12 @@ class RBUF:
         self.max_len = max_len
 
     def get_batch(self, batch_size):
-        # Return a weighted random sample from self.data
-        weights = np.linspace(0, 1, len(self.data))
-        return random.choices(self.data, weights=weights, k=batch_size)
+        # Simple random sampling without weights
+        return random.sample(self.data, min(batch_size, len(self.data)))
 
     def get_training_set(self, batch_size):
-        weights = np.linspace(0, 1, len(self.training_set))
-        return random.choices(self.training_set, weights=weights, k=batch_size)
+        # Simple random sampling without weights
+        return random.sample(self.training_set, min(batch_size, len(self.training_set)))
 
     def get_validation_set(self):
         return self.validation_set

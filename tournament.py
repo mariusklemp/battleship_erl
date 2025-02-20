@@ -46,18 +46,28 @@ class Tournament:
         self.game_manager = game_manager
         self.placement_agent = placement_agent
 
-    def set_nn_agent(self, i, default_net):
+    def set_nn_agent(self, i, layer_config):
         """Initializes a SearchAgent that uses a neural network.
         Model number is based on tournament parameters.
         """
-        model_number = int(self.num_games / self.num_players * (i))
+        # Calculate model number to load models at regular intervals (0, 100, 200, ..., 1000)
+        model_number = i * (self.num_games // self.num_players)
         print(f"[DEBUG] Loading model: {model_number}")
         path = f"models/model_{model_number}.pth"
+
+        # Create a new network instance for each model
+        net = ANET(
+            board_size=self.board_size,
+            activation="relu",
+            output_size=self.board_size**2,
+            device="cpu",
+            layer_config=layer_config,
+        )
 
         search_agent = SearchAgent(
             board_size=self.board_size,
             strategy="nn_search",
-            net=default_net,
+            net=net,
             optimizer="adam",
             name=f"nn_{model_number}",
             lr=0.001,
@@ -71,19 +81,12 @@ class Tournament:
         For "nn_search", we load a neural network from file.
         For other strategies, we simply create a SearchAgent with that strategy.
         """
-        # Load the default network for NN-based players.
+        # Load the network configuration
         layer_config = json.load(open("ai/config.json"))
-        default_net = ANET(
-            board_size=self.board_size,
-            activation="relu",
-            output_size=self.board_size**2,
-            device="cpu",
-            layer_config=layer_config,
-        )
 
         # For each strategy in the provided list, create a player.
         for i in range(0, self.num_players + 1):
-            agent, identifier = self.set_nn_agent(i, default_net)
+            agent, identifier = self.set_nn_agent(i, layer_config)
             self.players[identifier] = agent
             self.result[identifier] = (
                 []
@@ -94,19 +97,19 @@ class Tournament:
                 agent = SearchAgent(
                     board_size=self.board_size,
                     strategy=strat,
+                    name=strat,  # Add name for non-NN agents
                 )
-
                 identifier = f"{strat}"
             elif strat == "mcts":
                 agent = SearchAgent(
                     board_size=self.board_size,
                     strategy=strat,
+                    name=strat,  # Add name for MCTS agent
                 )
                 mcts = MCTS(
                     self.game_manager, simulations_number=500, exploration_constant=1.41
                 )
                 agent.strategy.set_mcts(mcts)
-
                 identifier = f"{strat}"
             else:
                 raise ValueError(f"Unknown search strategy: {strat}")
@@ -119,9 +122,16 @@ class Tournament:
     def play(self, search_agent, game_manager):
         """Plays one game with the given search agent and returns the move count."""
         current_state = game_manager.initial_state(placing=self.placement_agent)
-        while not game_manager.is_terminal(current_state):
-            visualize.show_board(current_state.board, board_size=game_manager.size)
 
+        # Debug: Print a sample of model parameters to verify they're different
+        if hasattr(search_agent.strategy, "net"):
+            params = next(iter(search_agent.strategy.net.parameters()))
+            agent_name = getattr(
+                search_agent, "name", search_agent.strategy.__class__.__name__
+            )
+            print(f"[DEBUG] {agent_name} first layer mean: {params.mean().item():.6f}")
+
+        while not game_manager.is_terminal(current_state):
             move = search_agent.strategy.find_move(current_state, topp=True)
             current_state = game_manager.next_state(current_state, move)
         return current_state.move_count

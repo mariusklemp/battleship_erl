@@ -107,11 +107,18 @@ class PlacementAgent:
         For non-sunk ships we generate all placements (horizontal and vertical) that do not:
         - Overlap any cell that is marked as a miss (board[2]) or sunk (board[3]).
         - Place a ship on an explored cell unless that cell is a hit.
-        Additionally, if a ship has one or more hit cells (i.e. it’s been partially damaged
+        Additionally, if a ship has one or more hit cells (i.e. it's been partially damaged
         but not sunk), then any candidate placement must cover those hit cells.
         """
         candidate_map = {}
         board_size = self.board_size
+
+        # Get all hit cells that aren't part of sunk ships
+        all_hits = {
+            i
+            for i, (hit, sunk) in enumerate(zip(board[1], board[3]))
+            if hit == 1 and sunk == 0
+        }
 
         for ship in self.ships:
             candidates = []
@@ -128,51 +135,73 @@ class PlacementAgent:
                 candidate_map[ship] = candidates
                 continue
 
-            # For non-sunk ships, compute which cells in the current placement have been hit.
-            required_hits = {i for i in ship.indexes if board[1][i] == 1}
+            # Get hits that are specifically on this ship
+            ship_hits = {i for i in ship.indexes if board[1][i] == 1}
 
             for direction in [0, 1]:
                 if direction == 0:
-                    # Horizontal placements: columns 0 .. board_size - ship.size
+                    # Horizontal placements
                     for row in range(board_size):
                         for col in range(board_size - ship.size + 1):
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
                             if not self._is_candidate_valid(candidate_indexes, board):
                                 continue
-                            # Enforce that any candidate for a non-sunk ship must include all its hit cells.
-                            if required_hits and not required_hits.issubset(
-                                candidate_indexes
-                            ):
+                            # Must cover ship's own hits, but can also cover other hits
+                            if ship_hits and not ship_hits.issubset(candidate_indexes):
                                 continue
-                            candidates.append(
-                                {
-                                    "col": col,
-                                    "row": row,
-                                    "direction": direction,
-                                    "indexes": candidate_indexes,
-                                }
-                            )
+                            # Prioritize candidates that cover any hits
+                            if set(candidate_indexes) & all_hits:
+                                candidates.insert(
+                                    0,
+                                    {
+                                        "col": col,
+                                        "row": row,
+                                        "direction": direction,
+                                        "indexes": candidate_indexes,
+                                    },
+                                )
+                            else:
+                                candidates.append(
+                                    {
+                                        "col": col,
+                                        "row": row,
+                                        "direction": direction,
+                                        "indexes": candidate_indexes,
+                                    }
+                                )
                 else:
-                    # Vertical placements: rows 0 .. board_size - ship.size
+                    # Vertical placements
                     for col in range(board_size):
                         for row in range(board_size - ship.size + 1):
                             temp_ship = Ship(ship.size, board_size, col, row, direction)
                             candidate_indexes = temp_ship.indexes
                             if not self._is_candidate_valid(candidate_indexes, board):
                                 continue
-                            if required_hits and not required_hits.issubset(
-                                candidate_indexes
-                            ):
+                            if ship_hits and not ship_hits.issubset(candidate_indexes):
                                 continue
-                            candidates.append(
-                                {
-                                    "col": col,
-                                    "row": row,
-                                    "direction": direction,
-                                    "indexes": candidate_indexes,
-                                }
-                            )
+                            if set(candidate_indexes) & all_hits:
+                                candidates.insert(
+                                    0,
+                                    {
+                                        "col": col,
+                                        "row": row,
+                                        "direction": direction,
+                                        "indexes": candidate_indexes,
+                                    },
+                                )
+                            else:
+                                candidates.append(
+                                    {
+                                        "col": col,
+                                        "row": row,
+                                        "direction": direction,
+                                        "indexes": candidate_indexes,
+                                    }
+                                )
+
+            # Shuffle the candidates to randomize placement preferences
+            random.shuffle(candidates)
             candidate_map[ship] = candidates
 
         return candidate_map
@@ -187,9 +216,9 @@ class PlacementAgent:
 
         This ensures that:
           • You never place a ship over a cell the player has confirmed as a miss.
-          • For cells that aren’t hits, you do not put a ship into an already-explored cell.
+          • For cells that aren't hits, you do not put a ship into an already-explored cell.
           • Hit cells (which are explored by definition) are allowed, so that the global constraint
-            of “a ship must still be there” is met.
+            of "a ship must still be there" is met.
         """
         for idx in candidate_indexes:
             # Disallow placements on misses or sunk cells.
@@ -243,7 +272,7 @@ class PlacementAgent:
 
     def _update_ships(self, chosen_config):
         """
-        Update each ship’s attributes using the chosen configuration candidate.
+        Update each ship's attributes using the chosen configuration candidate.
         Also update the flattened list of ship indexes.
         """
         for ship, cand in zip(self.ships, chosen_config):

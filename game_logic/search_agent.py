@@ -10,6 +10,7 @@ class SearchAgent:
         self, board_size, strategy, net=None, optimizer="adam", lr=0.001, name=""
     ):
         self.board_size = board_size
+        self.name = name
         self.strategy = self.init_strategy(strategy, net, optimizer, lr, name)
 
     def init_strategy(self, strategy, net, optimizer, lr, name):

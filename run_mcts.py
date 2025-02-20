@@ -49,8 +49,6 @@ def simulate_game(
         gui.update_board(current_state)
         pygame.display.update()
 
-    print("Ships to look for:")
-    current_state.placing.show_ships()
     move_count = 0
 
     while not game_manager.is_terminal(current_state):
@@ -59,40 +57,22 @@ def simulate_game(
             pygame.display.update()
 
         current_node = mcts.run(current_state, search_agent)
-        best_child = current_node.best_child()
+
+        # Calculate how explored the board is
+        explored_ratio = sum(current_state.board[0]) / (game_manager.size**2)
+        # Use more exploration early in the game, less later
+        dynamic_c = mcts.exploration_constant * (1 - explored_ratio)
+        best_child = current_node.best_child(c_param=dynamic_c)
 
         move = best_child.move
 
-        # Get the original board state and action distribution
-        original_board = current_node.state.board
-        original_action_dist = current_node.action_distribution(
-            board_size=game_manager.size
-        )
-
         # Assume state_tensor_canonical returns (canonical_board, extra_features, rotation)
-        board_tensor, extra_features, rotation = (
-            current_node.state.state_tensor_canonical()
-        )
+        board_tensor, extra_features = current_node.state.state_tensor()
 
         # Retrieve the raw action distribution (a NumPy array).
         action_distribution = current_node.action_distribution(
             board_size=game_manager.size
         )
-
-        # Check if we have a valid action distribution (not None)
-        if action_distribution is not None:
-            # Canonicalize the action distribution using the rotation value.
-            canonical_action_distribution = canonicalize_action_distribution(
-                action_distribution, board_size=game_manager.size, rotation=rotation
-            )
-        else:
-            canonical_action_distribution = (
-                action_distribution  # or handle appropriately
-            )
-
-        # Visualize original and canonicalized versions
-        # print("\nOriginal Board:")
-        # twvisualize.show_board(original_board, board_size=game_manager.size)
 
         # print("\nOriginal Action Distribution:")
         # visualize.plot_action_distribution(original_action_dist, game_manager.size)
@@ -101,7 +81,7 @@ def simulate_game(
         rbuf.add_data_point(
             (
                 (board_tensor, extra_features),  # The canonical input state.
-                canonical_action_distribution,  # The canonicalized action distribution.
+                action_distribution,  # The canonicalized action distribution.
             )
         )
 
@@ -152,18 +132,33 @@ def train_models(
                     placement_agent,
                 )
             )
-            print(f"Finished game {i + 1} with {move_count[-1]} moves.")
-            print("Replay buffer length:", len(rbuf.data))
-            visualize.print_rbuf(rbuf, num_samples=5, board_size=game_manager.size)
+            # print(f"Finished game {i + 1} with {move_count[-1]} moves.")
+            # print("Replay buffer length:", len(rbuf.data))
 
         if train_model:
-            batch = rbuf.get_training_set(batch_size)
+            # Store pre-training state for comparison
+            pre_train_state = {
+                k: v.clone() for k, v in search_agent.strategy.net.state_dict().items()
+            }
+
+            batch = rbuf.get_batch(batch_size)
             search_agent.strategy.train_model(batch)
             search_agent.strategy.validate_model(rbuf.validation_set)
-            visualize.print_rbuf(batch, num_samples=5, board_size=game_manager.size)
 
-    if save_model and ((i + 1) % (number_actual_games / M) == 0):
-        search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
+            # Verify that training actually changed the model
+            post_train_state = search_agent.strategy.net.state_dict()
+            params_changed = False
+            for key in pre_train_state:
+                if not torch.equal(pre_train_state[key], post_train_state[key]):
+                    params_changed = True
+                    break
+            if not params_changed:
+                print("WARNING: Model parameters did not change after training!")
+
+        # Save model at regular intervals
+        if save_model and (i + 1) % (number_actual_games // M) == 0:
+            print(f"Saving model at game {i + 1}")
+            search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
@@ -211,7 +206,7 @@ def main(
         strategy=strategy_search,
         net=net,
         optimizer="adam",
-        lr=0.0005,
+        lr=0.0001,
     )
     placement_agent = PlacementAgent(
         board_size=board_size,
@@ -267,16 +262,16 @@ if __name__ == "__main__":
         sizes=[3, 2, 2],
         strategy_placement="random",
         strategy_search="nn_search",
-        simulations_number=300,
+        simulations_number=200,
         exploration_constant=1.41,
         M=10,
-        number_actual_games=10000,
+        number_actual_games=1000,
         batch_size=128,
         device=device,
-        load_rbuf=False,
+        load_rbuf=True,
         graphic_visualiser=False,
-        save_model=False,
-        train_model=False,
-        save_rbuf=True,
-        play_game=True,
+        save_model=True,
+        train_model=True,
+        save_rbuf=False,
+        play_game=False,
     )
