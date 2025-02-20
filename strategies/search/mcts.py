@@ -1,6 +1,5 @@
 import visualize
 from strategies.search.strategy import Strategy
-from visualize import plot_action_distribution, show_board
 
 
 class MCTSStrategy(Strategy):
@@ -15,11 +14,6 @@ class MCTSStrategy(Strategy):
         current_node = self.mcts.run(state, self.search_agent)
         # Picks the best move fully exploitation
         best_child = current_node.best_child(c_param=0)
-        # show_board(current_node.state.board, self.search_agent.board_size)
-        #   action_distribution = current_node.action_distribution(
-        #    board_size=self.search_agent.board_size
-        # )
-        # plot_action_distribution(action_distribution, self.search_agent.board_size)
 
         move = best_child.move
         return move

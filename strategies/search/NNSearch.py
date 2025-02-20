@@ -41,13 +41,7 @@ class NNSearch(nn.Module, Strategy):
 
         self.optimizer = get_optimizer(optimizer, self.net, lr)
         self.criterion = nn.CrossEntropyLoss()
-        self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-            self.optimizer,
-            mode="min",
-            factor=0.7,
-            patience=10,
-            verbose=True,
-        )
+
         self.avg_error_history = []
         self.avg_validation_history = []
         self.top1_accuracy_history = []
@@ -97,18 +91,17 @@ class NNSearch(nn.Module, Strategy):
         output[unknown_layer == 1] = float("-inf")
 
         # Apply softmax to convert logits to a probability distribution
-        probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
+        temperature = 0.5 if topp else 1.0  # Lower temperature for tournament mode
+        probabilities = nn.functional.softmax(output / temperature, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
-        # print("Probabilities:", probabilities_np)
-        # visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
-            visualize.plot_action_distribution(
-                probabilities_np, self.search_agent.board_size
-            )
-            move = np.argmax(probabilities_np)
+            # Sample from the distribution with temperature
+            # This will still favor high probability moves but allow some exploration
+            move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
         else:
+            # During training, use pure random sampling
             move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
         return move
 
@@ -136,6 +129,10 @@ class NNSearch(nn.Module, Strategy):
         total_loss = 0
         total_batches = len(training_data)
 
+        # Track unique moves for diversity monitoring
+        all_moves = []
+        all_predictions = []
+
         for batch_idx, (state, target) in enumerate(training_data):
             board_tensor, extra_features = state
             board_tensor = self._reshape_board(board_tensor)
@@ -145,6 +142,12 @@ class NNSearch(nn.Module, Strategy):
             output = self.net(board_tensor, extra_features)
             output = self._apply_illegal_mask(output, board_tensor)
 
+            # Track predictions and targets for diversity analysis
+            pred_moves = output.argmax(dim=1).cpu().numpy()
+            target_moves = target_tensor.argmax(dim=1).cpu().numpy()
+            all_moves.extend(target_moves)
+            all_predictions.extend(pred_moves)
+
             # Add some noise to prevent getting stuck
             if self.training:
                 noise = torch.randn_like(output) * 0.01
@@ -153,9 +156,7 @@ class NNSearch(nn.Module, Strategy):
             loss = self.criterion(output, target_tensor.argmax(dim=1))
             loss.backward()
 
-            # Increased max_norm for gradient clipping
             torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=5.0)
-
             self.optimizer.step()
             total_loss += loss.item()
 
@@ -165,7 +166,6 @@ class NNSearch(nn.Module, Strategy):
 
         avg_loss = total_loss / total_batches
         self.avg_error_history.append(avg_loss)
-        self.scheduler.step(avg_loss)
 
     def validate_model(self, validation_data):
         self.net.eval()  # Set model to evaluation mode

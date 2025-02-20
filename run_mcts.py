@@ -49,8 +49,6 @@ def simulate_game(
         gui.update_board(current_state)
         pygame.display.update()
 
-    print("Ships to look for:")
-    current_state.placing.show_ships()
     move_count = 0
 
     while not game_manager.is_terminal(current_state):
@@ -134,8 +132,8 @@ def train_models(
                     placement_agent,
                 )
             )
-            print(f"Finished game {i + 1} with {move_count[-1]} moves.")
-            print("Replay buffer length:", len(rbuf.data))
+            # print(f"Finished game {i + 1} with {move_count[-1]} moves.")
+            # print("Replay buffer length:", len(rbuf.data))
 
         if train_model:
             # Store pre-training state for comparison
@@ -208,7 +206,7 @@ def main(
         strategy=strategy_search,
         net=net,
         optimizer="adam",
-        lr=0.005,
+        lr=0.0001,
     )
     placement_agent = PlacementAgent(
         board_size=board_size,
@@ -274,6 +272,6 @@ if __name__ == "__main__":
         graphic_visualiser=False,
         save_model=True,
         train_model=True,
-        save_rbuf=True,
+        save_rbuf=False,
         play_game=False,
     )

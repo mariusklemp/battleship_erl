@@ -409,19 +409,17 @@ def print_rbuf(rbuf, num_samples, board_size):
     :param board_size: The size of the board (assumed square).
     """
     print("\n--- Replay Buffer Contents ---")
-    print(f"Total stored samples: {len(rbuf.data)}")
+    print(f"Total stored samples: {len(rbuf)}")
 
-    if len(rbuf.data) == 0:
+    if len(rbuf) == 0:
         print("Replay buffer is empty.")
         return
 
     # Randomly sample entries to print if buffer is large
-    indices = np.random.choice(
-        len(rbuf.data), min(num_samples, len(rbuf.data)), replace=False
-    )
+    indices = np.random.choice(len(rbuf), min(num_samples, len(rbuf)), replace=False)
 
     for idx in indices:
-        (board_tensor, extra_features), action_distribution = rbuf.data[idx]
+        (board_tensor, extra_features), action_distribution = rbuf[idx]
 
         # Convert board tensor to numpy and reshape to the correct format
         # From (1, 4, board_size, board_size) to (4, board_size * board_size)
