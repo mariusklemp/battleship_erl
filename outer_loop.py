@@ -1,8 +1,16 @@
 import json
+from tqdm import tqdm
 from deapSystem.evolution import Evolution
 from game_logic.search_agent import SearchAgent
 from ai.models import ANET
 from deapSystem.search_metrics import SearchMetricsTracker
+from run_mcts import run_mcts_inner_loop, load_config
+
+
+def load_evolution_config(config_path="config/evolution_config.json"):
+    """Load evolution configuration from JSON file."""
+    with open(config_path, "r") as f:
+        return json.load(f)
 
 
 def set_nn_agent(i, layer_config, board_size, model_number):
@@ -49,17 +57,22 @@ def populate_search_agents(board_size, population_size, layer_config):
 # Main
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
-    # === Static Parameters (Adjustable) ===
-    BOARD_SIZE = 5
-    SHIP_SIZES = [3, 2, 2]
-    PLACING_POPULATION_SIZE = 50
-    SEARCH_POPULATION_SIZE = 10
-    ELITE_SIZE = 1
-    NUM_GENERATIONS = 10
-    TOURNAMENT_SIZE = 3
-    MUTPB = 0.2
+    # Load configurations
+    mcts_config = load_config()
+    evolution_config = load_evolution_config()
+
+    # Load neural network configuration
     LAYER_CONFIG = json.load(open("ai/config.json"))
-    # =======================================
+
+    # Get configuration parameters
+    BOARD_SIZE = mcts_config["board_size"]
+    SHIP_SIZES = mcts_config["ship_sizes"]
+    PLACING_POPULATION_SIZE = evolution_config["placing_population"]["size"]
+    SEARCH_POPULATION_SIZE = evolution_config["search_population"]["size"]
+    ELITE_SIZE = evolution_config["placing_population"]["elite_size"]
+    NUM_GENERATIONS = evolution_config["evolution"]["num_generations"]
+    TOURNAMENT_SIZE = evolution_config["placing_population"]["tournament_size"]
+    MUTPB = evolution_config["placing_population"]["mutation_probability"]
 
     environment = Evolution(
         board_size=BOARD_SIZE,
@@ -77,10 +90,34 @@ if __name__ == "__main__":
     )
     search_metrics = SearchMetricsTracker(search_agents)
 
+    # Outer loop for generations of placing agents and search agents
     for gen in range(NUM_GENERATIONS):
+        print(f"\n=== Generation {gen + 1}/{NUM_GENERATIONS} ===")
+
         # Run evolution with metrics tracking
+        print("Evolving placing agents...")
         environment.evolve(gen, search_agents, search_metrics)
 
+        # Run MCTS training of search agents in inner loop
+        print("\nTraining search agents against placing population...")
+        for i, search_agent in tqdm(
+            enumerate(search_agents),
+            desc="Training search agents",
+            total=len(search_agents),
+        ):
+            print(
+                f"\nTraining search agent {i + 1}/{len(search_agents)} against {PLACING_POPULATION_SIZE} placing agents"
+            )
+            run_mcts_inner_loop(
+                environment.game_manager,
+                search_agent,
+                simulations_number=mcts_config["mcts"]["simulations_number"],
+                exploration_constant=mcts_config["mcts"]["exploration_constant"],
+                batch_size=mcts_config["training"]["batch_size"],
+                device=mcts_config["device"],
+                sizes=SHIP_SIZES,
+                placement_agents=environment.pop_placing_agents,
+            )
     # Plot metrics at the end
     environment.plot_metrics()
     search_metrics.plot_metrics()

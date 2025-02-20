@@ -1,5 +1,7 @@
 import pygame
-
+import json
+import torch
+import numpy as np
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 from ai.mcts import MCTS
@@ -7,11 +9,8 @@ from game_logic.game_manager import GameManager
 from tqdm import tqdm
 from ai.models import ANET
 from RBUF import RBUF
-import json
 import visualize
 from gui import GUI
-import torch
-import numpy as np
 
 
 def canonicalize_action_distribution(
@@ -105,8 +104,9 @@ def train_models(
     train_model,
     save_rbuf,
     board_size,
-    placement_agent,
+    placement_agents,
     play_game,
+    sizes,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -117,10 +117,18 @@ def train_models(
         pygame.display.set_caption("Battleship")
         gui = GUI(board_size)
 
+    if placement_agents is None:
+        placement_agent = PlacementAgent(
+            board_size=board_size,
+            ship_sizes=sizes,
+            strategy="random",
+        )
+
     if save_model:
         search_agent.strategy.save_model(f"models/model_{0}.pth")
 
     for i in tqdm(range(number_actual_games)):
+        placement_agent = placement_agents[i]
         if play_game:
             move_count.append(
                 simulate_game(
@@ -136,24 +144,9 @@ def train_models(
             # print("Replay buffer length:", len(rbuf.data))
 
         if train_model:
-            # Store pre-training state for comparison
-            pre_train_state = {
-                k: v.clone() for k, v in search_agent.strategy.net.state_dict().items()
-            }
-
             batch = rbuf.get_batch(batch_size)
             search_agent.strategy.train_model(batch)
             search_agent.strategy.validate_model(rbuf.validation_set)
-
-            # Verify that training actually changed the model
-            post_train_state = search_agent.strategy.net.state_dict()
-            params_changed = False
-            for key in pre_train_state:
-                if not torch.equal(pre_train_state[key], post_train_state[key]):
-                    params_changed = True
-                    break
-            if not params_changed:
-                print("WARNING: Model parameters did not change after training!")
 
         # Save model at regular intervals
         if save_model and (i + 1) % (number_actual_games // M) == 0:
@@ -162,70 +155,121 @@ def train_models(
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
-    if train_model:
-        search_agent.strategy.plot_metrics()
+    # if train_model:
+    # search_agent.strategy.plot_metrics()
 
-    if play_game:
-        print(len(mcts.root_node.children))
-
-    if play_game:
-        visualize.plot_fitness(move_count, game_manager.size)
+    # if play_game:
+    # visualize.plot_fitness(move_count, game_manager.size)
 
 
-def main(
-    board_size,
-    sizes,
-    strategy_placement,
-    strategy_search,
+def load_config(config_path="config/mcts_config.json"):
+    """Load configuration from JSON file."""
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    # Handle device configuration
+    if config["device"] == "auto":
+        if torch.cuda.is_available():
+            config["device"] = "cuda"
+        else:
+            config["device"] = "cpu"
+
+    return config
+
+
+def run_mcts_inner_loop(
+    game_manager,
+    search_agent,
     simulations_number,
     exploration_constant,
-    M,
-    number_actual_games,
     batch_size,
     device,
-    load_rbuf,
-    graphic_visualiser,
-    save_model,
-    train_model,
-    save_rbuf,
-    play_game,
+    sizes,
+    placement_agents,
 ):
-    layer_config = json.load(open("ai/config.json"))
+    """Train a search agent against a population of placing agents.
+    Each search agent plays exactly one game against each placing agent.
 
-    net = ANET(
-        board_size=board_size,
-        activation="relu",
-        output_size=board_size**2,
-        device=device,
-        layer_config=layer_config,
-        extra_input_size=5,
-    )
-
-    search_agent = SearchAgent(
-        board_size=board_size,
-        strategy=strategy_search,
-        net=net,
-        optimizer="adam",
-        lr=0.0001,
-    )
-    placement_agent = PlacementAgent(
-        board_size=board_size,
-        ship_sizes=sizes,
-        strategy=strategy_placement,
-    )
-
-    game_manager = GameManager(size=board_size)
-
+    Args:
+        game_manager: The game manager instance
+        search_agent: The search agent to train
+        number_actual_games: Ignored (kept for compatibility)
+        simulations_number: Number of MCTS simulations per move
+        exploration_constant: MCTS exploration constant
+        batch_size: Training batch size
+        device: Computing device to use
+        sizes: Ship sizes
+        placement_agents: List of placing agents to train against
+    """
+    config = load_config()
     mcts = MCTS(
         game_manager,
         simulations_number=simulations_number,
         exploration_constant=exploration_constant,
     )
 
-    rbuf = RBUF(max_len=10000)
+    rbuf = RBUF(max_len=config["replay_buffer"]["max_size"])
 
-    if load_rbuf:
-        rbuf.load_from_file(file_path="rbuf/rbuf.pkl")
+    if config["replay_buffer"]["load_from_file"]:
+        rbuf.load_from_file(file_path=config["replay_buffer"]["file_path"])
+        print("Loaded replay buffer from file. Length:", len(rbuf.data))
+
+    print(f"Training against {len(placement_agents)} placing agents")
+
+    train_models(
+        game_manager,
+        mcts,
+        rbuf,
+        search_agent,
+        len(placement_agents),  # Number of games equals number of placing agents
+        batch_size,
+        M=config["training"]["save_interval"],
+        device=device,
+        graphic_visualiser=config["visualization"]["enable_graphics"],
+        save_model=config["model"]["save"],
+        train_model=config["model"]["train"],
+        save_rbuf=config["replay_buffer"]["save_to_file"],
+        board_size=game_manager.size,
+        placement_agents=placement_agents,  # Use all placing agents
+        play_game=True,  # Actually play the games
+        sizes=sizes,
+    )
+
+
+def main():
+    config = load_config()
+
+    layer_config = json.load(open("ai/config.json"))
+
+    net = ANET(
+        board_size=config["board_size"],
+        activation="relu",
+        output_size=config["board_size"] ** 2,
+        device=config["device"],
+        layer_config=layer_config,
+        extra_input_size=5,
+    )
+
+    search_agent = SearchAgent(
+        board_size=config["board_size"],
+        strategy="nn_search",
+        net=net,
+        optimizer="adam",
+        lr=config["training"]["learning_rate"],
+    )
+
+    game_manager = GameManager(size=config["board_size"])
+
+    mcts = MCTS(
+        game_manager,
+        simulations_number=config["mcts"]["simulations_number"],
+        exploration_constant=config["mcts"]["exploration_constant"],
+    )
+
+    rbuf = RBUF(max_len=config["replay_buffer"]["max_size"])
+
+    if config["replay_buffer"]["load_from_file"]:
+        rbuf.load_from_file(file_path=config["replay_buffer"]["file_path"])
         print("Loaded replay buffer from file. Length:", len(rbuf.data))
 
     train_models(
@@ -233,45 +277,20 @@ def main(
         mcts,
         rbuf,
         search_agent,
-        number_actual_games,
-        batch_size,
-        M,
-        device,
-        graphic_visualiser,
-        save_model,
-        train_model,
-        save_rbuf,
-        board_size,
-        placement_agent,
-        play_game,
+        config["training"]["number_actual_games"],
+        config["training"]["batch_size"],
+        config["training"]["save_interval"],
+        config["device"],
+        config["visualization"]["enable_graphics"],
+        config["model"]["save"],
+        config["model"]["train"],
+        config["replay_buffer"]["save_to_file"],
+        config["board_size"],
+        play_game=False,
+        placement_agents=None,
+        sizes=config["ship_sizes"],
     )
 
 
 if __name__ == "__main__":
-    # Device setup with proper MPS handling
-
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-
-    else:
-        device = torch.device("cpu")
-    print(f"Using device: {device}")
-
-    main(
-        board_size=5,
-        sizes=[3, 2, 2],
-        strategy_placement="random",
-        strategy_search="nn_search",
-        simulations_number=200,
-        exploration_constant=1.41,
-        M=10,
-        number_actual_games=1000,
-        batch_size=128,
-        device=device,
-        load_rbuf=True,
-        graphic_visualiser=False,
-        save_model=True,
-        train_model=True,
-        save_rbuf=False,
-        play_game=False,
-    )
+    main()
