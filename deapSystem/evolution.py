@@ -1,14 +1,22 @@
 import random
 from functools import partial
+import sys
+import os
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from deap import base, creator, tools
 import matplotlib.pyplot as plt
 import numpy as np
+
+import visualize
 
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 
-from helpers import is_gene_valid, mark_board, random_valid_gene, local_mutation_gene
+from .helpers import is_gene_valid, mark_board, random_valid_gene, local_mutation_gene
 
 # ---------------------------------------------------------------------
 # Define DEAP Fitness and Individual Types
@@ -34,14 +42,20 @@ class HallOfShame:
 
 
 class Evolution:
-    def __init__(self, board_size, ship_sizes, population_size, num_generations,
-                 mcts_simulations, mcts_exploration, elite_size=1):
+    def __init__(
+        self,
+        board_size,
+        ship_sizes,
+        population_size,
+        num_generations,
+        elite_size=1,
+        MUTPB=0.2,
+        TOURNAMENT_SIZE=3,
+    ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
         self.population_size = population_size
         self.num_generations = num_generations
-        self.mcts_simulations = mcts_simulations
-        self.mcts_exploration = mcts_exploration
         self.elite_size = elite_size
         toolbox.register("evaluate_population", self.evaluate_population)
 
@@ -54,6 +68,22 @@ class Evolution:
         self.diversity_over_gens = []
         self.sparsity_over_gens = []
         self.percent_vertical_over_gens = []  # Only store vertical percentage.
+
+        # Set up game environment.
+        self.game_manager = GameManager(size=self.board_size)
+
+        # Initialize population.
+        self.pop_placing_agents = self.initialize_placing_population(
+            self.population_size
+        )
+
+        # Register DEAP operators with our custom methods.
+        toolbox.register("mate_chromosome", self.custom_crossover_placement)
+        toolbox.register(
+            "mutate_chromosome",
+            partial(self.custom_mutation_placement, indpb=MUTPB),
+        )
+        toolbox.register("select", tools.selTournament, tournsize=TOURNAMENT_SIZE)
 
     # ------------------- Helper to Create Board from Chromosome -------------------
     def create_board_from_chromosome(self, chromosome):
@@ -90,7 +120,9 @@ class Evolution:
         dists = []
         for i in range(len(positions)):
             for j in range(i + 1, len(positions)):
-                d = abs(positions[i][0] - positions[j][0]) + abs(positions[i][1] - positions[j][1])
+                d = abs(positions[i][0] - positions[j][0]) + abs(
+                    positions[i][1] - positions[j][1]
+                )
                 dists.append(d)
         return np.mean(dists)
 
@@ -120,32 +152,51 @@ class Evolution:
         """
         opponents = []
         # Hunt_down strategy opponent.
-        for _ in range(n):
-            search_agent_hunt_down = SearchAgent(board_size=self.board_size, strategy="hunt_down")
+        for i in range(n):
+            search_agent_hunt_down = SearchAgent(
+                board_size=self.board_size,
+                strategy="hunt_down",
+                name=f"hunt_down_{i}",  # Add a unique name for each hunt_down agent
+            )
             opponents.append(search_agent_hunt_down)
 
         return opponents
 
     # ------------------- Game Simulation and Evaluation -------------------
     def simulate_game(self, game_manager, placing_agent, search_agent):
-        """Simulate a Battleship game and return the move count."""
+        """Simulate a Battleship game and return the move count, hits, and misses."""
         current_state = game_manager.initial_state(placing=placing_agent)
+        # Count total hits and misses at the end instead of tracking during the game
         while not game_manager.is_terminal(current_state):
             move = search_agent.strategy.find_move(current_state)
             current_state = game_manager.next_state(current_state, move)
-        return current_state.move_count
 
-    def evaluate_population(self, population_placing, game_manager):
+        # Count hits and misses from the final board state
+        # board[1] contains hits (1s)
+        # board[2] contains misses (1s)
+        hits = sum(square == 1 for square in current_state.board[1])
+        misses = sum(square == 1 for square in current_state.board[2])
+
+        return current_state.move_count, hits, misses
+
+    def evaluate_population(
+        self, population_placing, game_manager, search_agents, search_metrics=None
+    ):
         """
         Evaluate each placing agent by simulating games against a pool of opponents
         and assigning the average performance as fitness.
         """
-        opponents = self.get_opponent_pool(5)
+        opponents = search_agents
         for placing_agent in population_placing:
             fitness_scores = []
             for opp in opponents:
-                fitness = self.simulate_game(game_manager, placing_agent, opp)
-                fitness_scores.append(fitness)
+                moves, hits, misses = self.simulate_game(
+                    game_manager, placing_agent, opp
+                )
+                fitness_scores.append(moves)
+                # Record search agent metrics if tracker is provided
+                if search_metrics is not None:
+                    search_metrics.record_game(opp, moves, hits, misses)
             placing_agent.fitness.values = (sum(fitness_scores) / len(fitness_scores),)
 
     def initialize_placing_population(self, n):
@@ -153,7 +204,8 @@ class Evolution:
         population = []
         for _ in range(n):
             placing_agent = creator.IndividualPlacementAgent(
-                self.board_size, self.ship_sizes, strategy="chromosome")
+                self.board_size, self.ship_sizes, strategy="chromosome"
+            )
             population.append(placing_agent)
         return population
 
@@ -162,8 +214,9 @@ class Evolution:
         distances = []
         for i in range(len(population)):
             for j in range(i + 1, len(population)):
-                d = self.chromosome_distance(population[i].strategy.chromosome,
-                                             population[j].strategy.chromosome)
+                d = self.chromosome_distance(
+                    population[i].strategy.chromosome, population[j].strategy.chromosome
+                )
                 distances.append(d)
         return np.mean(distances) if distances else 0
 
@@ -184,11 +237,13 @@ class Evolution:
 
         # Figure 1: Average Fitness with Regression Line.
         fig, ax = plt.subplots(figsize=(6, 5))
-        ax.plot(generations, self.avg_moves_over_gens, marker='o', label='Average Fitness')
+        ax.plot(
+            generations, self.avg_moves_over_gens, marker="o", label="Average Fitness"
+        )
         if len(self.avg_moves_over_gens) > 1:
             coeffs = np.polyfit(generations, self.avg_moves_over_gens, 1)
             poly_eqn = np.poly1d(coeffs)
-            ax.plot(generations, poly_eqn(generations), 'r--', label='Regression Line')
+            ax.plot(generations, poly_eqn(generations), "r--", label="Regression Line")
         ax.set_title("Average Fitness per Generation")
         ax.set_xlabel("Generation")
         ax.set_ylabel("Average Move Count")
@@ -198,7 +253,7 @@ class Evolution:
         # Figure 2: Population Diversity Over Generations.
         fig2, ax2 = plt.subplots(figsize=(6, 5))
         gens_div = np.arange(len(self.diversity_over_gens))
-        ax2.plot(gens_div, self.diversity_over_gens, marker='o')
+        ax2.plot(gens_div, self.diversity_over_gens, marker="o")
         ax2.set_title("Population Diversity Over Generations")
         ax2.set_xlabel("Generation")
         ax2.set_ylabel("Average Pairwise Distance")
@@ -223,7 +278,7 @@ class Evolution:
             axs[i].set_xticks(range(self.board_size))
             axs[i].set_yticks(range(self.board_size))
         for j in range(i + 1, len(axs)):
-            axs[j].axis('off')
+            axs[j].axis("off")
         fig3.suptitle("Ship Placement Frequency per Generation")
         plt.tight_layout()
         plt.show()
@@ -241,12 +296,14 @@ class Evolution:
                 centroids.append((centroid_row, centroid_col))
         centroids = np.array(centroids)
         fig4, ax4 = plt.subplots(figsize=(6, 5))
-        ax4.plot(centroids[:, 1], centroids[:, 0], marker='o', linestyle='-', color='magenta')
+        ax4.plot(
+            centroids[:, 1], centroids[:, 0], marker="o", linestyle="-", color="magenta"
+        )
         ax4.set_title("Centroid Evolution of Ship Placements")
         ax4.set_xlabel("Column")
         ax4.set_ylabel("Row")
         for i, (row, col) in enumerate(centroids):
-            ax4.text(col, row, str(i), color='black', ha='left', va='bottom')
+            ax4.text(col, row, str(i), color="black", ha="left", va="bottom")
         plt.show()
 
         # Figure 5: Hall of Fame Boards.
@@ -273,7 +330,9 @@ class Evolution:
             for i, worst_ind in enumerate(self.hos.items):
                 board = self.create_board_from_chromosome(worst_ind.strategy.chromosome)
                 im = axs6[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs6[i].set_title(f"Worst {i}\nFitness = {worst_ind.fitness.values[0]:.2f}")
+                axs6[i].set_title(
+                    f"Worst {i}\nFitness = {worst_ind.fitness.values[0]:.2f}"
+                )
                 axs6[i].set_xticks(range(self.board_size))
                 axs6[i].set_yticks(range(self.board_size))
             fig6.suptitle("Worst Boards (Hall of Shame)")
@@ -283,7 +342,7 @@ class Evolution:
         if len(self.sparsity_over_gens) > 0:
             fig7, ax7 = plt.subplots(figsize=(6, 5))
             gens_sparse = np.arange(len(self.sparsity_over_gens))
-            ax7.plot(gens_sparse, self.sparsity_over_gens, marker='o')
+            ax7.plot(gens_sparse, self.sparsity_over_gens, marker="o")
             ax7.set_title("Average Board Sparsity per Generation")
             ax7.set_xlabel("Generation")
             ax7.set_ylabel("Average Intra-individual Ship Distance")
@@ -296,118 +355,142 @@ class Evolution:
             verticals = np.array(self.percent_vertical_over_gens)  # vertical % stored
 
             # Plot the vertical percentage line.
-            ax8.plot(gens_orient, verticals, marker='o', color='blue', label="Orientation (%)")
+            ax8.plot(
+                gens_orient,
+                verticals,
+                marker="o",
+                color="blue",
+                label="Orientation (%)",
+            )
 
             # Draw a horizontal threshold line at 50%.
-            ax8.axhline(50, color='red', linestyle='--', label='50% Threshold')
+            ax8.axhline(50, color="red", linestyle="--", label="50% Threshold")
 
             # Optionally, fill areas with different colors to visually indicate superiority.
             # When vertical % is above 50, vertical placements are superior.
-            ax8.fill_between(gens_orient, verticals, 50,
-                             where=(verticals >= 50), color='blue', alpha=0.2, interpolate=True,
-                             label="Vertical Superior")
+            ax8.fill_between(
+                gens_orient,
+                verticals,
+                50,
+                where=(verticals >= 50),
+                color="blue",
+                alpha=0.2,
+                interpolate=True,
+                label="Vertical Superior",
+            )
             # When vertical % is below 50, horizontal placements are superior.
-            ax8.fill_between(gens_orient, verticals, 50,
-                             where=(verticals < 50), color='green', alpha=0.2, interpolate=True,
-                             label="Horizontal Superior")
+            ax8.fill_between(
+                gens_orient,
+                verticals,
+                50,
+                where=(verticals < 50),
+                color="green",
+                alpha=0.2,
+                interpolate=True,
+                label="Horizontal Superior",
+            )
 
-            ax8.set_title("Ship Orientation Over Generations\n(Above 50%: Vertical; Below 50%: Horizontal)")
+            ax8.set_title(
+                "Ship Orientation Over Generations\n(Above 50%: Vertical; Below 50%: Horizontal)"
+            )
             ax8.set_xlabel("Generation")
             ax8.set_ylabel("Orientation Percentage (%)")
             ax8.set_ylim(0, 100)
             ax8.legend()
             plt.show()
 
-
     # ------------------- Evolutionary Process -------------------
-    def evolve(self):
-        # Set up game environment.
-        game_manager = GameManager(size=self.board_size)
+    def evolve(self, gen, search_agents, search_metrics=None):
+        print(f"\n-------------- Generation {gen} --------------")
+        # Evaluate population using shared sampling.
+        print("Evaluating population...")
+        toolbox.evaluate_population(
+            self.pop_placing_agents, self.game_manager, search_agents, search_metrics
+        )
 
-        # Initialize population.
-        pop_placing_agents = self.initialize_placing_population(self.population_size)
+        # Record average fitness.
+        avg_moves = sum(
+            agent.fitness.values[0] for agent in self.pop_placing_agents
+        ) / len(self.pop_placing_agents)
+        self.avg_moves_over_gens.append(avg_moves)
+        print(f"Average moves in Generation {gen}: {avg_moves}")
 
-        for gen in range(self.num_generations):
-            print(f"\n-------------- Generation {gen} --------------")
-            for i, agent in enumerate(pop_placing_agents):
-                print(f"Agent {i} chromosome:")
-                print(agent.strategy.chromosome)
-                # agent.show_ships()
+        # Record board overlay for this generation.
+        avg_board = self.record_generation_board(self.pop_placing_agents)
+        self.boards_over_generations.append(avg_board)
 
-            # Evaluate population using shared sampling.
-            print("Evaluating population...")
-            toolbox.evaluate_population(pop_placing_agents, game_manager)
+        # Compute and record population diversity.
+        diversity = self.compute_average_pairwise_distance(self.pop_placing_agents)
+        self.diversity_over_gens.append(diversity)
 
-            # Record average fitness.
-            avg_moves = sum(agent.fitness.values[0] for agent in pop_placing_agents) / len(pop_placing_agents)
-            self.avg_moves_over_gens.append(avg_moves)
-            print(f"Average moves in Generation {gen}: {avg_moves}")
+        # Compute and record sparsity.
+        sparsity_list = [
+            self.compute_individual_sparsity(agent.strategy.chromosome)
+            for agent in self.pop_placing_agents
+        ]
+        avg_sparsity = np.mean(sparsity_list)
+        self.sparsity_over_gens.append(avg_sparsity)
 
-            # Record board overlay for this generation.
-            avg_board = self.record_generation_board(pop_placing_agents)
-            self.boards_over_generations.append(avg_board)
+        # Compute and record orientation percentage (vertical).
+        total_ships = 0
+        vertical_count = 0
+        for agent in self.pop_placing_agents:
+            for gene in agent.strategy.chromosome:
+                total_ships += 1
+                if gene[2] == 1:  # 1 indicates vertical.
+                    vertical_count += 1
+        percent_vertical = (
+            (vertical_count / total_ships * 100) if total_ships > 0 else 0
+        )
+        self.percent_vertical_over_gens.append(percent_vertical)
 
-            # Compute and record population diversity.
-            diversity = self.compute_average_pairwise_distance(pop_placing_agents)
-            self.diversity_over_gens.append(diversity)
+        # Update Hall of Fame and Hall of Shame.
+        self.hof.update(self.pop_placing_agents)
+        self.hos.update(self.pop_placing_agents)
 
-            # Compute and record sparsity.
-            sparsity_list = [self.compute_individual_sparsity(agent.strategy.chromosome) for agent in
-                             pop_placing_agents]
-            avg_sparsity = np.mean(sparsity_list)
-            self.sparsity_over_gens.append(avg_sparsity)
+        # --- Elitism: Preserve best individuals ---
+        elite = tools.selBest(self.pop_placing_agents, self.elite_size)
 
-            # Compute and record orientation percentage (vertical).
-            total_ships = 0
-            vertical_count = 0
-            for agent in pop_placing_agents:
-                for gene in agent.strategy.chromosome:
-                    total_ships += 1
-                    if gene[2] == 1:  # 1 indicates vertical.
-                        vertical_count += 1
-            percent_vertical = (vertical_count / total_ships * 100) if total_ships > 0 else 0
-            self.percent_vertical_over_gens.append(percent_vertical)
+        # Selection
+        offspring_placing = toolbox.select(
+            self.pop_placing_agents, len(self.pop_placing_agents)
+        )
+        offspring_placing = list(map(toolbox.clone, offspring_placing))
 
-            # Update Hall of Fame and Hall of Shame.
-            self.hof.update(pop_placing_agents)
-            self.hos.update(pop_placing_agents)
+        # Crossover
+        print("\n--- Crossover Step ---")
+        for i in range(1, len(offspring_placing), 2):
+            p1 = offspring_placing[i - 1].strategy.chromosome
+            p2 = offspring_placing[i].strategy.chromosome
 
-            # --- Elitism: Preserve best individuals ---
-            elite = tools.selBest(pop_placing_agents, self.elite_size)
+            (
+                offspring_placing[i - 1].strategy.chromosome,
+                offspring_placing[i].strategy.chromosome,
+            ) = toolbox.mate_chromosome(p1, p2)
 
-            # Selection
-            offspring_placing = toolbox.select(pop_placing_agents, len(pop_placing_agents))
-            offspring_placing = list(map(toolbox.clone, offspring_placing))
+        # Mutation
+        print("\n--- Mutation Step ---")
+        for i in range(len(offspring_placing)):
+            original = offspring_placing[i].strategy.chromosome
+            mutated = toolbox.mutate_chromosome(original)[0]
+            offspring_placing[i].strategy.chromosome = mutated
 
-            # Crossover
-            print("\n--- Crossover Step ---")
-            for i in range(1, len(offspring_placing), 2):
-                p1 = offspring_placing[i - 1].strategy.chromosome
-                p2 = offspring_placing[i].strategy.chromosome
+        # Reinitialize individuals with updated chromosomes.
+        offspring_placing = [
+            creator.IndividualPlacementAgent(
+                self.board_size,
+                self.ship_sizes,
+                strategy="chromosome",
+                chromosome=ind.strategy.chromosome,
+            )
+            for ind in offspring_placing
+        ]
 
-                offspring_placing[i - 1].strategy.chromosome, offspring_placing[i].strategy.chromosome = \
-                    toolbox.mate_chromosome(p1, p2)
-
-            # Mutation
-            print("\n--- Mutation Step ---")
-            for i in range(len(offspring_placing)):
-                original = offspring_placing[i].strategy.chromosome
-                mutated = toolbox.mutate_chromosome(original)[0]
-                offspring_placing[i].strategy.chromosome = mutated
-
-            # Reinitialize individuals with updated chromosomes.
-            offspring_placing = [
-                creator.IndividualPlacementAgent(self.board_size, self.ship_sizes, strategy="chromosome",
-                                                 chromosome=ind.strategy.chromosome)
-                for ind in offspring_placing
-            ]
-
-            # --- Merge Elite with Offspring ---
-            combined_population = offspring_placing + elite
-            pop_placing_agents[:] = tools.selBest(combined_population, self.population_size)
-
-        # Plot metrics at the end.
-        self.plot_metrics()
+        # --- Merge Elite with Offspring ---
+        combined_population = offspring_placing + elite
+        self.pop_placing_agents[:] = tools.selBest(
+            combined_population, self.population_size
+        )
 
     # ------------------- Custom Operators -------------------
     def custom_crossover_placement(self, parent1, parent2):
@@ -421,7 +504,9 @@ class Evolution:
             size = self.ship_sizes[i]
             # Offspring 1: Use parent's gene in fixed order.
             for gene in [parent1[i], parent2[i]]:
-                if is_gene_valid(board1, gene[0], gene[1], gene[2], self.board_size, size):
+                if is_gene_valid(
+                    board1, gene[0], gene[1], gene[2], self.board_size, size
+                ):
                     gene1 = gene
                     break
             else:
@@ -431,7 +516,9 @@ class Evolution:
 
             # Offspring 2: Try parent's gene in reversed order.
             for gene in [parent2[i], parent1[i]]:
-                if is_gene_valid(board2, gene[0], gene[1], gene[2], self.board_size, size):
+                if is_gene_valid(
+                    board2, gene[0], gene[1], gene[2], self.board_size, size
+                ):
                     gene2 = gene
                     break
             else:
@@ -452,11 +539,15 @@ class Evolution:
         board = [[0] * self.board_size for _ in range(self.board_size)]
         for i, gene in enumerate(individual):
             size = self.ship_sizes[i]
-            if not is_gene_valid(board, gene[0], gene[1], gene[2], self.board_size, size):
+            if not is_gene_valid(
+                board, gene[0], gene[1], gene[2], self.board_size, size
+            ):
                 new_gene = random_valid_gene(board, self.board_size, size)
             elif random.random() < indpb:
                 new_gene = local_mutation_gene(gene, board, self.board_size, size)
-                if not is_gene_valid(board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size):
+                if not is_gene_valid(
+                    board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size
+                ):
                     new_gene = random_valid_gene(board, self.board_size, size)
             else:
                 new_gene = gene
@@ -464,7 +555,7 @@ class Evolution:
             repaired.append(new_gene)
             mark_board(board, new_gene, size)
 
-        return repaired,
+        return (repaired,)
 
 
 # ---------------------------------------------------------------------
@@ -477,8 +568,6 @@ if __name__ == "__main__":
     POPULATION_SIZE = 50
     ELITE_SIZE = 1
     NUM_GENERATIONS = 10
-    MCTS_SIMULATIONS = 50
-    MCTS_EXPLORATION = 1.41
     TOURNAMENT_SIZE = 3
     MUTPB = 0.2
     # =======================================
@@ -488,14 +577,16 @@ if __name__ == "__main__":
         ship_sizes=SHIP_SIZES,
         population_size=POPULATION_SIZE,
         num_generations=NUM_GENERATIONS,
-        mcts_simulations=MCTS_SIMULATIONS,
-        mcts_exploration=MCTS_EXPLORATION,
-        elite_size=ELITE_SIZE
+        elite_size=ELITE_SIZE,
+        MUTPB=MUTPB,
+        TOURNAMENT_SIZE=TOURNAMENT_SIZE,
     )
 
     # Register DEAP operators with our custom methods.
     toolbox.register("mate_chromosome", environment.custom_crossover_placement)
-    toolbox.register("mutate_chromosome", partial(environment.custom_mutation_placement, indpb=MUTPB))
+    toolbox.register(
+        "mutate_chromosome", partial(environment.custom_mutation_placement, indpb=MUTPB)
+    )
     toolbox.register("select", tools.selTournament, tournsize=TOURNAMENT_SIZE)
 
     # Run evolution.

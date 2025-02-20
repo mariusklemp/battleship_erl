@@ -301,21 +301,6 @@ class NNSearch(nn.Module, Strategy):
 
     def load_model(self, path):
         print(f"Loading model from {path}")
-        # Store previous state for comparison
-        previous_state = self.net.state_dict()
-
         # Load new state
         self.net.load_state_dict(torch.load(path))
-        current_state = self.net.state_dict()
-
-        # Compare states
-        is_different = False
-        for key in current_state.keys():
-            if not torch.equal(previous_state[key], current_state[key]):
-                is_different = True
-                break
-
-        if not is_different:
-            print(f"WARNING: Loaded model {path} is identical to previous model!")
-
         self.net.eval()
