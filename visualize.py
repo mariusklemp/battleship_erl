@@ -2,41 +2,45 @@ import warnings
 
 import graphviz
 import matplotlib.pyplot as plt
-import numpy as np
-import seaborn as sns
 import torch
 
 
-def plot_stats(statistics, ylog=False, view=False, filename="avg_fitness.svg"):
-    """Plots the population's average and best fitness."""
-    if plt is None:
-        warnings.warn(
-            "This display is not available due to a missing optional dependency (matplotlib)"
-        )
-        return
+import matplotlib.pyplot as plt
+import numpy as np
 
-    generation = range(len(statistics.most_fit_genomes))
-    best_fitness = [c.fitness for c in statistics.most_fit_genomes]
+def plot_stats(statistics, best_possible, ylog=False, view=False):
+    """
+    Plots the population's average and best fitness,
+    and also shows the best possible fitness as a horizontal line.
+
+    Parameters:
+        statistics: The NEAT statistics object.
+        best_possible: The best fitness possible.
+        ylog: If True, use a logarithmic scale for y.
+        view: If True, display the plot.
+    """
+    generations = range(len(statistics.most_fit_genomes))
     avg_fitness = np.array(statistics.get_fitness_mean())
-    stdev_fitness = np.array(statistics.get_fitness_stdev())
+    # Extract the best fitness for each generation from the most fit genomes.
+    best_fitness = [genome.fitness for genome in statistics.most_fit_genomes]
 
-    plt.plot(generation, avg_fitness, "b-", label="average")
-    plt.plot(generation, avg_fitness - stdev_fitness, "g-.", label="-1 sd")
-    plt.plot(generation, avg_fitness + stdev_fitness, "g-.", label="+1 sd")
-    plt.plot(generation, best_fitness, "r-", label="best")
+    plt.plot(generations, avg_fitness, "b-", label="average fitness")
+    plt.plot(generations, best_fitness, "g-", label="best fitness")
+    plt.axhline(y=best_possible, color="r", linestyle="--", label="best possible")
 
-    plt.title("Population's average and best fitness")
-    plt.xlabel("Generations")
+    plt.title("Population's Fitness over Generations")
+    plt.xlabel("Generation")
     plt.ylabel("Fitness")
-    plt.grid()
+    plt.grid(True)
     plt.legend(loc="best")
     if ylog:
         plt.gca().set_yscale("symlog")
 
     if view:
         plt.show()
-
     plt.close()
+
+
 
 
 def plot_spikes(spikes, view=False, filename=None, title=None):

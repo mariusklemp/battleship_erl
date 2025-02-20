@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion     = max
 fitness_threshold     = 20
-pop_size              = 50
+pop_size              = 100
 reset_on_extinction   = True
 no_fitness_termination = False
 
@@ -23,7 +23,7 @@ fc_layer_size_min       = 64
 fc_layer_size_max       = 256
 
 # genome compatibility options
-compatibility_disjoint_coefficient = 2.0
+compatibility_disjoint_coefficient = 1.0
 compatibility_weight_coefficient   = 1.0
 
 # Activation options
@@ -40,15 +40,29 @@ conv_params_mutate_prob = 0.10
 conv_output_mutate_prob = 0.10
 conv_activation_mutate_prob = 0.1
 
+# Weight mutation options
+weight_init_mean= 0.0
+weight_init_stdev = 0.1
+weight_init_type = gaussian
+weight_max_value = 5.0
+weight_min_value = -5.0
+weight_mutate_rate = 0.15
+weight_mutate_power = 0.3
+weight_replace_rate = 0.1
+
+mutate_architecture = True
+mutate_weights = True
+crossover_architecture = True
+
 [DefaultSpeciesSet]
-compatibility_threshold = 4.0
+compatibility_threshold = 1.0
 
 [DefaultStagnation]
 species_fitness_func = max
-max_stagnation       = 25
-species_elitism      = 3
+max_stagnation       = 15
+species_elitism      = 0
 
 [DefaultReproduction]
-elitism            = 3
-survival_threshold = 0.25
-min_species_size   = 4
+elitism            = 1
+survival_threshold = 0.2
+min_species_size   = 2
