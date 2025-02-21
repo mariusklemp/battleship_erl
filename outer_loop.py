@@ -1,9 +1,9 @@
 import json
 from tqdm import tqdm
-from deapSystem.evolution import Evolution
+from deap_system.evolution import Evolution
 from game_logic.search_agent import SearchAgent
 from ai.models import ANET
-from deapSystem.search_metrics import SearchMetricsTracker
+from deap_system.search_metrics import SearchMetricsTracker
 from run_mcts import run_mcts_inner_loop, load_config
 
 
