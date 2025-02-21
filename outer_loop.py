@@ -60,6 +60,7 @@ if __name__ == "__main__":
     # Load configurations
     mcts_config = load_config()
     evolution_config = load_evolution_config()
+    RUN_MCTS = False
 
     # Load neural network configuration
     LAYER_CONFIG = json.load(open("ai/config.json"))
@@ -100,24 +101,25 @@ if __name__ == "__main__":
 
         # Run MCTS training of search agents in inner loop
         print("\nTraining search agents against placing population...")
-        for i, search_agent in tqdm(
-            enumerate(search_agents),
-            desc="Training search agents",
-            total=len(search_agents),
-        ):
-            print(
-                f"\nTraining search agent {i + 1}/{len(search_agents)} against {PLACING_POPULATION_SIZE} placing agents"
-            )
-            run_mcts_inner_loop(
-                environment.game_manager,
-                search_agent,
-                simulations_number=mcts_config["mcts"]["simulations_number"],
-                exploration_constant=mcts_config["mcts"]["exploration_constant"],
-                batch_size=mcts_config["training"]["batch_size"],
-                device=mcts_config["device"],
-                sizes=SHIP_SIZES,
-                placement_agents=environment.pop_placing_agents,
-            )
+        if RUN_MCTS:
+            for i, search_agent in tqdm(
+                enumerate(search_agents),
+                desc="Training search agents",
+                total=len(search_agents),
+            ):
+                print(
+                    f"\nTraining search agent {i + 1}/{len(search_agents)} against {PLACING_POPULATION_SIZE} placing agents"
+                )
+                run_mcts_inner_loop(
+                    environment.game_manager,
+                    search_agent,
+                    simulations_number=mcts_config["mcts"]["simulations_number"],
+                    exploration_constant=mcts_config["mcts"]["exploration_constant"],
+                    batch_size=mcts_config["training"]["batch_size"],
+                    device=mcts_config["device"],
+                    sizes=SHIP_SIZES,
+                    placement_agents=environment.pop_placing_agents,
+                )
     # Plot metrics at the end
     environment.plot_metrics()
     search_metrics.plot_metrics()
