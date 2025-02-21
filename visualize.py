@@ -4,9 +4,9 @@ import graphviz
 import matplotlib.pyplot as plt
 import torch
 
-
 import matplotlib.pyplot as plt
 import numpy as np
+
 
 def plot_stats(statistics, best_possible, ylog=False, view=False):
     """
@@ -39,8 +39,6 @@ def plot_stats(statistics, best_possible, ylog=False, view=False):
     if view:
         plt.show()
     plt.close()
-
-
 
 
 def plot_spikes(spikes, view=False, filename=None, title=None):
@@ -118,15 +116,15 @@ def plot_species(statistics, view=False, filename="speciation.svg"):
 
 
 def draw_net(
-    config,
-    genome,
-    view=False,
-    filename=None,
-    node_names=None,
-    show_disabled=True,
-    prune_unused=False,
-    node_colors=None,
-    fmt="svg",
+        config,
+        genome,
+        view=False,
+        filename=None,
+        node_names=None,
+        show_disabled=True,
+        prune_unused=False,
+        node_colors=None,
+        fmt="svg",
 ):
     """Receives a genome and draws a neural network with arbitrary topology."""
     # Attributes for network nodes.
@@ -242,7 +240,7 @@ def plot_fitness(move_count, board_size):
         games, moves, color="#FFFF00", label="Moves per game", alpha=0.5, linewidth=1
     )
     ax1.plot(
-        games[moving_avg_window - 1 :],
+        games[moving_avg_window - 1:],
         moving_avg,
         color="#2E86C1",
         label=f"Moving average (window={moving_avg_window})",

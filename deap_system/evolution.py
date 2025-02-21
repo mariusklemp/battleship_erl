@@ -10,13 +10,11 @@ from deap import base, creator, tools
 import matplotlib.pyplot as plt
 import numpy as np
 
-import visualize
-
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 
-from .helpers import is_gene_valid, mark_board, random_valid_gene, local_mutation_gene
+from helpers import is_gene_valid, mark_board, random_valid_gene, local_mutation_gene
 
 # ---------------------------------------------------------------------
 # Define DEAP Fitness and Individual Types
@@ -43,14 +41,14 @@ class HallOfShame:
 
 class Evolution:
     def __init__(
-        self,
-        board_size,
-        ship_sizes,
-        population_size,
-        num_generations,
-        elite_size=1,
-        MUTPB=0.2,
-        TOURNAMENT_SIZE=3,
+            self,
+            board_size,
+            ship_sizes,
+            population_size,
+            num_generations,
+            elite_size=1,
+            MUTPB=0.2,
+            TOURNAMENT_SIZE=3,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -146,13 +144,13 @@ class Evolution:
         return percent_vertical, percent_horizontal
 
     # ------------------- Shared Sampling: Opponent Pool -------------------
-    def get_opponent_pool(self, n):
+    def get_opponent_pool(self):
         """
         Build a diverse set of opponents.
         """
         opponents = []
         # Hunt_down strategy opponent.
-        for i in range(n):
+        for i in range(self.population_size):
             search_agent_hunt_down = SearchAgent(
                 board_size=self.board_size,
                 strategy="hunt_down",
@@ -180,7 +178,7 @@ class Evolution:
         return current_state.move_count, hits, misses
 
     def evaluate_population(
-        self, population_placing, game_manager, search_agents, search_metrics=None
+            self, population_placing, game_manager, search_agents, search_metrics=None
     ):
         """
         Evaluate each placing agent by simulating games against a pool of opponents
@@ -505,7 +503,7 @@ class Evolution:
             # Offspring 1: Use parent's gene in fixed order.
             for gene in [parent1[i], parent2[i]]:
                 if is_gene_valid(
-                    board1, gene[0], gene[1], gene[2], self.board_size, size
+                        board1, gene[0], gene[1], gene[2], self.board_size, size
                 ):
                     gene1 = gene
                     break
@@ -517,7 +515,7 @@ class Evolution:
             # Offspring 2: Try parent's gene in reversed order.
             for gene in [parent2[i], parent1[i]]:
                 if is_gene_valid(
-                    board2, gene[0], gene[1], gene[2], self.board_size, size
+                        board2, gene[0], gene[1], gene[2], self.board_size, size
                 ):
                     gene2 = gene
                     break
@@ -540,13 +538,13 @@ class Evolution:
         for i, gene in enumerate(individual):
             size = self.ship_sizes[i]
             if not is_gene_valid(
-                board, gene[0], gene[1], gene[2], self.board_size, size
+                    board, gene[0], gene[1], gene[2], self.board_size, size
             ):
                 new_gene = random_valid_gene(board, self.board_size, size)
             elif random.random() < indpb:
                 new_gene = local_mutation_gene(gene, board, self.board_size, size)
                 if not is_gene_valid(
-                    board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size
+                        board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size
                 ):
                     new_gene = random_valid_gene(board, self.board_size, size)
             else:
@@ -566,28 +564,31 @@ if __name__ == "__main__":
     BOARD_SIZE = 10
     SHIP_SIZES = [5, 4, 3, 2, 2]
     POPULATION_SIZE = 50
-    ELITE_SIZE = 1
-    NUM_GENERATIONS = 10
+    ELITE_SIZE = 0
+    NUM_GENERATIONS = 1000
     TOURNAMENT_SIZE = 3
     MUTPB = 0.2
+    PLACING_POPULATION_SIZE = 5
     # =======================================
 
     environment = Evolution(
         board_size=BOARD_SIZE,
         ship_sizes=SHIP_SIZES,
-        population_size=POPULATION_SIZE,
+        population_size=PLACING_POPULATION_SIZE,
         num_generations=NUM_GENERATIONS,
         elite_size=ELITE_SIZE,
         MUTPB=MUTPB,
         TOURNAMENT_SIZE=TOURNAMENT_SIZE,
     )
 
-    # Register DEAP operators with our custom methods.
-    toolbox.register("mate_chromosome", environment.custom_crossover_placement)
-    toolbox.register(
-        "mutate_chromosome", partial(environment.custom_mutation_placement, indpb=MUTPB)
-    )
-    toolbox.register("select", tools.selTournament, tournsize=TOURNAMENT_SIZE)
+    search_agents = environment.get_opponent_pool()
 
-    # Run evolution.
-    environment.evolve()
+    # Outer loop for generations of placing agents and search agents
+    for gen in range(NUM_GENERATIONS):
+        print(f"\n=== Generation {gen + 1}/{NUM_GENERATIONS} ===")
+
+        # Run evolution with metrics tracking
+        print("Evolving placing agents...")
+        environment.evolve(gen, search_agents)
+
+    environment.plot_metrics()
