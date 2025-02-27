@@ -2,7 +2,7 @@
     "board_size": 5,
     "ship_sizes": [3, 2, 2],
     "mcts": {
-        "simulations_number": 150,
+        "simulations_number": 10,
         "exploration_constant": 1.41
     },
     "training": {

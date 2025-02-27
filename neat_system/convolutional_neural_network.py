@@ -1,16 +1,17 @@
 import torch
 import torch.nn as nn
-from cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
+from neat_system.cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
 
 
 class ConvolutionalNeuralNetwork:
-    def __init__(self, input_shape, output_shape, layer_evals):
+    def __init__(self, input_shape, output_shape, layer_evals, device="cpu"):
         """
         Initialize the Convolutional Neural Network.
         """
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.layer_evals = layer_evals
+        self.device = device
 
     @staticmethod
     def create(genome, config):
@@ -29,7 +30,9 @@ class ConvolutionalNeuralNetwork:
         # Iterate over the gene objects in the genome.
         for gene in genome.layer_config:
             if isinstance(gene, CNNConvGene):
-                activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
+                activation = ConvolutionalNeuralNetwork.get_activation_function(
+                    gene.activation
+                )
 
                 # Create the convolutional layer.
                 conv_layer = nn.Conv2d(
@@ -41,21 +44,38 @@ class ConvolutionalNeuralNetwork:
                 )
                 # Copy evolved weights and biases into the layer.
                 if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    conv_layer.weight.data.copy_(torch.from_numpy(gene.weights).type_as(conv_layer.weight.data))
-                    conv_layer.bias.data.copy_(torch.from_numpy(gene.biases).type_as(conv_layer.bias.data))
+                    conv_layer.weight.data.copy_(
+                        torch.from_numpy(gene.weights).type_as(conv_layer.weight.data)
+                    )
+                    conv_layer.bias.data.copy_(
+                        torch.from_numpy(gene.biases).type_as(conv_layer.bias.data)
+                    )
 
-                layer_evals.append({"type": "conv", "params": {"layer": conv_layer, "activation": activation}})
+                layer_evals.append(
+                    {
+                        "type": "conv",
+                        "params": {"layer": conv_layer, "activation": activation},
+                    }
+                )
 
             elif isinstance(gene, CNNPoolGene):
                 # Create a pooling layer (Max or Average)
-                pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride)) \
-                    if gene.pool_type == "max" else nn.AvgPool2d(kernel_size=int(gene.pool_size),
-                                                                 stride=int(gene.stride))
+                pool_layer = (
+                    nn.MaxPool2d(
+                        kernel_size=int(gene.pool_size), stride=int(gene.stride)
+                    )
+                    if gene.pool_type == "max"
+                    else nn.AvgPool2d(
+                        kernel_size=int(gene.pool_size), stride=int(gene.stride)
+                    )
+                )
 
                 layer_evals.append({"type": "pool", "params": {"layer": pool_layer}})
 
             elif isinstance(gene, CNNFCGene):
-                activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
+                activation = ConvolutionalNeuralNetwork.get_activation_function(
+                    gene.activation
+                )
 
                 # Create the fully connected (Linear) layer.
                 fc_layer = nn.Linear(
@@ -64,10 +84,19 @@ class ConvolutionalNeuralNetwork:
                 )
                 # Copy evolved weights and biases into the layer.
                 if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    fc_layer.weight.data.copy_(torch.from_numpy(gene.weights).type_as(fc_layer.weight.data))
-                    fc_layer.bias.data.copy_(torch.from_numpy(gene.biases).type_as(fc_layer.bias.data))
+                    fc_layer.weight.data.copy_(
+                        torch.from_numpy(gene.weights).type_as(fc_layer.weight.data)
+                    )
+                    fc_layer.bias.data.copy_(
+                        torch.from_numpy(gene.biases).type_as(fc_layer.bias.data)
+                    )
 
-                layer_evals.append({"type": "fc", "params": {"layer": fc_layer, "activation": activation}})
+                layer_evals.append(
+                    {
+                        "type": "fc",
+                        "params": {"layer": fc_layer, "activation": activation},
+                    }
+                )
 
         # Assume the last FC gene defines the size for the output layer.
         last_fc_size = None
@@ -80,8 +109,13 @@ class ConvolutionalNeuralNetwork:
             raise ValueError("No fully connected (fc) layer found in the genome.")
 
         # Create the output layer.
-        output_layer = nn.Linear(int(last_fc_size), board_size ** 2)
-        layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
+        output_layer = nn.Linear(int(last_fc_size), board_size**2)
+        layer_evals.append(
+            {
+                "type": "fc",
+                "params": {"layer": output_layer, "activation": nn.Identity()},
+            }
+        )
 
         return ConvolutionalNeuralNetwork(input_shape, output_shape, layer_evals)
 
