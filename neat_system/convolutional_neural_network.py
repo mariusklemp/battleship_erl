@@ -23,10 +23,6 @@ class ConvolutionalNeuralNetwork:
         output_shape = (board_size, board_size)
         layer_evals = []  # Holds layer specifications
 
-        print("\nCreating CNN for genome", genome.key)
-        for gene in genome.layer_config:
-            print(gene)
-
         # Iterate over the gene objects in the genome.
         for gene in genome.layer_config:
             if isinstance(gene, CNNConvGene):

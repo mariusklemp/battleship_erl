@@ -107,6 +107,7 @@ def run(
     # Attach custom WeightStatsReporter
     weight_stats_reporter = WeightStatsReporter()
     p.add_reporter(weight_stats_reporter)
+
     # p.add_reporter(neat.Checkpointer(10))
 
     game_manager = GameManager(size=board_size)

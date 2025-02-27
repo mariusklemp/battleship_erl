@@ -4,6 +4,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 
+from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
+
 
 def plot_species_weight_stats(species_weight_stats):
     """
@@ -138,10 +140,14 @@ def visualize_genome(genome, ax, title="Genome Architecture"):
     """
     G = nx.DiGraph()
     for i, gene in enumerate(genome.layer_config):
-        if hasattr(gene, "kernel_size"):
+        if isinstance(gene, CNNConvGene):
             label = f"Conv: k={gene.kernel_size}\nout={gene.out_channels}"
-        else:
+        elif isinstance(gene, CNNPoolGene):
+            label = f"Pool: type={gene.pool_type}\np={gene.pool_size}, s={gene.stride}"
+        elif isinstance(gene, CNNFCGene):
             label = f"FC: size={gene.fc_layer_size}"
+        else:
+            label = "Unknown"
         G.add_node(i, label=label)
         if i > 0:
             G.add_edge(i - 1, i)
@@ -323,7 +329,11 @@ def analyze_species_from_population(species):
             conv_counts.append(conv_layers)
             fc_counts.append(fc_layers)
             # For weights, compute the mean over each layer then average them.
-            layer_weight_means = [gene.weights.mean() for gene in genome.layer_config]
+            layer_weight_means = [
+                gene.weights.mean()
+                for gene in genome.layer_config
+                if hasattr(gene, "weights")
+            ]
             if layer_weight_means:
                 weight_means.append(np.mean(layer_weight_means))
         # Compute species averages.

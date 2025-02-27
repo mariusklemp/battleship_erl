@@ -1,4 +1,5 @@
 import copy
+import time
 from random import choice, random, randint
 from neat.config import ConfigParameter, write_pretty_params
 
@@ -166,26 +167,6 @@ class CNNGenome(object):
         self.layer_config = []  # List of layer genes.
         self.fitness = None
 
-    def debug_print(self):
-        """
-        Print a debug summary of the genome configuration, including layer types and parameters.
-        """
-        lines = [f"--- GENOME: {self.key} ---"]
-        for idx, gene in enumerate(self.layer_config):
-            if isinstance(gene, CNNConvGene):
-                lines.append(
-                    f"Layer {idx}: Conv (Out: {gene.out_channels}, Kernel: {gene.kernel_size}x{gene.kernel_size}, Stride: {gene.stride})"
-                )
-            elif isinstance(gene, CNNPoolGene):
-                lines.append(
-                    f"Layer {idx}: Pooling (Type: {gene.pool_type}, Pool Size: {gene.pool_size}, Stride: {gene.stride})"
-                )
-            elif isinstance(gene, CNNFCGene):
-                lines.append(
-                    f"Layer {idx}: Fully Connected (Size: {gene.fc_layer_size})"
-                )
-        print("\n".join(lines))
-
     def configure_new(self, config):
         """
         Configure a new genome with a random architecture and initialize weights.
@@ -236,12 +217,13 @@ class CNNGenome(object):
 
         :param config: CNNGenomeConfig instance.
         """
-        print("DOING MUTATE")
-        self.debug_print()
+        # print('DOING MUTATE')
+        # print(self.layer_config)
         # --- Architecture Mutation Phase ---
         if config.mutate_architecture:
             # Possibly add a new convolutional layer.
             if random() < config.layer_add_prob:
+                # print('ADDING CONV')
                 current_input_size = config.input_size
                 in_channels = config.input_channels
                 for gene in self.layer_config:
@@ -264,6 +246,7 @@ class CNNGenome(object):
 
             # Possibly add a new pooling layer.
             if random() < config.pool_layer_add_prob:
+                # print('ADDING POOL')
                 current_spatial_size = config.input_size
                 for gene in self.layer_config:
                     if isinstance(gene, CNNConvGene):
@@ -290,6 +273,7 @@ class CNNGenome(object):
             if random() < config.layer_add_prob and any(
                 isinstance(g, CNNConvGene) for g in self.layer_config
             ):
+                # print('ADDING FC')
                 conv_genes = [
                     g for g in self.layer_config if isinstance(g, CNNConvGene)
                 ]
@@ -315,6 +299,7 @@ class CNNGenome(object):
                 if len(fc_genes) > 1 or not isinstance(
                     self.layer_config[-1], CNNFCGene
                 ):
+                    # print('DELETING')
                     self.layer_config.pop()
 
             # Possibly remove a pooling layer.
@@ -323,12 +308,19 @@ class CNNGenome(object):
                     g for g in self.layer_config if isinstance(g, CNNPoolGene)
                 ]
                 if pool_layers:
+                    # print('DELETING POOL')
                     self.layer_config.remove(choice(pool_layers))
 
+            # print('BEFORE adjusting layer sizes')
+            self.enforce_valid_ordering()
+            # print(self.layer_config)
             self._adjust_layer_sizes(config)
+            # print('AFTER adjusting layer sizes')
+            # print(self.layer_config)
 
             # --- Mutate each gene ---
             for gene in self.layer_config:
+                self._adjust_layer_sizes(config)
                 gene.mutate(config)
 
         # --- Weight Mutation Phase (if enabled) ---
@@ -357,8 +349,8 @@ class CNNGenome(object):
 
         self.enforce_valid_ordering()
         self._adjust_layer_sizes(config)
-        print("AFTER MUTATE")
-        self.debug_print()
+        # print('AFTER MUTATE')
+        # print(self.layer_config)
 
     def configure_crossover(self, genome1, genome2, config):
         """
@@ -368,8 +360,11 @@ class CNNGenome(object):
         :param genome2: Parent genome 2.
         :param config: CNNGenomeConfig instance.
         """
-        print("DOING CROSSOVER")
-        genome2.debug_print()
+        start = time.perf_counter()
+
+        # print('DOING CROSSOVER')
+        # print(genome1.layer_config)
+        # print(genome2.layer_config)
 
         conv_layers_1 = [g for g in genome1.layer_config if isinstance(g, CNNConvGene)]
         conv_layers_2 = [g for g in genome2.layer_config if isinstance(g, CNNConvGene)]
@@ -494,10 +489,13 @@ class CNNGenome(object):
                         gene.biases, parent_gene.biases, target_weight_shape[0]
                     )
 
-        print("AFTER CROSSOVER")
-        print(self.layer_config)
+        # print('AFTER CROSSOVER')
         self.enforce_valid_ordering()
+        # print('BEFORE adjusting layer sizes')
+        # print(self.layer_config)
         self._adjust_layer_sizes(config)
+        # print('AFTER adjusting layer sizes')
+        # print(self.layer_config)
 
     def enforce_valid_ordering(self):
         """
@@ -516,8 +514,6 @@ class CNNGenome(object):
         """
         Adjust the spatial dimensions and flattened size throughout the network.
         This method updates layer parameters and adapts weights as necessary.
-
-        :param config: CNNGenomeConfig instance.
         """
         current_input_size = config.input_size
         flattened_size = None
@@ -557,13 +553,14 @@ class CNNGenome(object):
                     gene.biases = adapt_biases(gene.biases, expected_shape[0])
 
             elif isinstance(gene, CNNPoolGene):
+                # Update the pooling gene's input size based on the current spatial dimension.
+                gene.input_size = current_input_size
                 if i > 0:
                     prev_gene = self.layer_config[i - 1]
                     if isinstance(prev_gene, CNNConvGene):
                         gene.in_channels = prev_gene.out_channels
                     elif isinstance(prev_gene, CNNPoolGene):
                         gene.in_channels = prev_gene.in_channels
-
                 current_input_size = calculate_pool_output_size(
                     current_input_size, gene
                 )
@@ -619,10 +616,4 @@ class CNNGenome(object):
                 params = gene.input_size * gene.fc_layer_size + gene.fc_layer_size
                 total_params += params
 
-        return (
-            f"Genome Size Summary:\n"
-            f"  Conv Layers: {conv_count}\n"
-            f"  Pool Layers: {pool_count}\n"
-            f"  FC Layers: {fc_count}\n"
-            f"  Total Trainable Parameters: {total_params}"
-        )
+        return f"Conv: {conv_count}, Pool: {pool_count}, FC: {fc_count}, TTP: {total_params}"
