@@ -123,6 +123,11 @@ class CNNPoolGene(BaseGene):
         return gene
 
     def mutate(self, config):
+        # If the current input is too small for any pooling (i.e. < 2), fallback to no-op pooling.
+        if self.input_size < 2:
+            self.pool_size, self.stride = 1, 1
+            return
+
         valid_pool_params = []
         # Only consider pool sizes that are <= current input_size.
         for pool_size in config.pool_sizes:
@@ -132,14 +137,12 @@ class CNNPoolGene(BaseGene):
                 output_size = ((self.input_size - pool_size) // stride) + 1
                 if output_size > 0:
                     valid_pool_params.append((pool_size, stride))
-        print(f"[DEBUG] PoolGene.mutate: input_size={self.input_size}, valid_params={valid_pool_params}")
         if valid_pool_params:
             new_params = choice(valid_pool_params)
             if new_params != (self.pool_size, self.stride):
                 self.pool_size, self.stride = new_params
         else:
             # Fallback: use a no-op pooling.
-            print(f"[ERROR] No valid pool parameters for input_size {self.input_size}; fallback to (1,1)")
             self.pool_size, self.stride = 1, 1
 
         # Optionally mutate pool type.

@@ -104,6 +104,7 @@ def run(
     # Attach custom WeightStatsReporter
     weight_stats_reporter = WeightStatsReporter()
     p.add_reporter(weight_stats_reporter)
+
     # p.add_reporter(neat.Checkpointer(10))
 
     game_manager = GameManager(size=board_size)
@@ -169,11 +170,11 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 4
-    SHIP_SIZES = [2, 3]
-    CHROMOSOME = [(0, 0, 0), (1, 1, 0)]
-    NUM_GENERATIONS = 100
-    POPULATION_SIZE = 20
+    BOARD_SIZE = 3
+    SHIP_SIZES = [2]
+    CHROMOSOME = [(0, 0, 0)]
+    NUM_GENERATIONS = 20
+    POPULATION_SIZE = 50
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
     CROSSOVER_ARCHITECTURE = True
