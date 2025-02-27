@@ -9,6 +9,6 @@
         "size": 10
     },
     "evolution": {
-        "num_generations": 10
+        "num_generations": 50
     }
 } 

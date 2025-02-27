@@ -287,17 +287,8 @@ class NNSearch(nn.Module, Strategy):
         plt.show()
 
     def save_model(self, path):
-        print(f"Saving model to {path}")
         # Save the model
         torch.save(self.net.state_dict(), path)
-
-        # Verify the save by loading and comparing
-        saved_state = torch.load(path)
-        current_state = self.net.state_dict()
-
-        # Compare a few parameters to ensure they're different from previous saves
-        for key in list(current_state.keys())[:3]:  # Check first 3 layers
-            print(f"Layer {key} mean value: {current_state[key].mean().item():.6f}")
 
     def load_model(self, path):
         print(f"Loading model from {path}")
