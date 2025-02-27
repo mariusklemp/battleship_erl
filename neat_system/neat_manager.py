@@ -1,15 +1,16 @@
+import configparser
 import os
 import neat
 import tqdm
 from tqdm import tqdm
 
-from CNN_genome import CNNGenome
+from cnn_genome import CNNGenome
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
-from ai.mcts import MCTS
 import visualize
 from convolutional_neural_network import ConvolutionalNeuralNetwork
+from neat_system.weight_reporter import WeightStatsReporter
 
 
 class NEAT_Manager:
@@ -63,6 +64,7 @@ class NEAT_Manager:
             strategy="chromosome",
             chromosome=self.chromosome,
         )
+
         sum_move_count = 0
 
         for i in range(self.range_evaluations):
@@ -99,6 +101,9 @@ def run(
     p.add_reporter(neat.StdOutReporter(True))
     stats = neat.StatisticsReporter()
     p.add_reporter(stats)
+    # Attach custom WeightStatsReporter
+    weight_stats_reporter = WeightStatsReporter()
+    p.add_reporter(weight_stats_reporter)
     # p.add_reporter(neat.Checkpointer(10))
 
     game_manager = GameManager(size=board_size)
@@ -114,13 +119,49 @@ def run(
         game_manager,
     )
 
-    print("Config object as dictionary:")
-    print(config.__dict__)
+    p.run(manager.eval_genomes, gen)
 
-    winner = p.run(manager.eval_genomes, gen)
-
-    # Visualize the winner genome
+    visualize.visualize_hof(statistics=stats)
+    visualize.plot_weight_stats(weight_stats_reporter.get_weight_stats())
+    visualize.plot_species_weight_stats(weight_stats_reporter.get_species_weight_stats())
+    species_analysis = visualize.analyze_species_from_population(p.species)
+    visualize.plot_species_analysis(species_analysis)
+    visualize.visualize_species(stats)
     visualize.plot_stats(statistics=stats, best_possible=(board_size ** 2 - sum(ship_sizes)), ylog=False, view=True)
+    visualize.plot_fitness_boxplot(stats)
+
+
+def get_kernel_sizes(board_size):
+    # Use the board size if it's odd; otherwise, subtract 1 to get the largest odd
+    max_odd = board_size if board_size % 2 == 1 else board_size - 1
+    # Calculate a middle kernel size that’s also odd
+    mid = (1 + max_odd) // 2
+    if mid % 2 == 0:
+        mid += 1
+    # Remove duplicates (e.g., for board_size=3, 1 may appear twice)
+    return list(dict.fromkeys([1, mid, max_odd]))
+
+
+def get_strides(board_size):
+    # For strides, we’ll keep it simple: always include 1 and board_size//2
+    return list(dict.fromkeys([1, board_size // 2]))
+
+
+def get_paddings(board_size):
+    # For paddings, use 0 and board_size//4
+    return list(dict.fromkeys([0, board_size // 4]))
+
+
+def get_pool_sizes(board_size):
+    """Returns a list of valid pooling sizes, ensuring they fit within the board."""
+    max_pool = board_size if board_size % 2 == 0 else board_size - 1  # Largest even size
+    mid_pool = max(2, board_size // 2)  # Half the board, but at least 2
+    return list(dict.fromkeys([2, mid_pool, max_pool]))
+
+
+def get_pool_strides(board_size):
+    """Returns a list of valid pooling strides, ensuring valid downsampling."""
+    return list(dict.fromkeys([1, board_size // 2]))
 
 
 if __name__ == "__main__":
@@ -128,13 +169,46 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 3
-    SHIP_SIZES = [2]
-    NUM_GENERATIONS = 10
+    BOARD_SIZE = 4
+    SHIP_SIZES = [2, 3]
+    CHROMOSOME = [(0, 0, 0), (1, 1, 0)]
+    NUM_GENERATIONS = 100
+    POPULATION_SIZE = 20
     RANGE_EVALUATIONS = 5
-    MUTPB = 0.2
+    MUTATE_ARCHITECTURE = True
+    CROSSOVER_ARCHITECTURE = True
+    MUTATE_WEIGHTS = False
+    CROSSOVER_WEIGHTS = False
     # =======================================
 
+    # Read the existing config file
+    cp = configparser.ConfigParser()
+    cp.read(config_path)
+
+    # Update [NEAT] section values
+    cp['NEAT']['fitness_threshold'] = str(BOARD_SIZE ** 2 - sum(SHIP_SIZES))
+    cp['NEAT']['pop_size'] = str(POPULATION_SIZE)
+
+    # Update [CNNGenome] section values
+    cp['CNNGenome']['input_size'] = str(BOARD_SIZE)
+    cp['CNNGenome']['output_size'] = str(BOARD_SIZE ** 2)
+    cp['CNNGenome']['kernel_sizes'] = str(get_kernel_sizes(BOARD_SIZE))
+    cp['CNNGenome']['strides'] = str(get_strides(BOARD_SIZE))
+    cp['CNNGenome']['paddings'] = str(get_paddings(BOARD_SIZE))
+
+    cp['CNNGenome']['pool_sizes'] = str(get_pool_sizes(BOARD_SIZE))
+    cp['CNNGenome']['pool_strides'] = str(get_pool_strides(BOARD_SIZE))
+
+    cp['CNNGenome']['mutate_architecture'] = str(MUTATE_ARCHITECTURE)
+    cp['CNNGenome']['mutate_weights'] = str(MUTATE_WEIGHTS)
+    cp['CNNGenome']['crossover_architecture'] = str(CROSSOVER_ARCHITECTURE)
+    cp['CNNGenome']['crossover_weights'] = str(CROSSOVER_WEIGHTS)
+
+    # Write the updated config back to disk
+    with open(config_path, 'w') as f:
+        cp.write(f)
+
+    # Now load the NEAT configuration from the updated config file
     config = neat.Config(
         CNNGenome,
         neat.DefaultReproduction,
@@ -150,6 +224,6 @@ if __name__ == "__main__":
         ship_sizes=SHIP_SIZES,
         strategy_placement="custom",
         strategy_search="neat",
-        chromosome=[(0, 0, 0)],
+        chromosome=CHROMOSOME,
         range_evaluations=RANGE_EVALUATIONS,
     )

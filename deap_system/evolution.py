@@ -564,8 +564,8 @@ if __name__ == "__main__":
     BOARD_SIZE = 10
     SHIP_SIZES = [5, 4, 3, 2, 2]
     POPULATION_SIZE = 50
-    ELITE_SIZE = 0
-    NUM_GENERATIONS = 1000
+    ELITE_SIZE = 1
+    NUM_GENERATIONS = 100
     TOURNAMENT_SIZE = 3
     MUTPB = 0.2
     PLACING_POPULATION_SIZE = 5
