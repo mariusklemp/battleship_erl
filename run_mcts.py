@@ -212,9 +212,6 @@ def run_mcts_inner_loop(
 
     if config["replay_buffer"]["load_from_file"]:
         rbuf.load_from_file(file_path=config["replay_buffer"]["file_path"])
-        print("Loaded replay buffer from file. Length:", len(rbuf.data))
-
-    print(f"Training against {len(placement_agents)} placing agents")
 
     train_models(
         game_manager,

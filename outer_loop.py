@@ -1,6 +1,7 @@
 import json
 from tqdm import tqdm
 from deap_system.evolution import Evolution
+from deap_system.evolution_evaluator import EvolutionEvaluator
 from game_logic.search_agent import SearchAgent
 from ai.models import ANET
 from deap_system.search_metrics import SearchMetricsTracker
@@ -38,7 +39,7 @@ def set_nn_agent(i, layer_config, board_size, model_number):
         name=f"nn_{model_number}",
         lr=0.001,
     )
-    search_agent.strategy.load_model(path)
+    # search_agent.strategy.load_model(path)
     return search_agent
 
 
@@ -60,7 +61,7 @@ if __name__ == "__main__":
     # Load configurations
     mcts_config = load_config()
     evolution_config = load_evolution_config()
-    RUN_MCTS = False
+    RUN_MCTS = True
 
     # Load neural network configuration
     LAYER_CONFIG = json.load(open("ai/config.json"))
@@ -74,6 +75,9 @@ if __name__ == "__main__":
     NUM_GENERATIONS = evolution_config["evolution"]["num_generations"]
     TOURNAMENT_SIZE = evolution_config["placing_population"]["tournament_size"]
     MUTPB = evolution_config["placing_population"]["mutation_probability"]
+
+    # Number of games to run for each evaluation
+    NUM_EVALUATION_GAMES = 10
 
     environment = Evolution(
         board_size=BOARD_SIZE,
@@ -90,6 +94,13 @@ if __name__ == "__main__":
         BOARD_SIZE, SEARCH_POPULATION_SIZE, LAYER_CONFIG
     )
     search_metrics = SearchMetricsTracker(search_agents)
+
+    # Initialize the evolution evaluator for tracking performance against baseline opponents
+    evaluator = EvolutionEvaluator(
+        board_size=BOARD_SIZE,
+        ship_sizes=SHIP_SIZES,
+        num_evaluation_games=NUM_EVALUATION_GAMES,
+    )
 
     # Outer loop for generations of placing agents and search agents
     for gen in range(NUM_GENERATIONS):
@@ -120,6 +131,18 @@ if __name__ == "__main__":
                     sizes=SHIP_SIZES,
                     placement_agents=environment.pop_placing_agents,
                 )
+
+        # Evaluate agents against baseline opponents after each generation
+        print(
+            f"\nEvaluating agents against baseline opponents ({NUM_EVALUATION_GAMES} games each)..."
+        )
+        evaluator.evaluate_search_agents(search_agents, gen)
+        evaluator.evaluate_placement_agents(environment.hof.items, gen)
+
     # Plot metrics at the end
     environment.plot_metrics()
     search_metrics.plot_metrics()
+
+    # Plot evolution evaluation metrics
+    print("\nPlotting evolution evaluation metrics...")
+    evaluator.plot_metrics()
