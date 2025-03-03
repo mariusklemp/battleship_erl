@@ -1,10 +1,152 @@
 import pandas as pd
 import torch
-
 import networkx as nx
 import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle
 
 from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
+
+
+def plot_innovation_registry(innovation_registry):
+    """
+    Plots the global innovation registry sorted by innovation number.
+    Each innovation is represented as a box (with up to 10 per row) showing:
+      - Innovation number (in parentheses)
+      - Gene type
+      - Signature details
+    """
+    # Sort innovations by their number.
+    sorted_items = sorted(innovation_registry.items(), key=lambda item: item[1])
+    n = len(sorted_items)
+    max_cols = 10
+    nrows = (n + max_cols - 1) // max_cols
+
+    fig, ax = plt.subplots(figsize=(1.5 * max_cols, 3 * nrows))
+
+    # Define colors for each gene type.
+    color_map = {
+        "CNNConvGene": "#c2f0c2",  # pale green
+        "CNNPoolGene": "#c2e0f0",  # pale blue
+        "CNNFCGene": "#f0d9c2",  # pale orange
+    }
+
+    for i, ((gene_type, signature), innov_number) in enumerate(sorted_items):
+        col = i % max_cols
+        row = i // max_cols
+        # Plot rows from top to bottom.
+        y = nrows - row - 1
+        line1 = f"({innov_number})"
+        line2 = f"{gene_type}"
+        line3 = " | ".join(str(x) for x in signature)
+        text_str = f"{line1}\n{line2}\n{line3}"
+        face_color = color_map.get(gene_type, "#dddddd")
+        rect = Rectangle((col, y), 0.9, 1, facecolor=face_color, edgecolor="black")
+        ax.add_patch(rect)
+        ax.text(col + 0.45, y + 0.5, text_str, ha="center", va="center",
+                wrap=True, fontsize=9)
+
+    ax.set_xlim(0, max_cols)
+    ax.set_ylim(0, nrows)
+    ax.set_aspect("equal", adjustable="box")
+    ax.axis("off")
+    plt.title("Global Innovation Registry")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_genome(ax, genome, label, max_cols=5):
+    """
+    Plots the layers (genes) of a single genome in a fixed grid,
+    ensuring each gene box has the same size as in the innovation registry.
+    """
+    n = len(genome.layer_config)
+    nrows = (n + max_cols - 1) // max_cols  # total rows needed
+
+    color_map = {
+        "CNNConvGene": "#c2f0c2",  # pale green
+        "CNNPoolGene": "#c2e0f0",  # pale blue
+        "CNNFCGene": "#f0d9c2",  # pale orange
+    }
+
+    for i, gene in enumerate(genome.layer_config):
+        # Column and row within this grid
+        col = i % max_cols
+        row = i // max_cols
+
+        # We plot from top (row=0) to bottom (row=nrows-1),
+        # so we invert row by subtracting from nrows-1:
+        y = (nrows - 1) - row
+        x = col
+
+        gtype = gene.__class__.__name__ if hasattr(gene, "__class__") else "Unknown"
+        if gtype == "CNNConvGene":
+            gene_type = f"Conv {gene.key}"
+            details1 = f"k={gene.kernel_size}, s={gene.stride}, p={gene.padding}"
+            details2 = f"out={gene.out_channels}"
+        elif gtype == "CNNPoolGene":
+            gene_type = f"Pool {gene.key}"
+            details1 = f"size={gene.pool_size}, s={gene.stride}"
+            details2 = f"type={gene.pool_type}"
+        elif gtype == "CNNFCGene":
+            gene_type = f"FC {gene.key}"
+            details1 = f"size={gene.fc_layer_size}"
+            details2 = f"act={gene.activation}"
+        else:
+            gene_type = f"Unknown {gene.key}"
+            details1 = "???"
+            details2 = ""
+
+        status = "enabled" if gene.enabled else "disabled"
+        face_color = color_map.get(gtype, "#dddddd") if gene.enabled else "#dddddd"
+
+        # Each box is 0.9 wide and 1.0 tall, just like in your registry.
+        rect = Rectangle((x, y), 0.9, 1, facecolor=face_color, edgecolor="black")
+        ax.add_patch(rect)
+        text_str = f"{gene_type}\n{details1}\n{details2}\n{status}"
+        ax.text(x + 0.45, y + 0.5, text_str, ha="center", va="center",
+                wrap=True, fontsize=9)
+
+    # Force the axis to span exactly from 0..max_cols in X and 0..nrows in Y.
+    ax.set_xlim(0, max_cols)
+    ax.set_ylim(0, nrows)
+
+    # Keep each box square. This ensures the boxes remain the same physical size.
+    ax.set_aspect("equal", adjustable="box")
+
+    # Hide the axis lines/ticks.
+    ax.axis("off")
+
+    # Title for this genome.
+    ax.set_title(f"Genome ({genome.key}): {label}")
+
+
+def plot_multiple_genomes(genome_label_list, fig_title, max_cols=8):
+    """
+    Plots several genomes in subplots arranged vertically (one per row).
+    Each genome uses the same 'fixed-size' box approach.
+    """
+    n_genomes = len(genome_label_list)
+    nrows = n_genomes
+    ncols = 1
+
+    # Increase width & height to give enough space.
+    # The width of 1.5*max_cols matches your registry style;
+    # multiply the height to accommodate multiple genomes.
+    fig, axes = plt.subplots(nrows, ncols, figsize=(1.5 * max_cols, 3 * n_genomes))
+
+    # If only one genome, make `axes` iterable.
+    if n_genomes == 1:
+        axes = [axes]
+    else:
+        axes = list(axes)
+
+    # Plot each genome in its own subplot row.
+    for ax, (genome, label) in zip(axes, genome_label_list):
+        plot_genome(ax, genome, label, max_cols=max_cols)
+
+    plt.suptitle(fig_title, fontsize=14)
+    plt.tight_layout()
+    plt.show()
 
 
 def plot_species_weight_stats(species_weight_stats):
@@ -15,13 +157,11 @@ def plot_species_weight_stats(species_weight_stats):
       species_weight_stats: A dict with keys as generations and values as dicts
                             mapping species IDs to weight statistics (including 'mean').
     """
-    # Collect all species IDs that have appeared.
     all_species = set()
     for gen_stats in species_weight_stats.values():
         all_species.update(gen_stats.keys())
     all_species = sorted(list(all_species))
 
-    # Build a dictionary: for each species, record its mean weight for each generation.
     species_data = {sid: {} for sid in all_species}
     for gen, gen_stats in species_weight_stats.items():
         for sid in all_species:
@@ -30,7 +170,6 @@ def plot_species_weight_stats(species_weight_stats):
             else:
                 species_data[sid][gen] = np.nan
 
-    # Convert to a DataFrame: rows=generations, columns=species.
     df = pd.DataFrame({sid: pd.Series(data) for sid, data in species_data.items()})
     df.index.name = "Generation"
 
@@ -49,7 +188,7 @@ def plot_weight_stats(weight_stats):
     """
     Plots the mean, std deviation, min, and max values of weights over generations.
     """
-    df = pd.DataFrame(weight_stats).T  # Transpose so generations are rows
+    df = pd.DataFrame(weight_stats).T
     df.index.name = "Generation"
 
     plt.figure(figsize=(10, 6))
@@ -66,7 +205,6 @@ def plot_weight_stats(weight_stats):
 
 
 def plot_fitness_boxplot(stats):
-    # For each generation, collect all fitness values.
     fitness_data = []
     generations = []
     for gen_idx, gen_stats in enumerate(stats.generation_statistics):
@@ -86,14 +224,7 @@ def plot_fitness_boxplot(stats):
 
 
 def plot_species_sizes(stats):
-    """
-    Expects stats to be a StatisticsReporter object that contains species data.
-    Uses stats.get_species_sizes() to retrieve a list of species counts per generation.
-    """
-    print(stats)
-
-    species_counts = stats.get_species_sizes()  # e.g. returns a list of lists: one per generation
-    # Convert to a DataFrame for easier plotting
+    species_counts = stats.get_species_sizes()
     species_df = pd.DataFrame(species_counts)
     species_df.columns = [f"Species {i + 1}" for i in range(species_df.shape[1])]
     species_df.index.name = "Generation"
@@ -110,15 +241,9 @@ def plot_species_sizes(stats):
 
 
 def visualize_hof(statistics, hof_size=5):
-    """
-    Retrieves the top `hof_size` best genomes from the StatisticsReporter and
-    visualizes each one in a single figure using subplots.
-    """
     best_genomes = statistics.best_genomes(hof_size)
-    # Create a figure with hof_size subplots in one row.
     fig, axes = plt.subplots(1, hof_size, figsize=(5 * hof_size, 5))
 
-    # If there's only one subplot, wrap it in a list to be consistent.
     if hof_size == 1:
         axes = [axes]
 
@@ -131,11 +256,10 @@ def visualize_hof(statistics, hof_size=5):
 
 
 def visualize_genome(genome, ax, title="Genome Architecture"):
-    """
-    Visualizes a single genome on the provided axis.
-    """
     G = nx.DiGraph()
-    for i, gene in enumerate(genome.layer_config):
+    # Only include active genes
+    active_genes = [gene for gene in genome.layer_config if getattr(gene, "enabled", True)]
+    for i, gene in enumerate(active_genes):
         if isinstance(gene, CNNConvGene):
             label = f"Conv: k={gene.kernel_size}\nout={gene.out_channels}"
         elif isinstance(gene, CNNPoolGene):
@@ -156,33 +280,20 @@ def visualize_genome(genome, ax, title="Genome Architecture"):
 
 
 def visualize_species(statistics):
-    """
-    Visualizes the number of individuals per species over generations.
-    Uses the get_species_sizes() method from the statistics object to create a DataFrame.
-    Only shows lines where the species existed.
-    """
-    # Get species counts as a list of lists: one list per generation.
     species_counts = statistics.get_species_sizes()
-    # Convert to a DataFrame: each row is a generation, each column a species.
     species_df = pd.DataFrame(species_counts)
     species_df.columns = [f"Species {i + 1}" for i in range(species_df.shape[1])]
     species_df.index.name = "Generation"
 
-    # For each species, replace counts with NaN for generations before its creation and after extinction.
     for col in species_df.columns:
-        # Get generations where species count is > 0.
         nonzero = species_df[col] > 0
         if nonzero.any():
-            # The first generation the species appears
             first_gen = species_df.index[nonzero.argmax()]
-            # The last generation it appears (using reversed series)
             last_gen = species_df.index[::-1][nonzero[::-1].argmax()]
-            # Set values before first_gen and after last_gen to NaN.
             species_df.loc[species_df.index < first_gen, col] = np.nan
             species_df.loc[species_df.index > last_gen, col] = np.nan
 
     plt.figure(figsize=(10, 6))
-    # Plot a line for each species.
     for col in species_df.columns:
         plt.plot(species_df.index, species_df[col], marker='o', label=col)
     plt.xlabel("Generation")
@@ -194,48 +305,29 @@ def visualize_species(statistics):
 
 
 def plot_stats(statistics, best_possible, ylog=False, view=False):
-    """
-    Plots the population's average, median, and standard deviation of fitness,
-    along with the best fitness and the average best fitness per species,
-    plus a horizontal line for the best possible fitness.
-
-    Parameters:
-        statistics: The NEAT statistics object.
-        best_possible: The best fitness possible.
-        ylog: If True, use a logarithmic scale for y.
-        view: If True, display the plot.
-    """
-    # Determine the number of generations based on the most_fit_genomes list.
     generations = list(range(len(statistics.most_fit_genomes)))
 
-    # Get average, median, and stdev fitness per generation.
     avg_fitness_list = statistics.get_fitness_mean()
     median_fitness_list = statistics.get_fitness_median()
     stdev_fitness_list = statistics.get_fitness_stdev()
 
-    # Convert to numpy arrays (handle scalars if needed).
     avg_fitness = np.array(avg_fitness_list) if isinstance(avg_fitness_list, list) else np.array([avg_fitness_list])
     median_fitness = np.array(median_fitness_list) if isinstance(median_fitness_list, list) else np.array(
         [median_fitness_list])
     stdev_fitness = np.array(stdev_fitness_list) if isinstance(stdev_fitness_list, list) else np.array(
         [stdev_fitness_list])
 
-    # Extract best fitness from the most fit genome per generation.
     best_fitness = [genome.fitness for genome in statistics.most_fit_genomes]
 
-    # Compute average best fitness per species per generation.
     avg_best_species_fitness = []
     for gen_stats in statistics.generation_statistics:
         best_species_fitness = []
-        # For each species, find the best fitness.
         for species_id, genomes_fitness_dict in gen_stats.items():
-            if genomes_fitness_dict:  # Only consider species with members.
+            if genomes_fitness_dict:
                 best_fit = max(genomes_fitness_dict.values())
                 best_species_fitness.append(best_fit)
-        # Compute the average for this generation (or 0 if empty).
         avg_best_species_fitness.append(np.mean(best_species_fitness) if best_species_fitness else 0)
 
-    # Ensure that all data series have the same length.
     min_length = min(len(generations), len(avg_fitness), len(best_fitness), len(avg_best_species_fitness),
                      len(median_fitness), len(stdev_fitness))
     generations = generations[:min_length]
@@ -245,7 +337,6 @@ def plot_stats(statistics, best_possible, ylog=False, view=False):
     median_fitness = median_fitness[:min_length]
     stdev_fitness = stdev_fitness[:min_length]
 
-    # Plot the data.
     plt.figure(figsize=(10, 6))
     plt.plot(generations, avg_fitness, "b-", marker='o', label="Average Fitness")
     plt.plot(generations, best_fitness, "g-", marker='o', label="Best Fitness")
@@ -268,35 +359,32 @@ def plot_stats(statistics, best_possible, ylog=False, view=False):
 
 
 def analyze_species_from_population(species):
-    """
-    Computes architectural averages for each species from the final population.
-
-    Returns a dictionary keyed by species ID with:
-      - avg_conv_layers: average number of convolutional layers.
-      - avg_fc_layers: average number of fully connected layers.
-      - avg_weight_mean: average (across layers and genomes) of the mean weight values.
-    """
     species_analysis = {}
     for species_id, species_obj in species.species.items():
         conv_counts = []
+        pool_counts = []
         fc_counts = []
         weight_means = []
         for genome in species_obj.members.values():
-            # Count layers in the genome.
-            conv_layers = sum(1 for gene in genome.layer_config if hasattr(gene, 'kernel_size'))
-            fc_layers = sum(1 for gene in genome.layer_config if hasattr(gene, 'fc_layer_size'))
+            # Count only enabled genes.
+            conv_layers = sum(1 for gene in genome.layer_config
+                              if isinstance(gene, CNNConvGene) and getattr(gene, "enabled", True))
+            pool_layers = sum(1 for gene in genome.layer_config
+                              if isinstance(gene, CNNPoolGene) and getattr(gene, "enabled", True))
+            fc_layers = sum(1 for gene in genome.layer_config
+                            if isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True))
             conv_counts.append(conv_layers)
+            pool_counts.append(pool_layers)
             fc_counts.append(fc_layers)
-            # For weights, compute the mean over each layer then average them.
             layer_weight_means = [
                 gene.weights.mean() for gene in genome.layer_config
-                if hasattr(gene, 'weights')
+                if hasattr(gene, 'weights') and getattr(gene, "enabled", True)
             ]
             if layer_weight_means:
                 weight_means.append(np.mean(layer_weight_means))
-        # Compute species averages.
         species_analysis[species_id] = {
             'avg_conv_layers': np.mean(conv_counts) if conv_counts else 0,
+            'avg_pool_layers': np.mean(pool_counts) if pool_counts else 0,
             'avg_fc_layers': np.mean(fc_counts) if fc_counts else 0,
             'avg_weight_mean': np.mean(weight_means) if weight_means else 0,
         }
@@ -304,27 +392,23 @@ def analyze_species_from_population(species):
 
 
 def plot_species_analysis(species_analysis):
-    """
-      Plots a stacked bar chart where for each species the average number of convolutional layers
-      and fully connected layers are shown in one bar (stacked).
-    """
-    # Sorted species IDs.
     species_ids = sorted(species_analysis.keys())
     avg_conv_layers = [species_analysis[sid]['avg_conv_layers'] for sid in species_ids]
+    avg_pool_layers = [species_analysis[sid]['avg_pool_layers'] for sid in species_ids]
     avg_fc_layers = [species_analysis[sid]['avg_fc_layers'] for sid in species_ids]
 
     x = np.arange(len(species_ids))
-    width = 0.6  # width of the bars
+    width = 0.6
 
     plt.figure(figsize=(10, 6))
-    # Plot conv layers at the bottom.
     p1 = plt.bar(x, avg_conv_layers, width, label='Avg Conv Layers', color='skyblue')
-    # Stack fc layers on top.
-    p2 = plt.bar(x, avg_fc_layers, width, bottom=avg_conv_layers, label='Avg FC Layers', color='lightgreen')
+    p2 = plt.bar(x, avg_pool_layers, width, bottom=avg_conv_layers, label='Avg Pool Layers', color='lightcoral')
+    p3 = plt.bar(x, avg_fc_layers, width, bottom=np.array(avg_conv_layers) + np.array(avg_pool_layers),
+                 label='Avg FC Layers', color='lightgreen')
 
     plt.xlabel("Species ID")
     plt.ylabel("Average Number of Layers")
-    plt.title("Stacked Layers (Conv + FC) per Species")
+    plt.title("Stacked Layers (Conv + Pool + FC) per Species")
     plt.xticks(x, [f"Species {sid}" for sid in species_ids])
     plt.legend()
     plt.tight_layout()

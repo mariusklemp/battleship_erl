@@ -130,6 +130,14 @@ def run(
     visualize.visualize_species(stats)
     visualize.plot_stats(statistics=stats, best_possible=(board_size ** 2 - sum(ship_sizes)), ylog=False, view=True)
     visualize.plot_fitness_boxplot(stats)
+    from neat_system.cnn_layers import global_innovation_registry
+    visualize.plot_innovation_registry(global_innovation_registry)
+
+    best_genomes = stats.best_genomes(5)
+    genomes = []
+    for genome in best_genomes:
+        genomes.append((genome, ""))
+    visualize.plot_multiple_genomes(genomes, "Best Genomes")
 
 
 def get_kernel_sizes(board_size):
@@ -170,15 +178,15 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 3
-    SHIP_SIZES = [2]
-    CHROMOSOME = [(0, 0, 0)]
-    NUM_GENERATIONS = 20
+    BOARD_SIZE = 5
+    SHIP_SIZES = [2, 3]
+    CHROMOSOME = [(0, 0, 0), (1, 1, 0)]
+    NUM_GENERATIONS = 200
     POPULATION_SIZE = 50
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
     CROSSOVER_ARCHITECTURE = True
-    MUTATE_WEIGHTS = False
+    MUTATE_WEIGHTS = True
     CROSSOVER_WEIGHTS = False
     # =======================================
 

@@ -1,8 +1,162 @@
-from random import choice, randint
+import copy
+from random import random
 
-import networkx as nx
 import numpy as np
 from scipy.stats import wasserstein_distance, skew, kurtosis
+
+
+# ============================================================================
+# Helper functions to crossover between genes
+# ============================================================================
+def _crossover_by_key(config, genes1, genes2, fitness1, fitness2):
+    """
+    Given two lists of genes (sorted by key), performs NEAT-style crossover:
+      - For matching genes (same key): combine weights and biases from both parents.
+        If either gene is disabled, the child gene is disabled with 75% probability.
+      - For disjoint/excess genes: inherit from the fitter parent.
+    Returns a new list of child genes (copies).
+    """
+    child_genes = []
+
+    # Sort parents' genes by key.
+    g1 = sorted(genes1, key=lambda x: x.key)
+    g2 = sorted(genes2, key=lambda x: x.key)
+
+    i, j = 0, 0
+    while i < len(g1) and j < len(g2):
+        if g1[i].key == g2[j].key:
+            gene1, gene2 = g1[i], g2[j]
+            chosen_gene = copy.deepcopy(gene1)
+            # Use helper to combine weights and biases.
+            if config.crossover_weights:
+                new_weights, new_biases = crossover_gene_parameters(gene1, gene2)
+                if new_weights is not None:
+                    chosen_gene.weights = new_weights
+                if new_biases is not None:
+                    chosen_gene.biases = new_biases
+
+            # If either parent's gene is disabled, disable the child's gene with 75% probability.
+            if (not gene1.enabled or not gene2.enabled) and random() < 0.75:
+                chosen_gene.enabled = False
+            else:
+                chosen_gene.enabled = True
+
+            child_genes.append(chosen_gene)
+            i += 1
+            j += 1
+        elif g1[i].key < g2[j].key:
+            # Disjoint gene from g1.
+            if fitness1 >= fitness2:
+                child_genes.append(copy.deepcopy(g1[i]))
+            i += 1
+        else:
+            # Disjoint gene from g2.
+            if fitness2 >= fitness1:
+                child_genes.append(copy.deepcopy(g2[j]))
+            j += 1
+
+    # Inherit excess genes from the fitter parent.
+    while i < len(g1):
+        if fitness1 >= fitness2:
+            child_genes.append(copy.deepcopy(g1[i]))
+        i += 1
+
+    while j < len(g2):
+        if fitness2 >= fitness1:
+            child_genes.append(copy.deepcopy(g2[j]))
+        j += 1
+
+    return child_genes
+
+
+def crossover_gene_parameters(gene1, gene2):
+    """
+    Combine the weights and biases of two matching genes.
+    Returns new_weights and new_biases.
+
+    If the shapes differ, adapt gene2's parameters to gene1's shape before combining.
+    """
+    new_weights = None
+    new_biases = None
+
+    # Handle weights:
+    if hasattr(gene1, 'weights') and hasattr(gene2, 'weights'):
+        if gene1.weights.shape == gene2.weights.shape:
+            new_weights = (gene1.weights + gene2.weights) / 2.0
+        else:
+            # If shapes differ, adapt gene2's weights to gene1's shape.
+            if gene1.__class__.__name__ == "CNNConvGene":
+                adapted = adapt_conv_weights(gene2.weights, gene1.weights.shape)
+            elif gene1.__class__.__name__ == "CNNFCGene":
+                adapted = adapt_fc_weights(gene2.weights, gene1.weights.shape)
+            else:
+                # Fallback: if no adapter is available, use gene1's weights shape.
+                adapted = gene2.weights
+            new_weights = (gene1.weights + adapted) / 2.0
+
+    # Handle biases:
+    if hasattr(gene1, 'biases') and hasattr(gene2, 'biases'):
+        if gene1.biases.shape == gene2.biases.shape:
+            new_biases = (gene1.biases + gene2.biases) / 2.0
+        else:
+            adapted = adapt_biases(gene2.biases, gene1.biases.shape[0])
+            new_biases = (gene1.biases + adapted) / 2.0
+
+    return new_weights, new_biases
+
+
+# ============================================================================
+# Helper functions to compute distance between genes
+# ============================================================================
+def compute_gene_type_distance(self_genes, other_genes, gene_distance_func, config,
+                               excess_coeff, disjoint_coeff, weight_coeff):
+    """
+    Computes the distance for a given gene type between two genomes,
+    distinguishing excess and disjoint genes.
+    """
+    # If both sets are empty, distance is zero.
+    if not self_genes and not other_genes:
+        return 0.0
+
+    # Maximum innovation numbers in each genome.
+    max_self_innov = max(self_genes.keys()) if self_genes else 0
+    max_other_innov = max(other_genes.keys()) if other_genes else 0
+
+    matching_distance_sum = 0.0
+    matching_count = 0
+    excess = 0
+    disjoint = 0
+
+    # Consider all gene keys present in either genome.
+    all_keys = set(self_genes.keys()).union(other_genes.keys())
+    for key in all_keys:
+        gene_self = self_genes.get(key)
+        gene_other = other_genes.get(key)
+        if gene_self is not None and gene_other is not None:
+            # Matching (homologous) genes.
+            matching_distance_sum += gene_distance_func(gene_self, gene_other, config)
+            matching_count += 1
+        else:
+            # Gene present in only one genome.
+            if gene_self is None:
+                # Gene missing in self.
+                if key > max_self_innov:
+                    excess += 1
+                else:
+                    disjoint += 1
+            else:
+                # Gene missing in other.
+                if key > max_other_innov:
+                    excess += 1
+                else:
+                    disjoint += 1
+
+    avg_weight_diff = matching_distance_sum / matching_count if matching_count > 0 else 0.0
+    # Normalize by the number of genes (use 1 if genomes are very small).
+    N = max(len(self_genes), len(other_genes))
+    N = N if N >= 20 else 1
+
+    return (excess_coeff * excess) / N + (disjoint_coeff * disjoint) / N + (weight_coeff * avg_weight_diff)
 
 
 # ============================================================================
@@ -12,19 +166,23 @@ from scipy.stats import wasserstein_distance, skew, kurtosis
 def _mutate_weights_conv(conv_gene, weight_mutate_rate, weight_mutate_power, weight_replace_rate,
                          weight_min_value, weight_max_value, config):
     # Mutate weights and biases using the helper.
-    conv_gene.weights = _mutate_array(conv_gene.weights, weight_mutate_rate, weight_mutate_power,
-                                      weight_replace_rate, weight_min_value, weight_max_value, config)
-    conv_gene.biases = _mutate_array(conv_gene.biases, weight_mutate_rate, weight_mutate_power,
-                                     weight_replace_rate, weight_min_value, weight_max_value, config)
+    weights = _mutate_array(conv_gene.weights, weight_mutate_rate, weight_mutate_power,
+                            weight_replace_rate, weight_min_value, weight_max_value, config)
+    biases = _mutate_array(conv_gene.biases, weight_mutate_rate, weight_mutate_power,
+                           weight_replace_rate, weight_min_value, weight_max_value, config)
+
+    return weights, biases
 
 
 def _mutate_weights_fc(fc_gene, weight_mutate_rate, weight_mutate_power, weight_replace_rate,
                        weight_min_value, weight_max_value, config):
     # Mutate weights and biases using the same helper.
-    fc_gene.weights = _mutate_array(fc_gene.weights, weight_mutate_rate, weight_mutate_power,
-                                    weight_replace_rate, weight_min_value, weight_max_value, config)
-    fc_gene.biases = _mutate_array(fc_gene.biases, weight_mutate_rate, weight_mutate_power,
-                                   weight_replace_rate, weight_min_value, weight_max_value, config)
+    weights = _mutate_array(fc_gene.weights, weight_mutate_rate, weight_mutate_power,
+                            weight_replace_rate, weight_min_value, weight_max_value, config)
+    biases = _mutate_array(fc_gene.biases, weight_mutate_rate, weight_mutate_power,
+                           weight_replace_rate, weight_min_value, weight_max_value, config)
+
+    return weights, biases
 
 
 # ============================================================================
@@ -137,138 +295,8 @@ def adapt_biases(old_biases, new_length):
 
 
 # ============================================================================
-# Helper functions to crossover weights and biases.
-# ============================================================================
-
-def _crossover_matrix(m1, m2, adapt_func, target_shape):
-    """
-    Performs element-wise crossover of two matrices.
-    If shapes differ, adapt m2 to target_shape.
-    """
-    # Ensure m2 has the same shape as target (assume m1 is already target_shape)
-    if m2.shape != target_shape:
-        m2 = adapt_func(m2, target_shape)
-    mask = np.random.rand(*target_shape) < 0.5
-    return np.where(mask, m1, m2)
-
-
-def _crossover_vector(v1, v2, target_length):
-    """
-    Performs element-wise crossover of two vectors.
-    If lengths differ, adapt v2.
-    """
-    if v2.shape[0] != target_length:
-        v2 = np.random.uniform(v1.min(), v1.max(), size=(target_length,))
-    mask = np.random.rand(target_length) < 0.5
-    return np.where(mask, v1, v2)
-
-
-# ============================================================================
 # Helper functions to calculate distances between networks.
 # ============================================================================
-
-def node_cost(n1, n2):
-    """
-    Compute a substitution cost between two nodes (layer attributes).
-    """
-    if n1.get('type') != n2.get('type'):
-        return 1.0  # maximum penalty for mismatched types
-
-    cost = 0.0
-
-    # For convolutional layers:
-    if n1.get('type') == 'conv':
-        cost += abs(n1.get('kernel_size', 0) - n2.get('kernel_size', 0)) / max(n1.get('kernel_size', 1),
-                                                                               n2.get('kernel_size', 1))
-        cost += abs(n1.get('stride', 0) - n2.get('stride', 0)) / max(n1.get('stride', 1), n2.get('stride', 1))
-
-        # Handle padding specially to avoid division by zero
-        pad1 = n1.get('padding', 0)
-        pad2 = n2.get('padding', 0)
-        if pad1 == 0 and pad2 == 0:
-            diff_padding = 0.0
-        else:
-            diff_padding = abs(pad1 - pad2) / max(pad1, pad2)
-        cost += diff_padding
-
-        cost += abs(n1.get('out_channels', 0) - n2.get('out_channels', 0)) / max(n1.get('out_channels', 1),
-                                                                                 n2.get('out_channels', 1))
-        cost += abs(n1.get('in_channels', 0) - n2.get('in_channels', 0)) / max(n1.get('in_channels', 1),
-                                                                               n2.get('in_channels', 1))
-        cost += abs(n1.get('input_size', 0) - n2.get('input_size', 0)) / max(n1.get('input_size', 1),
-                                                                             n2.get('input_size', 1))
-
-    # For fully-connected layers:
-    elif n1.get('type') == 'fc':
-        cost += abs(n1.get('fc_layer_size', 0) - n2.get('fc_layer_size', 0)) / max(n1.get('fc_layer_size', 1),
-                                                                                   n2.get('fc_layer_size', 1))
-        cost += abs(n1.get('input_size', 0) - n2.get('input_size', 0)) / max(n1.get('input_size', 1),
-                                                                             n2.get('input_size', 1))
-
-    # Compare activation functions: if they differ, add a fixed penalty.
-    if n1.get('activation') != n2.get('activation'):
-        cost += 1.0
-
-    return cost
-
-
-def build_architecture_graph(layer_config):
-    from neat_system.cnn_genome import CNNConvGene, CNNPoolGene, CNNFCGene
-    """
-    Build a directed graph representation from a list of layer genes.
-    Each gene is converted to a node with attributes.
-    """
-    G = nx.DiGraph()
-    for i, gene in enumerate(layer_config):
-        attr = {}
-        if isinstance(gene, CNNConvGene):
-            attr['type'] = 'conv'
-            attr['kernel_size'] = gene.kernel_size
-            attr['stride'] = gene.stride
-            attr['padding'] = gene.padding
-            attr['out_channels'] = gene.out_channels
-            attr['in_channels'] = gene.in_channels
-            attr['input_size'] = gene.input_size
-            attr['activation'] = gene.activation
-        elif isinstance(gene, CNNPoolGene):
-            attr['type'] = 'pool'
-            attr['pool_size'] = gene.pool_size
-            attr['stride'] = gene.stride
-            attr['pool_type'] = gene.pool_type
-            attr['in_channels'] = gene.in_channels
-            attr['input_size'] = gene.input_size
-        elif isinstance(gene, CNNFCGene):
-            attr['type'] = 'fc'
-            attr['fc_layer_size'] = gene.fc_layer_size
-            attr['input_size'] = gene.input_size
-            attr['activation'] = gene.activation
-        else:
-            attr['type'] = 'unknown'
-        G.add_node(i, **attr)
-        if i > 0:
-            G.add_edge(i - 1, i)
-    return G
-
-
-def graph_architecture_distance(net1, net2):
-    """
-    Compute a graph-based architecture distance between two networks by building
-    graphs from their layer_config and computing an approximate graph edit distance.
-    """
-    G1 = build_architecture_graph(net1.layer_config)
-    G2 = build_architecture_graph(net2.layer_config)
-
-    ged = nx.graph_edit_distance(
-        G1, G2,
-        node_subst_cost=lambda n1, n2: node_cost(n1, n2),
-        node_del_cost=lambda u: 1.0,
-        node_ins_cost=lambda u: 1.0
-    )
-    # In case ged is None, fall back to the difference in node count.
-    if ged is None:
-        ged = abs(len(G1.nodes()) - len(G2.nodes()))
-    return ged
-
 
 def weight_distribution_distance(weights1, weights2,
                                  alpha, beta, gamma, delta,
@@ -318,71 +346,30 @@ def weight_distribution_distance(weights1, weights2,
     return wd_contrib, skew_contrib, kurt_contrib, quant_contrib, combined_distance
 
 
-def connection_distance(net1, net2, alpha=1.5, beta=0.3, gamma=0.05, delta=1.5):
+def connection_distance(g1, g2, alpha=1.5, beta=0.3, gamma=0.05, delta=1.5):
     """
     Compute a connection distance between two networks based on weight distributions.
     Prints the contribution percentages of Wasserstein, skewness, kurtosis, and quantiles.
     """
-    layers1 = net1.layer_config
-    layers2 = net2.layer_config
-    n = min(len(layers1), len(layers2))
+
     total_wd, total_skew, total_kurt, total_quant, total_distance = 0, 0, 0, 0, 0
-    count = 0
 
-    for i in range(n):
-        g1, g2 = layers1[i], layers2[i]
+    wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
+        g1.weights, g2.weights, alpha, beta, gamma, delta
+    )
+    total_wd += wd
+    total_skew += skew_c
+    total_kurt += kurt_c
+    total_quant += quant_c
+    total_distance += combined
 
-        if hasattr(g1, 'weights') and hasattr(g2, 'weights'):
-            try:
-                wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
-                    g1.weights, g2.weights, alpha, beta, gamma, delta
-                )
-                total_wd += wd
-                total_skew += skew_c
-                total_kurt += kurt_c
-                total_quant += quant_c
-                total_distance += combined
-            except Exception:
-                total_distance += 1.0  # Fallback penalty
-            count += 1
-
-        if hasattr(g1, 'biases') and hasattr(g2, 'biases'):
-            try:
-                wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
-                    g1.biases, g2.biases, alpha, beta, gamma, delta
-                )
-                total_wd += wd
-                total_skew += skew_c
-                total_kurt += kurt_c
-                total_quant += quant_c
-                total_distance += combined
-            except Exception:
-                total_distance += 1.0
-            count += 1
-
-    if count > 0:
-        total_distance /= count
-        total_wd /= count
-        total_skew /= count
-        total_kurt /= count
-        total_quant /= count
-
-    # Compute contribution percentages
-    total_sum = total_wd + total_skew + total_kurt + total_quant
-    if total_sum > 0:
-        wd_pct = total_wd / total_sum * 100
-        skew_pct = total_skew / total_sum * 100
-        kurt_pct = total_kurt / total_sum * 100
-        quant_pct = total_quant / total_sum * 100
-    else:
-        wd_pct = skew_pct = kurt_pct = quant_pct = 0
-
-    # Print detailed breakdown
-    # print("\n🔹 **Distance Breakdown**:")
-    # print(f"  Wasserstein: {wd_pct:.2f}% ({total_wd:.4f})")
-    # print(f"  Skewness:    {skew_pct:.2f}% ({total_skew:.4f})")
-    # print(f"  Kurtosis:    {kurt_pct:.2f}% ({total_kurt:.4f})")
-    # print(f"  Quantiles:   {quant_pct:.2f}% ({total_quant:.4f})")
-    # print(f"  => **Combined: {total_distance:.4f}**\n")
+    wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
+        g1.biases, g2.biases, alpha, beta, gamma, delta
+    )
+    total_wd += wd
+    total_skew += skew_c
+    total_kurt += kurt_c
+    total_quant += quant_c
+    total_distance += combined
 
     return total_distance

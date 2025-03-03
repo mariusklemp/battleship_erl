@@ -1,14 +1,14 @@
 import copy
-import time
 from random import choice, random, randint
 from neat.config import ConfigParameter, write_pretty_params
 
+import visualize
 from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
-from neat_system.helpers import (graph_architecture_distance, connection_distance,
+from neat_system.helpers import (
                                  adapt_conv_weights, adapt_biases, adapt_fc_weights,
-                                 _crossover_vector, _crossover_matrix, _mutate_array,
                                  calculate_pool_output_size, calculate_conv_output_size,
-                                 _mutate_weights_conv, _mutate_weights_fc)
+                                 compute_gene_type_distance,
+                                 _crossover_by_key)
 
 
 class CNNGenomeConfig(object):
@@ -39,10 +39,13 @@ class CNNGenomeConfig(object):
         ConfigParameter("layer_add_prob", float),
         ConfigParameter("layer_delete_prob", float),
         ConfigParameter("conv_params_mutate_prob", float),
-        ConfigParameter("conv_output_mutate_prob", float),
+        ConfigParameter("pool_params_mutate_prob", float),
+        ConfigParameter("fc_params_mutate_prob", float),
         ConfigParameter("architecture_mutation_prob", float),
         ConfigParameter("compatibility_topology_coefficient", float),
         ConfigParameter("compatibility_weight_coefficient", float),
+        ConfigParameter("compatibility_disjoint_coefficient", float),
+        ConfigParameter("compatibility_excess_coefficient", float),
         ConfigParameter("weight_init_mean", float),
         ConfigParameter("weight_init_stdev", float),
         ConfigParameter("weight_init_type", str),
@@ -122,6 +125,7 @@ class CNNGenome(object):
     Represents a CNN genome composed of an ordered list of layer genes (convolutional,
     pooling, and fully connected). The genome also maintains a fitness value.
     """
+
     @classmethod
     def parse_config(cls, param_dict):
         """
@@ -194,18 +198,15 @@ class CNNGenome(object):
 
     def mutate(self, config):
         """
-        Mutate the genome architecture and parameters. This may involve adding or removing layers
-        and mutating each layer gene.
-
-        :param config: CNNGenomeConfig instance.
+        Mutate the genome architecture and parameters.
         """
-        # print('DOING MUTATE')
-        # print(self.layer_config)
+        # Capture a snapshot before any mutation.
+        snapshot_before = copy.deepcopy(self)
+
         # --- Architecture Mutation Phase ---
         if config.mutate_architecture:
             # Possibly add a new convolutional layer.
             if random() < config.layer_add_prob:
-                # print('ADDING CONV')
                 current_input_size = config.input_size
                 in_channels = config.input_channels
                 for gene in self.layer_config:
@@ -222,7 +223,6 @@ class CNNGenome(object):
 
             # Possibly add a new pooling layer.
             if random() < config.pool_layer_add_prob:
-                # print('ADDING POOL')
                 current_spatial_size = config.input_size
                 for gene in self.layer_config:
                     if isinstance(gene, CNNConvGene):
@@ -241,7 +241,6 @@ class CNNGenome(object):
 
             # Possibly add a new fully connected layer.
             if random() < config.layer_add_prob and any(isinstance(g, CNNConvGene) for g in self.layer_config):
-                # print('ADDING FC')
                 conv_genes = [g for g in self.layer_config if isinstance(g, CNNConvGene)]
                 last_conv_gene = conv_genes[-1]
                 current_input_size = config.input_size
@@ -255,163 +254,133 @@ class CNNGenome(object):
 
             # Possibly remove a layer.
             if random() < config.layer_delete_prob and len(self.layer_config) > 1:
-                fc_genes = [gene for gene in self.layer_config if isinstance(gene, CNNFCGene)]
-                if len(fc_genes) > 1 or not isinstance(self.layer_config[-1], CNNFCGene):
-                    # print('DELETING')
-                    self.layer_config.pop()
+                active_fc = [gene for gene in self.layer_config if
+                             isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True)]
+                if len(active_fc) > 1 or not isinstance(self.layer_config[-1], CNNFCGene):
+                    gene_to_disable = self.layer_config[-1]
+                    gene_to_disable.enabled = False
 
             # Possibly remove a pooling layer.
             if random() < config.pool_layer_delete_prob:
                 pool_layers = [g for g in self.layer_config if isinstance(g, CNNPoolGene)]
                 if pool_layers:
-                    # print('DELETING POOL')
-                    self.layer_config.remove(choice(pool_layers))
-
-            # print('BEFORE adjusting layer sizes')
-            self.enforce_valid_ordering()
-            # print(self.layer_config)
-            self._adjust_layer_sizes(config)
-            # print('AFTER adjusting layer sizes')
-            # print(self.layer_config)
-
-            # --- Mutate each gene ---
-            for gene in self.layer_config:
-                self._adjust_layer_sizes(config)
-                gene.mutate(config)
-
-        # --- Weight Mutation Phase (if enabled) ---
-        if config.mutate_weights:
-            for i, gene in enumerate(self.layer_config):
-                if isinstance(gene, CNNConvGene):
-                    _mutate_weights_conv(gene,
-                                         config.weight_mutate_rate,
-                                         config.weight_mutate_power,
-                                         config.weight_replace_rate,
-                                         config.weight_min_value,
-                                         config.weight_max_value,
-                                         config)
-                elif isinstance(gene, CNNFCGene):
-                    _mutate_weights_fc(gene,
-                                       config.weight_mutate_rate,
-                                       config.weight_mutate_power,
-                                       config.weight_replace_rate,
-                                       config.weight_min_value,
-                                       config.weight_max_value,
-                                       config)
+                    gene_to_disable = choice(pool_layers)
+                    gene_to_disable.enabled = False
 
         self.enforce_valid_ordering()
         self._adjust_layer_sizes(config)
-        # print('AFTER MUTATE')
-        # print(self.layer_config)
+        snapshot_arch_done = copy.deepcopy(self)  # Snapshot after architecture mutations
+
+        # --- Parameter Mutation Phase ---
+        new_layer_config = []
+        for gene in self.layer_config:
+            mutated_gene = gene.mutate(config)
+            new_layer_config.append(mutated_gene)
+        self.layer_config = new_layer_config
+        self.enforce_valid_ordering()
+        self._adjust_layer_sizes(config)
+        snapshot_after = copy.deepcopy(self)  # Snapshot after all mutations
+
+        # Plot all snapshots in one figure.
+        genome_steps = [
+            (snapshot_before, "Before mutate (add, remove)"),
+            (snapshot_arch_done, "Before mutate params"),
+            (snapshot_after, "After mutate")
+        ]
+        # visualize.plot_multiple_genomes(genome_steps, "Mutation Steps")
 
     def configure_crossover(self, genome1, genome2, config):
         """
-        Perform crossover between two genomes to produce a new genome.
-
-        :param genome1: Parent genome 1.
-        :param genome2: Parent genome 2.
-        :param config: CNNGenomeConfig instance.
+        Perform a NEAT-style crossover between two genomes to produce a new genome.
+        If crossover is turned off, simply use the fitter parent.
         """
-        start = time.perf_counter()
-
-        # print('DOING CROSSOVER')
-        # print(genome1.layer_config)
-        # print(genome2.layer_config)
-
-        conv_layers_1 = [g for g in genome1.layer_config if isinstance(g, CNNConvGene)]
-        conv_layers_2 = [g for g in genome2.layer_config if isinstance(g, CNNConvGene)]
-        pool_layers_1 = [g for g in genome1.layer_config if isinstance(g, CNNPoolGene)]
-        pool_layers_2 = [g for g in genome2.layer_config if isinstance(g, CNNPoolGene)]
-        fc_layers_1 = [g for g in genome1.layer_config if isinstance(g, CNNFCGene)]
-        fc_layers_2 = [g for g in genome2.layer_config if isinstance(g, CNNFCGene)]
-
         if config.crossover_architecture:
-            self.layer_config = []
-            in_channels = config.input_channels
-            current_input_size = config.input_size
+            # Create deep copies of the parents for visualization.
+            parent1 = copy.deepcopy(genome1)
+            parent2 = copy.deepcopy(genome2)
 
-            # Step 1: Crossover convolutional layers.
-            new_conv_layers = []
-            for i, (g1, g2) in enumerate(zip(conv_layers_1, conv_layers_2)):
-                selected = g1.copy() if random() < 0.5 else g2.copy()
-                selected.in_channels = in_channels
-                while selected.kernel_size > current_input_size and selected.kernel_size > 1:
-                    selected.kernel_size -= 1
-                try:
-                    current_input_size = calculate_conv_output_size(current_input_size, selected)
-                    in_channels = selected.out_channels
-                    new_conv_layers.append(selected)
-                except ValueError as e:
-                    print(f"[ERROR] Crossover Conv layer adjustment failed: {e}")
+            # 1) Get the parents' fitness values.
+            fitness1 = genome1.fitness
+            fitness2 = genome2.fitness
 
-            # Step 2: Crossover pooling layers (after conv layers).
-            new_pool_layers = []
-            for g1, g2 in zip(pool_layers_1, pool_layers_2):
-                selected = g1.copy() if random() < 0.5 else g2.copy()
-                if selected.pool_size <= current_input_size:
-                    current_input_size = calculate_pool_output_size(current_input_size, selected)
-                    new_pool_layers.append(selected)
+            # 2) Separate genes by type.
+            conv1 = [g for g in genome1.layer_config if isinstance(g, CNNConvGene)]
+            conv2 = [g for g in genome2.layer_config if isinstance(g, CNNConvGene)]
+            pool1 = [g for g in genome1.layer_config if isinstance(g, CNNPoolGene)]
+            pool2 = [g for g in genome2.layer_config if isinstance(g, CNNPoolGene)]
+            fc1 = [g for g in genome1.layer_config if isinstance(g, CNNFCGene)]
+            fc2 = [g for g in genome2.layer_config if isinstance(g, CNNFCGene)]
 
-            # Step 3: Append conv and pool layers.
-            self.layer_config.extend(new_conv_layers)
-            self.layer_config.extend(new_pool_layers)
+            # 3) NEAT-style crossover for each gene type.
+            child_conv = _crossover_by_key(config, conv1, conv2, fitness1, fitness2)
+            child_pool = _crossover_by_key(config, pool1, pool2, fitness1, fitness2)
+            child_fc = _crossover_by_key(config, fc1, fc2, fitness1, fitness2)
 
-            # Step 4: Determine flattened size after last conv/pool layer.
-            flattened_size = max(1, current_input_size ** 2 * in_channels) if self.layer_config else None
+            # 4) Sort each set by innovation number.
+            child_conv = sorted(child_conv, key=lambda x: x.key)
+            child_pool = sorted(child_pool, key=lambda x: x.key)
+            child_fc = sorted(child_fc, key=lambda x: x.key)
 
-            # Step 5: Crossover fully connected layers.
-            new_fc_layers = []
-            for i, (g1, g2) in enumerate(zip(fc_layers_1, fc_layers_2)):
-                selected = g1.copy() if random() < 0.5 else g2.copy()
-                if i == 0 and flattened_size is not None:
-                    selected.input_size = flattened_size
-                new_fc_layers.append(selected)
+            # Option A: Keep the type order (Conv -> Pool -> FC).
+            self.layer_config = child_conv + child_pool + child_fc
 
-            # Step 6: Append FC layers.
-            self.layer_config.extend(new_fc_layers)
+            # 5) Ensure at least one active conv and one active FC gene.
+            self.ensure_minimum_structure(config)
+
+            # 6) Enforce ordering & adjust layer sizes.
+            self.enforce_valid_ordering()
+            self._adjust_layer_sizes(config)
+
+            # Optionally, plot parents and child:
+            genome_steps = [
+                (parent1, "Parent 1"),
+                (parent2, "Parent 2"),
+                (self, "Child")
+            ]
+            # visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
         else:
-            chosen = genome1 if random() < 0.5 else genome2
-            self.layer_config = copy.deepcopy(chosen.layer_config)
+            # If crossover is turned off, simply copy the fitter parent's genome.
+            if genome1.fitness >= genome2.fitness:
+                self.layer_config = copy.deepcopy(genome1.layer_config)
+            else:
+                self.layer_config = copy.deepcopy(genome2.layer_config)
+        # Optionally, return self if needed
+        return self
 
-        if config.crossover_weights:
-            conv_index = 0
-            fc_index = 0
-            for i, gene in enumerate(self.layer_config):
-                if isinstance(gene, CNNConvGene):
-                    try:
-                        parent_gene = conv_layers_1[conv_index] if random() < 0.5 else conv_layers_2[conv_index]
-                    except IndexError:
-                        parent_gene = conv_layers_1[-1] if conv_layers_1 else conv_layers_2[-1]
-                    conv_index += 1
-                    target_weight_shape = (int(gene.out_channels), int(gene.in_channels),
-                                           int(gene.kernel_size), int(gene.kernel_size))
-                    gene.weights = _crossover_matrix(
-                        gene.weights, parent_gene.weights, adapt_conv_weights, target_weight_shape
-                    )
-                    gene.biases = _crossover_vector(
-                        gene.biases, parent_gene.biases, target_weight_shape[0]
-                    )
-                elif isinstance(gene, CNNFCGene):
-                    try:
-                        parent_gene = fc_layers_1[fc_index] if random() < 0.5 else fc_layers_2[fc_index]
-                    except IndexError:
-                        parent_gene = fc_layers_1[-1] if fc_layers_1 else fc_layers_2[-1]
-                    fc_index += 1
-                    target_weight_shape = (int(gene.fc_layer_size), int(gene.input_size))
-                    gene.weights = _crossover_matrix(
-                        gene.weights, parent_gene.weights, adapt_fc_weights, target_weight_shape
-                    )
-                    gene.biases = _crossover_vector(
-                        gene.biases, parent_gene.biases, target_weight_shape[0]
-                    )
 
-        # print('AFTER CROSSOVER')
-        self.enforce_valid_ordering()
-        # print('BEFORE adjusting layer sizes')
-        # print(self.layer_config)
-        self._adjust_layer_sizes(config)
-        # print('AFTER adjusting layer sizes')
-        # print(self.layer_config)
+    def ensure_minimum_structure(self, config):
+        """
+        Ensure that the genome has at least one active convolution and one active FC gene.
+        If not, either re-enable a disabled gene or add a new gene.
+        """
+        # Check active convolution genes.
+        active_conv = [g for g in self.layer_config if isinstance(g, CNNConvGene) and getattr(g, "enabled", True)]
+        if not active_conv:
+            # If there is a disabled conv gene, re-enable it.
+            disabled_conv = [g for g in self.layer_config if isinstance(g, CNNConvGene)]
+            if disabled_conv:
+                disabled_conv[0].enabled = True
+            else:
+                # Optionally, add a new convolution gene.
+                new_conv = CNNConvGene.create(config, config.input_channels, config.input_size)
+                new_conv.initialize_weights(config)
+                self.layer_config.insert(0, new_conv)
+
+        # Check active FC genes.
+        active_fc = [g for g in self.layer_config if isinstance(g, CNNFCGene) and getattr(g, "enabled", True)]
+        if not active_fc:
+            disabled_fc = [g for g in self.layer_config if isinstance(g, CNNFCGene)]
+            if disabled_fc:
+                print("Re-enabling a disabled FC gene to satisfy minimum structure")
+                disabled_fc[0].enabled = True
+            else:
+                print("Adding a new FC gene to satisfy minimum structure")
+                # Compute a flattened size from the active conv/pool chain.
+                # You might need a helper function for this; for now, we assume:
+                flattened_size = config.input_channels * (config.input_size ** 2)
+                new_fc = CNNFCGene.create(config, input_size=flattened_size)
+                new_fc.initialize_weights(config)
+                self.layer_config.append(new_fc)
 
     def enforce_valid_ordering(self):
         """
@@ -423,27 +392,27 @@ class CNNGenome(object):
         self.layer_config = conv_pool_genes + fc_genes
 
     def _adjust_layer_sizes(self, config):
-        """
-        Adjust the spatial dimensions and flattened size throughout the network.
-        This method updates layer parameters and adapts weights as necessary.
-        """
+        # Only consider enabled genes for computing the active network structure.
+        active_genes = [gene for gene in self.layer_config if getattr(gene, "enabled", True)]
+
         current_input_size = config.input_size
         flattened_size = None
 
-        for i, gene in enumerate(self.layer_config):
+        for idx, gene in enumerate(active_genes):
             if isinstance(gene, CNNConvGene):
-                if i == 0:
+                if idx == 0:
                     gene.in_channels = config.input_channels
                 else:
-                    conv_genes_before = [g for g in self.layer_config[:i] if isinstance(g, CNNConvGene)]
-                    if conv_genes_before:
-                        gene.in_channels = conv_genes_before[-1].out_channels
+                    # Find the last enabled convolution gene before this one.
+                    previous_convs = [g for g in active_genes[:idx] if isinstance(g, CNNConvGene)]
+                    if previous_convs:
+                        gene.in_channels = previous_convs[-1].out_channels
 
                 if gene.kernel_size > current_input_size:
                     gene.kernel_size = current_input_size
                 try:
                     current_input_size = calculate_conv_output_size(current_input_size, gene)
-                except ValueError as e:
+                except ValueError:
                     gene.kernel_size = max(1, gene.kernel_size - 1)
                     current_input_size = calculate_conv_output_size(current_input_size, gene)
                 flattened_size = (current_input_size ** 2) * gene.out_channels
@@ -455,40 +424,93 @@ class CNNGenome(object):
                     gene.biases = adapt_biases(gene.biases, expected_shape[0])
 
             elif isinstance(gene, CNNPoolGene):
-                # Update the pooling gene's input size based on the current spatial dimension.
+                # Update input size first.
                 gene.input_size = current_input_size
-                if i > 0:
-                    prev_gene = self.layer_config[i - 1]
-                    if isinstance(prev_gene, CNNConvGene):
-                        gene.in_channels = prev_gene.out_channels
-                    elif isinstance(prev_gene, CNNPoolGene):
-                        gene.in_channels = prev_gene.in_channels
-                current_input_size = calculate_pool_output_size(current_input_size, gene)
+
+                # Update in_channels based on the last enabled gene in active_genes.
+                if idx > 0:
+                    previous = active_genes[idx - 1]
+                    if isinstance(previous, (CNNConvGene, CNNPoolGene)):
+                        gene.in_channels = previous.out_channels if isinstance(previous,
+                                                                               CNNConvGene) else previous.in_channels
+
+                valid_pool_params = config.pre_validate_pool_params(current_input_size)
+                if not valid_pool_params:
+                    gene.enabled = False
+                    continue
+                elif (gene.pool_size, gene.stride) not in valid_pool_params:
+                    gene.pool_size, gene.stride = valid_pool_params[0]
+
+                new_size = calculate_pool_output_size(current_input_size, gene)
+                if new_size <= 0:
+                    gene.enabled = False
+                    continue
+                else:
+                    current_input_size = new_size
                 flattened_size = (current_input_size ** 2) * gene.in_channels
 
             elif isinstance(gene, CNNFCGene):
+                # For FC genes, use the current flattened size as the input size.
+                # If no previous conv/pool layers exist, compute it from the original input.
+                if flattened_size is None:
+                    # E.g., if there are no conv/pool layers, use input_channels * (input_size)^2.
+                    flattened_size = config.input_channels * (config.input_size ** 2)
+                gene.input_size = flattened_size
                 new_shape = (int(gene.fc_layer_size), int(flattened_size))
                 gene.weights = adapt_fc_weights(gene.weights, new_shape)
                 gene.biases = adapt_biases(gene.biases, new_shape[0])
-                gene.input_size = flattened_size
+                # Update flattened_size to be the output size of this FC gene.
                 flattened_size = gene.fc_layer_size
 
     def distance(self, other, config):
         """
-        Compute a composite distance between two CNN genomes as a weighted sum of:
-          1. Graph-based architecture distance.
-          2. Connection (weight and bias) distance.
+        Returns the genetic distance between this genome and the other.
+        The distance is computed separately for convolution, pooling, and fully
+        connected genes. For each gene type we distinguish:
+          - Excess genes (genes beyond the other genome's maximum innovation).
+          - Disjoint genes (non-matching genes within the overlapping range).
+          - Matching genes (whose parameter differences are computed via gene.distance()).
 
-        :param other: Another CNNGenome instance.
-        :param config: CNNGenomeConfig instance with distance coefficients.
-        :return: Composite distance (float).
+        The NEAT formula is applied:
+          δ = (c1 * E) / N + (c2 * D) / N + c3 * (average weight difference)
         """
-        arch_distance = graph_architecture_distance(self, other)
-        arch_distance = (arch_distance * config.compatibility_topology_coefficient)
-        conn_distance_val = connection_distance(self, other)
-        conn_distance_val = (conn_distance_val * config.compatibility_weight_coefficient)
-        combined_distance = arch_distance + conn_distance_val
-        return combined_distance
+        # -- Convolution Genes --
+        conv_self = {g.key: g for g in self.layer_config if isinstance(g, CNNConvGene)}
+        conv_other = {g.key: g for g in other.layer_config if isinstance(g, CNNConvGene)}
+        conv_distance = compute_gene_type_distance(
+            conv_self, conv_other,
+            lambda a, b, cfg: a.distance(b, cfg),
+            config,
+            config.compatibility_excess_coefficient,
+            config.compatibility_disjoint_coefficient,
+            config.compatibility_weight_coefficient
+        )
+
+        # -- Pooling Genes --
+        pool_self = {g.key: g for g in self.layer_config if isinstance(g, CNNPoolGene)}
+        pool_other = {g.key: g for g in other.layer_config if isinstance(g, CNNPoolGene)}
+        pool_distance = compute_gene_type_distance(
+            pool_self, pool_other,
+            lambda a, b, cfg: a.distance(b, cfg),
+            config,
+            config.compatibility_excess_coefficient,
+            config.compatibility_disjoint_coefficient,
+            config.compatibility_weight_coefficient
+        )
+
+        # -- Fully Connected Genes --
+        fc_self = {g.key: g for g in self.layer_config if isinstance(g, CNNFCGene)}
+        fc_other = {g.key: g for g in other.layer_config if isinstance(g, CNNFCGene)}
+        fc_distance = compute_gene_type_distance(
+            fc_self, fc_other,
+            lambda a, b, cfg: a.distance(b, cfg),
+            config,
+            config.compatibility_excess_coefficient,
+            config.compatibility_disjoint_coefficient,
+            config.compatibility_weight_coefficient
+        )
+
+        return conv_distance + pool_distance + fc_distance
 
     def size(self):
         """

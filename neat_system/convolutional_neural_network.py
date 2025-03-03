@@ -3,6 +3,22 @@ import torch.nn as nn
 from cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
 
 
+def compute_conv_output_dim(in_dim, kernel_size, stride, padding):
+    """
+    Computes the spatial dimension after a convolution layer,
+    using the formula: out_dim = (in_dim + 2*padding - kernel_size)//stride + 1.
+    """
+    return (in_dim + 2 * padding - kernel_size) // stride + 1
+
+
+def compute_pool_output_dim(in_dim, pool_size, stride):
+    """
+    Computes the spatial dimension after a pooling layer,
+    using the formula: out_dim = (in_dim - pool_size)//stride + 1.
+    """
+    return (in_dim - pool_size) // stride + 1
+
+
 class ConvolutionalNeuralNetwork:
     def __init__(self, input_shape, output_shape, layer_evals):
         """
@@ -14,20 +30,29 @@ class ConvolutionalNeuralNetwork:
 
     @staticmethod
     def create(genome, config):
-        """
-        Construct a Convolutional Neural Network phenotype from a genome.
-        """
         board_size = config.genome_config.input_size
-        input_shape = (config.genome_config.input_channels, board_size, board_size)
+        input_channels = config.genome_config.input_channels
+        input_shape = (input_channels, board_size, board_size)
         output_shape = (board_size, board_size)
-        layer_evals = []  # Holds layer specifications
 
-        # Iterate over the gene objects in the genome.
+        # We'll track the current spatial dimensions as we add layers.
+        curr_c, curr_h, curr_w = input_channels, board_size, board_size
+        layer_evals = []
+
         for gene in genome.layer_config:
-            if isinstance(gene, CNNConvGene):
-                activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
+            # Skip any disabled genes.
+            if hasattr(gene, "enabled") and not gene.enabled:
+                continue
 
-                # Create the convolutional layer.
+            if isinstance(gene, CNNConvGene):
+                # Check output dimension before building the layer.
+                out_h = compute_conv_output_dim(curr_h, gene.kernel_size, gene.stride, gene.padding)
+                out_w = compute_conv_output_dim(curr_w, gene.kernel_size, gene.stride, gene.padding)
+                if out_h < 1 or out_w < 1:
+                    raise ValueError(
+                        f"Invalid Conv layer: kernel={gene.kernel_size}, stride={gene.stride}, "
+                        f"padding={gene.padding} would produce spatial dims ({out_h}x{out_w})."
+                    )
                 conv_layer = nn.Conv2d(
                     in_channels=int(gene.in_channels),
                     out_channels=int(gene.out_channels),
@@ -35,47 +60,48 @@ class ConvolutionalNeuralNetwork:
                     stride=int(gene.stride),
                     padding=int(gene.padding),
                 )
-                # Copy evolved weights and biases into the layer.
                 if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    conv_layer.weight.data.copy_(torch.from_numpy(gene.weights).type_as(conv_layer.weight.data))
-                    conv_layer.bias.data.copy_(torch.from_numpy(gene.biases).type_as(conv_layer.bias.data))
-
+                    conv_layer.weight.data.copy_(torch.from_numpy(gene.weights))
+                    conv_layer.bias.data.copy_(torch.from_numpy(gene.biases))
+                activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
                 layer_evals.append({"type": "conv", "params": {"layer": conv_layer, "activation": activation}})
+                curr_c = gene.out_channels
+                curr_h, curr_w = out_h, out_w
 
             elif isinstance(gene, CNNPoolGene):
-                # Create a pooling layer (Max or Average)
-                pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride)) \
-                    if gene.pool_type == "max" else nn.AvgPool2d(kernel_size=int(gene.pool_size),
-                                                                 stride=int(gene.stride))
-
+                out_h = compute_pool_output_dim(curr_h, gene.pool_size, gene.stride)
+                out_w = compute_pool_output_dim(curr_w, gene.pool_size, gene.stride)
+                if out_h < 1 or out_w < 1:
+                    raise ValueError(
+                        f"Invalid Pool layer: pool_size={gene.pool_size}, stride={gene.stride} "
+                        f"would produce spatial dims ({out_h}x{out_w})."
+                    )
+                if gene.pool_type == "max":
+                    pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
+                else:
+                    pool_layer = nn.AvgPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
                 layer_evals.append({"type": "pool", "params": {"layer": pool_layer}})
+                curr_h, curr_w = out_h, out_w
 
             elif isinstance(gene, CNNFCGene):
                 activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
-
-                # Create the fully connected (Linear) layer.
-                fc_layer = nn.Linear(
-                    in_features=int(gene.input_size),
-                    out_features=int(gene.fc_layer_size),
-                )
-                # Copy evolved weights and biases into the layer.
+                fc_layer = nn.Linear(in_features=int(gene.input_size), out_features=int(gene.fc_layer_size))
                 if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    fc_layer.weight.data.copy_(torch.from_numpy(gene.weights).type_as(fc_layer.weight.data))
-                    fc_layer.bias.data.copy_(torch.from_numpy(gene.biases).type_as(fc_layer.bias.data))
-
+                    fc_layer.weight.data.copy_(torch.from_numpy(gene.weights))
+                    fc_layer.bias.data.copy_(torch.from_numpy(gene.biases))
                 layer_evals.append({"type": "fc", "params": {"layer": fc_layer, "activation": activation}})
+            else:
+                raise ValueError(f"Unknown gene type: {type(gene)}")
 
-        # Assume the last FC gene defines the size for the output layer.
+        # Check for at least one FC layer.
         last_fc_size = None
         for gene in reversed(genome.layer_config):
-            if isinstance(gene, CNNFCGene):
+            if isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True):
                 last_fc_size = gene.fc_layer_size
                 break
-
         if last_fc_size is None:
-            raise ValueError("No fully connected (fc) layer found in the genome.")
+            raise ValueError("No fully connected (FC) layer found in the genome.")
 
-        # Create the output layer.
         output_layer = nn.Linear(int(last_fc_size), board_size ** 2)
         layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
 
