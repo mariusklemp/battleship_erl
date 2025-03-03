@@ -19,6 +19,25 @@ class SearchMetricsTracker:
         self.misses_per_agent[name].append(misses)
         self.games_played[name] += 1
 
+    def update_agents(self, search_agents):
+        """
+        Update the list of agents being tracked.
+
+        Args:
+            search_agents: New list of search agents
+        """
+        # Get the names of the new agents
+        new_agent_names = [agent.name for agent in search_agents]
+
+        # Add any new agents to the tracking dictionaries
+        for name in new_agent_names:
+            if name not in self.agent_names:
+                self.agent_names.append(name)
+                self.moves_per_agent[name] = []
+                self.hits_per_agent[name] = []
+                self.misses_per_agent[name] = []
+                self.games_played[name] = 0
+
     def plot_metrics(self):
         """Plot various metrics for search agents."""
         # Plot 1: Average moves per agent
