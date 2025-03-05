@@ -95,7 +95,11 @@ class SearchMetricsTracker:
             avg_moves = np.mean(self.moves_per_agent[name])
             total_hits = sum(self.hits_per_agent[name])
             total_misses = sum(self.misses_per_agent[name])
-            hit_ratio = total_hits / (total_hits + total_misses) * 100
+            total_attempts = total_hits + total_misses
+            if total_attempts > 0:
+                hit_ratio = total_hits / total_attempts * 100
+            else:
+                hit_ratio = 0
 
             print(f"\nAgent: {name}")
             print(f"Games played: {self.games_played[name]}")

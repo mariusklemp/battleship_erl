@@ -13,6 +13,7 @@ from run_mcts import run_mcts_inner_loop, load_config
 from neat_system.neat_manager import NEAT_Manager
 from neat_system.cnn_genome import CNNGenome
 import visualize
+from neat_system.weight_reporter import WeightStatsReporter
 
 
 def load_evolution_config(config_path="config/evolution_config.json"):
@@ -135,18 +136,18 @@ if __name__ == "__main__":
         population.add_reporter(neat.StdOutReporter(True))
         stats = neat.StatisticsReporter()
         population.add_reporter(stats)
+        # Attach custom WeightStatsReporter
+        weight_stats_reporter = WeightStatsReporter()
+        population.add_reporter(weight_stats_reporter)
 
         # Initialize NEAT_Manager
-        # We'll use a simple chromosome for evaluation
-        CHROMOSOME = [(0, 0, 0), (1, 1, 0)]  # Example chromosome
         RANGE_EVALUATIONS = 5  # Number of games to evaluate each genome
 
         neat_manager = NEAT_Manager(
             board_size=BOARD_SIZE,
             ship_sizes=SHIP_SIZES,
-            strategy_placement="chromosome",
+            strategy_placement="random",
             strategy_search="nn_search",
-            chromosome=CHROMOSOME,
             range_evaluations=RANGE_EVALUATIONS,
             config=config,
             game_manager=game_manager,
@@ -276,5 +277,27 @@ if __name__ == "__main__":
     # Plot NEAT statistics if NEAT was used
     if USE_NEAT:
         print("\nPlotting NEAT statistics...")
-        visualize.plot_stats(stats)
-        visualize.plot_species(stats)
+        visualize.visualize_hof(statistics=stats)
+        visualize.plot_weight_stats(weight_stats_reporter.get_weight_stats())
+        visualize.plot_species_weight_stats(
+            weight_stats_reporter.get_species_weight_stats()
+        )
+        species_analysis = visualize.analyze_species_from_population(population.species)
+        visualize.plot_species_analysis(species_analysis)
+        visualize.visualize_species(stats)
+        visualize.plot_stats(
+            statistics=stats,
+            best_possible=(BOARD_SIZE**2 - sum(SHIP_SIZES)),
+            ylog=False,
+            view=True,
+        )
+        visualize.plot_fitness_boxplot(stats)
+        from neat_system.cnn_layers import global_innovation_registry
+
+        visualize.plot_innovation_registry(global_innovation_registry)
+
+        best_genomes = stats.best_genomes(5)
+        genomes = []
+        for genome in best_genomes:
+            genomes.append((genome, ""))
+        visualize.plot_multiple_genomes(genomes, "Best Genomes")

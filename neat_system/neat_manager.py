@@ -14,6 +14,7 @@ from game_logic.game_manager import GameManager
 from game_logic.search_agent import SearchAgent
 import visualize
 from ai.models import ANET
+from game_logic.placement_agent import PlacementAgent
 from neat_system.weight_reporter import WeightStatsReporter
 
 
@@ -24,7 +25,6 @@ class NEAT_Manager:
         ship_sizes,
         strategy_placement,
         strategy_search,
-        chromosome,
         range_evaluations,
         config,
         game_manager,
@@ -35,7 +35,6 @@ class NEAT_Manager:
         self.strategy_search = strategy_search
 
         self.config = config
-        self.chromosome = chromosome
         self.range_evaluations = range_evaluations
 
         self.game_manager = game_manager
@@ -116,11 +115,15 @@ def run(
         ship_sizes,
         strategy_placement,
         strategy_search,
-        chromosome,
         range_evaluations,
         config,
         game_manager,
     )
+    placement_agents = []
+    placement_agents.append(
+        PlacementAgent(board_size, ship_sizes, strategy_placement, chromosome)
+    )
+    manager.set_placement_agents(placement_agents)
 
     p.run(manager.eval_genomes, gen)
 
@@ -140,6 +143,7 @@ def run(
     )
     visualize.plot_fitness_boxplot(stats)
     from neat_system.cnn_layers import global_innovation_registry
+
     visualize.plot_innovation_registry(global_innovation_registry)
 
     best_genomes = stats.best_genomes(5)
@@ -242,7 +246,7 @@ if __name__ == "__main__":
         gen=NUM_GENERATIONS,
         board_size=BOARD_SIZE,
         ship_sizes=SHIP_SIZES,
-        strategy_placement="custom",
+        strategy_placement="chromosome",
         strategy_search="nn_search",
         chromosome=CHROMOSOME,
         range_evaluations=RANGE_EVALUATIONS,

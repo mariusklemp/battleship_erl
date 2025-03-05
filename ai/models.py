@@ -103,6 +103,8 @@ class ANET(nn.Module):
         # Process each gene in the genome's layer configuration
         for i, gene in enumerate(genome.layer_config):
             print(f"Processing gene: {gene}")
+            if hasattr(gene, "enabled") and not gene.enabled:
+                continue
 
             if isinstance(gene, CNNConvGene):  # Conv layer
                 # Create convolutional layer with adjusted input channels for the first layer
@@ -141,7 +143,12 @@ class ANET(nn.Module):
                             dtype=original_weights.dtype,
                         )
                         # Copy the original weights for the first 4 channels
-                        new_weights[:, :5, :, :] = original_weights
+                        new_weights[:, :4, :, :] = (
+                            original_weights  # Copy the first 4 channels
+                        )
+                        # Initialize the 5th channel with zeros
+                        new_weights[:, 4, :, :] = 0
+
                         conv_layer.weight.data.copy_(
                             new_weights.type_as(conv_layer.weight.data)
                         )
