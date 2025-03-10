@@ -193,10 +193,10 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 5
+    BOARD_SIZE = 3
     POPULATION_SIZE = 50
-    SHIP_SIZES = [3, 2, 2]
-    CHROMOSOME = [(0, 0, 0), (1, 1, 0), (1, 1, 1)]
+    SHIP_SIZES = [2]
+    CHROMOSOME = [(0, 0, 0)]
     NUM_GENERATIONS = 100
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
