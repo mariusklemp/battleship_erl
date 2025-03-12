@@ -2,13 +2,14 @@
     "board_size": 5,
     "ship_sizes": [3, 2, 2],
     "mcts": {
-        "simulations_number": 20,
+        "simulations_number": 100,
         "exploration_constant": 1.41
     },
     "training": {
         "batch_size": 128,
         "save_interval": 10,
-        "learning_rate": 0.0001
+        "learning_rate": 0.0001,
+        "epochs": 10
     },
     "replay_buffer": {
         "max_size": 10000,

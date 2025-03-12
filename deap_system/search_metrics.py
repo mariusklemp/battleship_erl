@@ -26,7 +26,7 @@ class SearchMetricsTracker:
         Args:
             search_agents: New list of search agents
         """
-        # Get the names of the new agents
+        # Get the names of the new agent
         new_agent_names = [agent.name for agent in search_agents]
 
         # Add any new agents to the tracking dictionaries
@@ -37,6 +37,45 @@ class SearchMetricsTracker:
                 self.hits_per_agent[name] = []
                 self.misses_per_agent[name] = []
                 self.games_played[name] = 0
+
+    def update_agent_name(self, old_name, new_name):
+        """
+        Update metrics when an agent's name changes.
+
+        Args:
+            old_name: The agent's previous name
+            new_name: The agent's new name
+
+        Returns:
+            bool: True if the update was successful, False otherwise
+        """
+        # Check if the old name exists in our metrics
+        if old_name not in self.agent_names:
+            return False
+
+        # Check if the new name is already being tracked
+        if new_name in self.agent_names:
+            # If the new name already exists, we'll merge the metrics
+            self.moves_per_agent[new_name].extend(self.moves_per_agent[old_name])
+            self.hits_per_agent[new_name].extend(self.hits_per_agent[old_name])
+            self.misses_per_agent[new_name].extend(self.misses_per_agent[old_name])
+            self.games_played[new_name] += self.games_played[old_name]
+        else:
+            # If the new name doesn't exist, copy the metrics and add to agent_names
+            self.agent_names.append(new_name)
+            self.moves_per_agent[new_name] = self.moves_per_agent[old_name].copy()
+            self.hits_per_agent[new_name] = self.hits_per_agent[old_name].copy()
+            self.misses_per_agent[new_name] = self.misses_per_agent[old_name].copy()
+            self.games_played[new_name] = self.games_played[old_name]
+
+        # Remove the old name from tracking
+        self.agent_names.remove(old_name)
+        del self.moves_per_agent[old_name]
+        del self.hits_per_agent[old_name]
+        del self.misses_per_agent[old_name]
+        del self.games_played[old_name]
+
+        return True
 
     def plot_metrics(self):
         """Plot various metrics for search agents."""

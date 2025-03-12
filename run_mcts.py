@@ -107,6 +107,7 @@ def train_models(
     placement_agents,
     play_game,
     sizes,
+    epochs=1,
 ):
     move_count = []
     """Play a series of games, training and saving the model as specified."""
@@ -144,9 +145,10 @@ def train_models(
             # print("Replay buffer length:", len(rbuf.data))
 
         if train_model:
-            batch = rbuf.get_batch(batch_size)
-            search_agent.strategy.train_model(batch)
-            search_agent.strategy.validate_model(rbuf.validation_set)
+            for _ in range(epochs):
+                batch = rbuf.get_batch(batch_size)
+                search_agent.strategy.train_model(batch)
+                search_agent.strategy.validate_model(rbuf.validation_set)
 
         # Save model at regular intervals
         if save_model and (i + 1) % (number_actual_games // M) == 0:
@@ -186,6 +188,7 @@ def run_mcts_inner_loop(
     device,
     sizes,
     placement_agents,
+    epochs=1,
 ):
     """Train a search agent against a population of placing agents.
     Each search agent plays exactly one game against each placing agent.
@@ -230,6 +233,7 @@ def run_mcts_inner_loop(
         placement_agents=placement_agents,  # Use all placing agents
         play_game=True,  # Actually play the games
         sizes=sizes,
+        epochs=epochs,
     )
 
 

@@ -84,7 +84,7 @@ if __name__ == "__main__":
     NUM_GENERATIONS = evolution_config["evolution"]["num_generations"]
     TOURNAMENT_SIZE = evolution_config["placing_population"]["tournament_size"]
     MUTPB = evolution_config["placing_population"]["mutation_probability"]
-
+    INNER_LOOP_EPOCHS = evolution_config["evolution"]["inner_loop_epochs"]
     # Number of games to run for each evaluation
     NUM_EVALUATION_GAMES = 10
 
@@ -153,20 +153,22 @@ if __name__ == "__main__":
             game_manager=game_manager,
         )
 
-        # We need to create search agents from the NEAT population
-        # This is not directly provided by NEAT_Manager, so we'll need to create them
+        # Create initial search agents from the NEAT population
         search_agents = []
-        for genome_id, genome in population.population.items():
-            net = ANET.create_from_cnn_genome(genome=genome, config=config)
-            agent = SearchAgent(
-                board_size=BOARD_SIZE,
-                strategy="nn_search",
-                net=net,
-                optimizer="adam",
-                name=f"neat_{genome_id}",
-                lr=0.001,
-            )
-            search_agents.append(agent)
+        for i, (genome_id, genome) in enumerate(population.population.items()):
+            try:
+                net = ANET.create_from_cnn_genome(genome=genome, config=config)
+                agent = SearchAgent(
+                    board_size=BOARD_SIZE,
+                    strategy="nn_search",
+                    net=net,
+                    optimizer="adam",
+                    name=f"neat_{i}_gen_0",  # Use generation-based naming from the start
+                    lr=0.001,
+                )
+                search_agents.append(agent)
+            except Exception as e:
+                print(f"Error creating agent for genome {genome_id}: {e}")
     else:
         # Use the original approach with fixed neural networks
         search_agents = populate_search_agents(
@@ -205,16 +207,18 @@ if __name__ == "__main__":
                 total=len(search_agents),
             ):
                 print(f"\nTraining search agent {i + 1}/{len(search_agents)}")
-                run_mcts_inner_loop(
-                    environment.game_manager,
-                    search_agent,
-                    simulations_number=mcts_config["mcts"]["simulations_number"],
-                    exploration_constant=mcts_config["mcts"]["exploration_constant"],
-                    batch_size=mcts_config["training"]["batch_size"],
-                    device=mcts_config["device"],
-                    sizes=SHIP_SIZES,
-                    placement_agents=environment.pop_placing_agents,
-                )
+                for _ in range(INNER_LOOP_EPOCHS):
+                    run_mcts_inner_loop(
+                        environment.game_manager,
+                        search_agent,
+                        simulations_number=mcts_config["mcts"]["simulations_number"],
+                        exploration_constant=mcts_config["mcts"]["exploration_constant"],
+                        batch_size=mcts_config["training"]["batch_size"],
+                        device=mcts_config["device"],
+                        sizes=SHIP_SIZES,
+                        placement_agents=environment.pop_placing_agents,
+                        epochs=mcts_config["training"]["epochs"],
+                    )
 
         if USE_NEAT:
             # Evaluate NEAT genomes
@@ -227,19 +231,18 @@ if __name__ == "__main__":
             neat_manager.eval_genomes(genomes, config)
 
             # Find the best genome
-            best_genome_id = max(
+            best_genome_id, best_genome = max(
                 population.population.items(), key=lambda x: x[1].fitness
-            )[0]
+            )
 
             # Save the best model
-            best_genome = population.population[best_genome_id]
             best_net = ANET.create_from_cnn_genome(genome=best_genome, config=config)
             best_agent = SearchAgent(
                 board_size=BOARD_SIZE,
                 strategy="nn_search",
                 net=best_net,
                 optimizer="adam",
-                name=f"neat_{best_genome_id}",
+                name=f"neat_best_gen_{gen}",  # Use consistent generation-based naming
                 lr=0.001,
             )
             best_agent.strategy.save_model(f"models/neat_gen_{gen}_best.pth")
@@ -247,22 +250,40 @@ if __name__ == "__main__":
             # Evolve the NEAT population for one generation
             population.run(neat_manager.eval_genomes, 1)
 
-            # Create new search agents from the evolved population
-            search_agents = []
-            for genome_id, genome in population.population.items():
-                net = ANET.create_from_cnn_genome(genome=genome, config=config)
-                agent = SearchAgent(
-                    board_size=BOARD_SIZE,
-                    strategy="nn_search",
-                    net=net,
-                    optimizer="adam",
-                    name=f"neat_{genome_id}",
-                    lr=0.001,
-                )
-                search_agents.append(agent)
+            # Update existing search agents with new networks from evolved genomes
+            print("Updating search agents with evolved networks...")
+            genome_items = list(population.population.items())
 
-            # Update search metrics tracker
-            search_metrics.update_agents(search_agents)
+            # Make sure we don't try to update more agents than we have genomes
+            for i, agent in enumerate(search_agents):
+                if i < len(genome_items):
+                    genome_id, genome = genome_items[i]
+                    try:
+                        # Store the old name before changing it
+                        old_name = agent.name
+
+                        # Create new network from evolved genome
+                        new_net = ANET.create_from_cnn_genome(
+                            genome=genome, config=config
+                        )
+
+                        # Update the agent's network
+                        agent.strategy.net = new_net
+
+                        # Update the agent's name to reflect the current generation
+                        new_name = f"neat_{i}_gen_{gen+1}"
+
+                        # If the name is changing, we need to update the search_metrics
+                        if old_name != new_name:
+                            # Update the agent's name
+                            agent.name = new_name
+
+                            # Use the SearchMetricsTracker's method to handle the name change
+                            search_metrics.update_agent_name(old_name, new_name)
+
+                    except Exception as e:
+                        print(f"Error updating agent {i} with genome {genome_id}: {e}")
+                        # If updating fails, we keep the old network
 
         # Evaluate agents against baseline opponents
         print(f"\nEvaluating agents against baseline opponents...")
