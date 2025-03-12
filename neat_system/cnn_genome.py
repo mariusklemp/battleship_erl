@@ -5,10 +5,10 @@ from neat.config import ConfigParameter, write_pretty_params
 import visualize
 from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
 from neat_system.helpers import (
-                                 adapt_conv_weights, adapt_biases, adapt_fc_weights,
-                                 calculate_pool_output_size, calculate_conv_output_size,
-                                 compute_gene_type_distance,
-                                 _crossover_by_key)
+    adapt_conv_weights, adapt_biases, adapt_fc_weights,
+    calculate_pool_output_size, calculate_conv_output_size,
+    compute_gene_type_distance,
+    _crossover_by_key)
 
 
 class CNNGenomeConfig(object):
@@ -294,57 +294,51 @@ class CNNGenome(object):
         Perform a NEAT-style crossover between two genomes to produce a new genome.
         If crossover is turned off, simply use the fitter parent.
         """
-        if config.crossover_architecture:
-            # Create deep copies of the parents for visualization.
-            parent1 = copy.deepcopy(genome1)
-            parent2 = copy.deepcopy(genome2)
-
-            # 1) Get the parents' fitness values.
-            fitness1 = genome1.fitness
-            fitness2 = genome2.fitness
-
-            # 2) Separate genes by type.
-            conv1 = [g for g in genome1.layer_config if isinstance(g, CNNConvGene)]
-            conv2 = [g for g in genome2.layer_config if isinstance(g, CNNConvGene)]
-            pool1 = [g for g in genome1.layer_config if isinstance(g, CNNPoolGene)]
-            pool2 = [g for g in genome2.layer_config if isinstance(g, CNNPoolGene)]
-            fc1 = [g for g in genome1.layer_config if isinstance(g, CNNFCGene)]
-            fc2 = [g for g in genome2.layer_config if isinstance(g, CNNFCGene)]
-
-            # 3) NEAT-style crossover for each gene type.
-            child_conv = _crossover_by_key(config, conv1, conv2, fitness1, fitness2)
-            child_pool = _crossover_by_key(config, pool1, pool2, fitness1, fitness2)
-            child_fc = _crossover_by_key(config, fc1, fc2, fitness1, fitness2)
-
-            # 4) Sort each set by innovation number.
-            child_conv = sorted(child_conv, key=lambda x: x.key)
-            child_pool = sorted(child_pool, key=lambda x: x.key)
-            child_fc = sorted(child_fc, key=lambda x: x.key)
-
-            # Option A: Keep the type order (Conv -> Pool -> FC).
-            self.layer_config = child_conv + child_pool + child_fc
-
-            # 5) Ensure at least one active conv and one active FC gene.
-            self.ensure_minimum_structure(config)
-
-            # 6) Enforce ordering & adjust layer sizes.
-            self.enforce_valid_ordering()
-            self._adjust_layer_sizes(config)
-
-            # Optionally, plot parents and child:
-            genome_steps = [
-                (parent1, "Parent 1"),
-                (parent2, "Parent 2"),
-                (self, "Child")
-            ]
-            # visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
-        else:
-            # If crossover is turned off, simply copy the fitter parent's genome.
+        # 0) If crossover is off, just clone the fitter parent's genome.
+        if not config.crossover_architecture:
             if genome1.fitness >= genome2.fitness:
                 self.layer_config = copy.deepcopy(genome1.layer_config)
             else:
                 self.layer_config = copy.deepcopy(genome2.layer_config)
-        # Optionally, return self if needed
+            return self
+
+        # 1) Make copies for visualization (optional).
+        parent1 = copy.deepcopy(genome1)
+        parent2 = copy.deepcopy(genome2)
+
+        # 2) Get parents' fitness.
+        fitness1 = genome1.fitness
+        fitness2 = genome2.fitness
+
+        # 3) Sort each parent's entire layer_config by innovation number,
+        #    rather than splitting by type.
+        parent1_genes = sorted(parent1.layer_config, key=lambda g: g.key)
+        parent2_genes = sorted(parent2.layer_config, key=lambda g: g.key)
+
+        child_genes = _crossover_by_key(config, parent1_genes, parent2_genes, fitness1, fitness2)
+
+        # child_genes is now sorted by innovation number.
+
+        # 5) Assign to this genome's layer_config.
+        self.layer_config = child_genes
+
+        # 6) Ensure we have at least one active conv and FC layer.
+        self.ensure_minimum_structure(config)
+
+        # 7) Optionally reorder or validate shapes.
+        #    - If you truly want to keep the exact order from the parents,
+        #      you might remove or modify enforce_valid_ordering().
+        self.enforce_valid_ordering()
+        self._adjust_layer_sizes(config)
+
+        # 8) (Optional) Visualize parents & child.
+        genome_steps = [
+            (parent1, "Parent 1"),
+            (parent2, "Parent 2"),
+            (self,    "Child")
+        ]
+        visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
+
         return self
 
 
