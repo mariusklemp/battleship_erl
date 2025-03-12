@@ -25,7 +25,7 @@ class ANET(nn.Module):
         activation="relu",
         device="cpu",
         layer_config=None,
-        extra_input_size=5,  # signal that extra features exist
+        extra_input_size=3,  # signal that extra features exist
         genome=None,
         config=None,
     ):

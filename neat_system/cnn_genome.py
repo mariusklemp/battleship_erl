@@ -337,7 +337,7 @@ class CNNGenome(object):
             (parent2, "Parent 2"),
             (self,    "Child")
         ]
-        visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
+        #visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
 
         return self
 

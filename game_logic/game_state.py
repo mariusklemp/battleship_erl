@@ -23,7 +23,7 @@ class GameState:
 
         # Create extra features tensor
         ship_counts = Counter(self.remaining_ships)
-        feature_vector = [ship_counts.get(i, 0) for i in range(1, 6)]
+        feature_vector = [ship_counts.get(i, 0) for i in range(1, board_size + 1)]
         extra_tensor = torch.tensor(feature_vector, dtype=torch.float32)
 
         return board_tensor, extra_tensor
