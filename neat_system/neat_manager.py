@@ -2,6 +2,8 @@ import configparser
 import os
 import sys
 
+from neat_system.convolutional_neural_network import ConvolutionalNeuralNetwork
+
 # Add the parent directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -82,7 +84,8 @@ class NEAT_Manager:
             tqdm(genomes, desc="Evaluating generation")
         ):
             for placement_agent in self.placement_agents:
-                net = ANET.create_from_cnn_genome(genome=genome, config=config)
+                # net = ANET(genome=genome, config=config) # New
+                net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
                 genome.fitness = self.evaluate(self.game_manager, net, placement_agent)
 
 
@@ -193,11 +196,11 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 3
+    BOARD_SIZE = 5
     POPULATION_SIZE = 50
-    SHIP_SIZES = [2]
-    CHROMOSOME = [(0, 0, 0)]
-    NUM_GENERATIONS = 100
+    SHIP_SIZES = [3, 2]
+    CHROMOSOME = [(0, 0, 0), (1, 1, 1)]
+    NUM_GENERATIONS = 60
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
     CROSSOVER_ARCHITECTURE = True
@@ -247,7 +250,7 @@ if __name__ == "__main__":
         board_size=BOARD_SIZE,
         ship_sizes=SHIP_SIZES,
         strategy_placement="chromosome",
-        strategy_search="nn_search",
+        strategy_search="neat",
         chromosome=CHROMOSOME,
         range_evaluations=RANGE_EVALUATIONS,
     )

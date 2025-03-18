@@ -19,14 +19,17 @@ def compute_pool_output_dim(in_dim, pool_size, stride):
     return (in_dim - pool_size) // stride + 1
 
 
-class ConvolutionalNeuralNetwork:
-    def __init__(self, input_shape, output_shape, layer_evals):
+class ConvolutionalNeuralNetwork(nn.Module):
+    def __init__(self, input_shape, output_shape, layer_evals, *args, **kwargs):
         """
         Initialize the Convolutional Neural Network.
         """
+        super().__init__(*args, **kwargs)
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.layer_evals = layer_evals
+        self.device = "cpu"
+        self.to(self.device)
 
     @staticmethod
     def create(genome, config):

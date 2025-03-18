@@ -365,10 +365,8 @@ class CNNGenome(object):
         if not active_fc:
             disabled_fc = [g for g in self.layer_config if isinstance(g, CNNFCGene)]
             if disabled_fc:
-                print("Re-enabling a disabled FC gene to satisfy minimum structure")
                 disabled_fc[0].enabled = True
             else:
-                print("Adding a new FC gene to satisfy minimum structure")
                 # Compute a flattened size from the active conv/pool chain.
                 # You might need a helper function for this; for now, we assume:
                 flattened_size = config.input_channels * (config.input_size ** 2)

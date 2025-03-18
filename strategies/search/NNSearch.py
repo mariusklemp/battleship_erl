@@ -26,6 +26,7 @@ class NNSearch(nn.Module, Strategy):
         super().__init__()
         self.name = "nn_search"
         self.search_agent = search_agent
+        print(net)
         self.net = net
         self.device = net.device  # Get device from the network
 

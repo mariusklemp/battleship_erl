@@ -84,16 +84,12 @@ class OuterLoopManager:
     
     def _create_nn_agent(self, index, model_number):
         """Create a neural network-based search agent."""
-        print(f"[DEBUG] Loading model: {model_number}")
-        
+
         # Create a new network instance for each model
-        net = ANET(
-            board_size=self.board_size,
-            activation="relu",
-            output_size=self.board_size**2,
-            device="cpu",
-            layer_config=self.layer_config,
-        )
+        net = ANET(board_size=self.board_size,
+                   activation="relu",
+                   device="cpu",
+                   layer_config=self.layer_config)
 
         search_agent = SearchAgent(
             board_size=self.board_size,
