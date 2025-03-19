@@ -248,10 +248,8 @@ def main():
     net = ANET(
         board_size=config["board_size"],
         activation="relu",
-        output_size=config["board_size"] ** 2,
         device=config["device"],
         layer_config=layer_config,
-        extra_input_size=5,
     )
 
     search_agent = SearchAgent(

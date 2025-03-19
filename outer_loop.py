@@ -84,16 +84,12 @@ class OuterLoopManager:
     
     def _create_nn_agent(self, index, model_number):
         """Create a neural network-based search agent."""
-        print(f"[DEBUG] Loading model: {model_number}")
-        
+
         # Create a new network instance for each model
-        net = ANET(
-            board_size=self.board_size,
-            activation="relu",
-            output_size=self.board_size**2,
-            device="cpu",
-            layer_config=self.layer_config,
-        )
+        net = ANET(board_size=self.board_size,
+                   activation="relu",
+                   device="cpu",
+                   layer_config=self.layer_config)
 
         search_agent = SearchAgent(
             board_size=self.board_size,
@@ -180,7 +176,7 @@ class OuterLoopManager:
         
         for i, (genome_id, genome) in enumerate(population.population.items()):
             try:
-                net = ANET.create_from_cnn_genome(genome=genome, config=config)
+                net = ANET(genome=genome, config=config)
                 agent = SearchAgent(
                     board_size=self.board_size,
                     strategy="nn_search",
@@ -234,7 +230,7 @@ class OuterLoopManager:
         )
         
         # Save the best model
-        best_net = ANET.create_from_cnn_genome(genome=best_genome, config=config)
+        best_net = ANET(genome=best_genome, config=config) # New
         best_agent = SearchAgent(
             board_size=self.board_size,
             strategy="nn_search",
@@ -261,7 +257,7 @@ class OuterLoopManager:
                     old_name = agent.name
                     
                     # Create new network from evolved genome
-                    new_net = ANET.create_from_cnn_genome(genome=genome, config=config)
+                    new_net = ANET(genome=genome, config=config) # New
                     
                     # Update the agent's network
                     agent.strategy.net = new_net

@@ -2,7 +2,6 @@ import copy
 from random import choice, random, randint
 from neat.config import ConfigParameter, write_pretty_params
 
-import visualize
 from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
 from neat_system.helpers import (
     adapt_conv_weights, adapt_biases, adapt_fc_weights,
@@ -34,8 +33,6 @@ class CNNGenomeConfig(object):
         ConfigParameter("pool_strides", str),
         ConfigParameter("pool_type", str),
         ConfigParameter("max_num_pool_layer", int),
-        ConfigParameter("pool_layer_add_prob", float),
-        ConfigParameter("pool_layer_delete_prob", float),
         ConfigParameter("layer_add_prob", float),
         ConfigParameter("layer_delete_prob", float),
         ConfigParameter("conv_params_mutate_prob", float),
@@ -165,7 +162,7 @@ class CNNGenome(object):
         self.layer_config = []
         num_conv_layers = randint(1, config.max_num_conv_layer)
         num_pool_layers = randint(0, config.max_num_pool_layer)
-        num_fc_layers = randint(1, config.max_num_fc_layer)
+        num_fc_layers = randint(0, config.max_num_fc_layer)
         in_channels = config.input_channels
         current_size = config.input_size
 
@@ -222,7 +219,7 @@ class CNNGenome(object):
                     self.layer_config.append(new_gene)
 
             # Possibly add a new pooling layer.
-            if random() < config.pool_layer_add_prob:
+            if random() < config.layer_add_prob:
                 current_spatial_size = config.input_size
                 for gene in self.layer_config:
                     if isinstance(gene, CNNConvGene):
@@ -252,24 +249,35 @@ class CNNGenome(object):
                 fc_gene.initialize_weights(config)
                 self.layer_config.append(fc_gene)
 
-            # Possibly remove a layer.
-            if random() < config.layer_delete_prob and len(self.layer_config) > 1:
-                active_fc = [gene for gene in self.layer_config if
-                             isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True)]
-                if len(active_fc) > 1 or not isinstance(self.layer_config[-1], CNNFCGene):
-                    gene_to_disable = self.layer_config[-1]
+            # Possibly remove a conv.
+            if random() < config.layer_delete_prob:
+                active_conv_layers = [gene for gene in self.layer_config if
+                                      isinstance(gene, CNNConvGene) and getattr(gene, "enabled", True)]
+                if len(active_conv_layers) > 1:
+                    gene_to_disable = choice(active_conv_layers)
+                    gene_to_disable.enabled = False
+
+            # Possibly remove FC layer.
+            if random() < config.layer_delete_prob:
+                active_fc_layers = [gene for gene in self.layer_config if
+                                    isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True)]
+                if active_fc_layers:
+                    gene_to_disable = choice(active_fc_layers)
                     gene_to_disable.enabled = False
 
             # Possibly remove a pooling layer.
-            if random() < config.pool_layer_delete_prob:
-                pool_layers = [g for g in self.layer_config if isinstance(g, CNNPoolGene)]
-                if pool_layers:
-                    gene_to_disable = choice(pool_layers)
+            if random() < config.layer_delete_prob:
+                active_pool_layers = [g for g in self.layer_config if
+                                      isinstance(g, CNNPoolGene) and getattr(g, "enabled", True)]
+                if active_pool_layers:
+                    gene_to_disable = choice(active_pool_layers)
                     gene_to_disable.enabled = False
 
-        self.enforce_valid_ordering()
-        self._adjust_layer_sizes(config)
         snapshot_arch_done = copy.deepcopy(self)  # Snapshot after architecture mutations
+        self.enforce_valid_ordering()
+        snapshot_arch_ordering = copy.deepcopy(self)  # Snapshot after architecture mutations
+        self._adjust_layer_sizes(config)
+        snapshot_arch_done_adjust = copy.deepcopy(self)  # Snapshot after architecture mutations
 
         # --- Parameter Mutation Phase ---
         new_layer_config = []
@@ -277,15 +285,22 @@ class CNNGenome(object):
             mutated_gene = gene.mutate(config)
             new_layer_config.append(mutated_gene)
         self.layer_config = new_layer_config
-        self.enforce_valid_ordering()
-        self._adjust_layer_sizes(config)
+
         snapshot_after = copy.deepcopy(self)  # Snapshot after all mutations
+        self.enforce_valid_ordering()
+        snapshot_after_ordering = copy.deepcopy(self)  # Snapshot after architecture mutations
+        self._adjust_layer_sizes(config)
+        snapshot_after_adjust = copy.deepcopy(self)  # Snapshot after all mutations
 
         # Plot all snapshots in one figure.
         genome_steps = [
-            (snapshot_before, "Before mutate (add, remove)"),
-            (snapshot_arch_done, "Before mutate params"),
-            (snapshot_after, "After mutate")
+            (snapshot_before, "Before mutate"),
+            (snapshot_arch_done, "After mutate architecture (add, disable)"),
+            (snapshot_arch_ordering, "After mutate architecture (reorder)"),
+            (snapshot_arch_done_adjust, "After mutate architecture (adjust)"),
+            (snapshot_after, "After mutate params"),
+            (snapshot_after_ordering, "After mutate params (reorder)"),
+            (snapshot_after_adjust, "After mutate params (adjust)")
         ]
         # visualize.plot_multiple_genomes(genome_steps, "Mutation Steps")
 
@@ -317,8 +332,6 @@ class CNNGenome(object):
 
         child_genes = _crossover_by_key(config, parent1_genes, parent2_genes, fitness1, fitness2)
 
-        # child_genes is now sorted by innovation number.
-
         # 5) Assign to this genome's layer_config.
         self.layer_config = child_genes
 
@@ -335,12 +348,10 @@ class CNNGenome(object):
         genome_steps = [
             (parent1, "Parent 1"),
             (parent2, "Parent 2"),
-            (self,    "Child")
+            (self, "Child")
         ]
-        #visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
-
+        # visualize.plot_multiple_genomes(genome_steps, "Crossover Steps")
         return self
-
 
     def ensure_minimum_structure(self, config):
         """
@@ -360,30 +371,51 @@ class CNNGenome(object):
                 new_conv.initialize_weights(config)
                 self.layer_config.insert(0, new_conv)
 
-        # Check active FC genes.
-        active_fc = [g for g in self.layer_config if isinstance(g, CNNFCGene) and getattr(g, "enabled", True)]
-        if not active_fc:
-            disabled_fc = [g for g in self.layer_config if isinstance(g, CNNFCGene)]
-            if disabled_fc:
-                print("Re-enabling a disabled FC gene to satisfy minimum structure")
-                disabled_fc[0].enabled = True
-            else:
-                print("Adding a new FC gene to satisfy minimum structure")
-                # Compute a flattened size from the active conv/pool chain.
-                # You might need a helper function for this; for now, we assume:
-                flattened_size = config.input_channels * (config.input_size ** 2)
-                new_fc = CNNFCGene.create(config, input_size=flattened_size)
-                new_fc.initialize_weights(config)
-                self.layer_config.append(new_fc)
-
     def enforce_valid_ordering(self):
         """
-        Reorder the layer configuration so that convolutional and pooling layers come before
-        fully connected layers.
+        Reorder *only the enabled* layers so that:
+          - All enabled Conv/Pool go before any enabled FC.
+          - The first enabled Conv/Pool is a Conv if at all possible.
+        Disabled genes remain in the exact same positions.
         """
-        conv_pool_genes = [gene for gene in self.layer_config if isinstance(gene, (CNNConvGene, CNNPoolGene))]
-        fc_genes = [gene for gene in self.layer_config if isinstance(gene, CNNFCGene)]
-        self.layer_config = conv_pool_genes + fc_genes
+
+        # 1) Gather enabled genes separately, preserving order.
+        enabled_conv_pool = []
+        enabled_fc = []
+        for gene in self.layer_config:
+            if gene.enabled:
+                if isinstance(gene, (CNNConvGene, CNNPoolGene)):
+                    enabled_conv_pool.append(gene)
+                elif isinstance(gene, CNNFCGene):
+                    enabled_fc.append(gene)
+                elif isinstance(gene, (CNNConvGene, CNNPoolGene)):
+                    enabled_conv_pool.append(gene)
+
+        # 2) Ensure the first enabled Conv/Pool is actually a Conv (if possible).
+        if enabled_conv_pool and not isinstance(enabled_conv_pool[0], CNNConvGene):
+            for i in range(1, len(enabled_conv_pool)):
+                if isinstance(enabled_conv_pool[i], CNNConvGene):
+                    # Swap it to the front
+                    enabled_conv_pool[0], enabled_conv_pool[i] = enabled_conv_pool[i], enabled_conv_pool[0]
+                    break
+
+        # 3) Rebuild the layer_config by replacing enabled genes in place,
+        #    but forced into the order: [enabled_conv_pool ... then enabled_fc].
+        #    Disabled genes keep their exact positions.
+        new_config = []
+        for gene in self.layer_config:
+            if gene.enabled:
+                if enabled_conv_pool:
+                    new_config.append(enabled_conv_pool.pop(0))
+                else:
+                    new_config.append(enabled_fc.pop(0))
+            else:
+                # Keep disabled genes exactly where they were.
+                new_config.append(gene)
+
+        # 4) Assign back
+        self.layer_config = new_config
+
 
     def _adjust_layer_sizes(self, config):
         # Only consider enabled genes for computing the active network structure.

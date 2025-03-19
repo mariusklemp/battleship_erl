@@ -9,13 +9,7 @@ from scipy.stats import wasserstein_distance, skew, kurtosis
 # Helper functions to crossover between genes
 # ============================================================================
 def _crossover_by_key(config, genes1, genes2, fitness1, fitness2):
-    """
-    Given two lists of genes (sorted by key), performs NEAT-style crossover:
-      - For matching genes (same key): combine weights and biases from both parents.
-        If either gene is disabled, the child gene is disabled with 75% probability.
-      - For disjoint/excess genes: inherit from the fitter parent.
-    Returns a new list of child genes (copies).
-    """
+
     child_genes = []
 
     # Sort parents' genes by key.
@@ -40,6 +34,20 @@ def _crossover_by_key(config, genes1, genes2, fitness1, fitness2):
                 chosen_gene.enabled = False
             else:
                 chosen_gene.enabled = True
+
+            # If either parent's gene is disabled, disable the child's gene with 75% probability.
+            #if (not gene1.enabled) and (not gene2.enabled):
+                # Both disabled
+                #chosen_gene.enabled = False
+            #elif (not gene1.enabled) or (not gene2.enabled):
+                # One disabled, one enabled
+                #if random() < 0.25:  # 25% chance to re-enable
+                    #chosen_gene.enabled = True
+                #else:
+                    #chosen_gene.enabled = False
+            #else:
+                # Both enabled
+                #chosen_gene.enabled = True
 
             child_genes.append(chosen_gene)
             i += 1

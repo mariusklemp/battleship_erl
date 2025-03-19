@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
-fitness_threshold = 5
-pop_size = 10
+fitness_threshold = 4
+pop_size = 50
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -21,11 +21,11 @@ compatibility_weight_coefficient = 1
 compatibility_disjoint_coefficient = 1
 compatibility_excess_coefficient = 1
 activation_function = relu
-max_num_conv_layer = 2
+max_num_conv_layer = 1
 max_num_fc_layer = 1
 architecture_mutation_prob = 0.3
-layer_add_prob = 0.1
-layer_delete_prob = 0.1
+layer_add_prob = 0.2
+layer_delete_prob = 0.2
 conv_params_mutate_prob = 0.10
 pool_params_mutate_prob = 0.10
 fc_params_mutate_prob = 0.10
@@ -33,8 +33,6 @@ pool_sizes = [2]
 pool_strides = [1]
 pool_type = max, avg
 max_num_pool_layer = 1
-pool_layer_add_prob = 0.2
-pool_layer_delete_prob = 0.2
 weight_init_mean = 0.0
 weight_init_stdev = 0.1
 weight_init_type = gaussian
