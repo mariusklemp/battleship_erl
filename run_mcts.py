@@ -126,10 +126,12 @@ def train_models(
         )
 
     if save_model:
+        print("Saving model 0")
         search_agent.strategy.save_model(f"models/model_{0}.pth")
 
     for i in tqdm(range(number_actual_games)):
-        placement_agent = placement_agents[i]
+        if placement_agents is not None:
+            placement_agent = placement_agents[i]
         if play_game:
             move_count.append(
                 simulate_game(
@@ -158,11 +160,11 @@ def train_models(
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
-    # if train_model:
-    # search_agent.strategy.plot_metrics()
+    if train_model:
+        search_agent.strategy.plot_metrics()
 
-    # if play_game:
-    # visualize.plot_fitness(move_count, game_manager.size)
+    if play_game:
+        visualize.plot_fitness(move_count, game_manager.size)
 
 
 def load_config(config_path="config/mcts_config.json"):
@@ -288,7 +290,7 @@ def main():
         config["model"]["train"],
         config["replay_buffer"]["save_to_file"],
         config["board_size"],
-        play_game=False,
+        play_game=True,
         placement_agents=None,
         sizes=config["ship_sizes"],
     )
