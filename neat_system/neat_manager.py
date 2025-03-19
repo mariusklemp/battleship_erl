@@ -22,14 +22,14 @@ from neat_system.weight_reporter import WeightStatsReporter
 
 class NEAT_Manager:
     def __init__(
-        self,
-        board_size,
-        ship_sizes,
-        strategy_placement,
-        strategy_search,
-        range_evaluations,
-        config,
-        game_manager,
+            self,
+            board_size,
+            ship_sizes,
+            strategy_placement,
+            strategy_search,
+            range_evaluations,
+            config,
+            game_manager,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -75,29 +75,31 @@ class NEAT_Manager:
 
         # Return the genome fitness
         avg_moves = sum_move_count / self.range_evaluations
-        return self.board_size**2 - avg_moves
+        return self.board_size ** 2 - avg_moves
 
     def eval_genomes(self, genomes, config):
         """Evaluate the fitness of each genome in the population."""
 
         for i, (genome_id, genome) in enumerate(
-            tqdm(genomes, desc="Evaluating generation")
+                tqdm(genomes, desc="Evaluating generation")
         ):
             for placement_agent in self.placement_agents:
                 # net = ANET(genome=genome, config=config) # New
+
                 net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
+
                 genome.fitness = self.evaluate(self.game_manager, net, placement_agent)
 
 
 def run(
-    config,
-    gen,
-    board_size,
-    ship_sizes,
-    strategy_placement,
-    strategy_search,
-    chromosome,
-    range_evaluations,
+        config,
+        gen,
+        board_size,
+        ship_sizes,
+        strategy_placement,
+        strategy_search,
+        chromosome,
+        range_evaluations,
 ):
     # Searching Agent
     # p = neat.Checkpointer.restore_checkpoint("neat-checkpoint-0")
@@ -140,7 +142,7 @@ def run(
     visualize.visualize_species(stats)
     visualize.plot_stats(
         statistics=stats,
-        best_possible=(board_size**2 - sum(ship_sizes)),
+        best_possible=(board_size ** 2 - sum(ship_sizes)),
         ylog=False,
         view=True,
     )
@@ -196,7 +198,7 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 5
+    BOARD_SIZE = 3
     POPULATION_SIZE = 50
     SHIP_SIZES = [3, 2]
     CHROMOSOME = [(0, 0, 0), (1, 1, 1)]
@@ -213,12 +215,12 @@ if __name__ == "__main__":
     cp.read(config_path)
 
     # Update [NEAT] section values
-    cp["NEAT"]["fitness_threshold"] = str(BOARD_SIZE**2 - sum(SHIP_SIZES))
+    cp["NEAT"]["fitness_threshold"] = str(BOARD_SIZE ** 2 - sum(SHIP_SIZES))
     cp["NEAT"]["pop_size"] = str(POPULATION_SIZE)
 
     # Update [CNNGenome] section values
     cp["CNNGenome"]["input_size"] = str(BOARD_SIZE)
-    cp["CNNGenome"]["output_size"] = str(BOARD_SIZE**2)
+    cp["CNNGenome"]["output_size"] = str(BOARD_SIZE ** 2)
     cp["CNNGenome"]["kernel_sizes"] = str(get_kernel_sizes(BOARD_SIZE))
     cp["CNNGenome"]["strides"] = str(get_strides(BOARD_SIZE))
     cp["CNNGenome"]["paddings"] = str(get_paddings(BOARD_SIZE))

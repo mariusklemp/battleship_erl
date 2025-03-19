@@ -52,66 +52,89 @@ class ANET(nn.Module):
         self.logits = nn.Sequential(*self.getLayers())
 
     def _build_from_genome(self, genome, config):
-        input_channels = config.genome_config.input_channels
-
+        # Initialize the module list and the spatial/channel counters.
         self.layers = nn.ModuleList()
-        # Track channels, height, and width explicitly.
-        curr_c, curr_h, curr_w = input_channels, self.board_size, self.board_size
 
-        for i, gene in enumerate(genome.layer_config):
+        curr_h, curr_w, curr_c = self.board_size, self.board_size, config.genome_config.input_channels
+        layer_evals = []
+
+        # Iterate over the genome's layer configuration.
+        for gene in genome.layer_config:
+            # Skip any disabled genes.
             if hasattr(gene, "enabled") and not gene.enabled:
                 continue
 
             if isinstance(gene, CNNConvGene):
-                # Use the current channel count as input channels.
+                # Compute expected output dimensions.
+                out_h = (curr_h + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
+                out_w = (curr_w + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
+
+                # Create the convolution layer.
                 conv_layer = nn.Conv2d(
-                    in_channels=curr_c,
+                    in_channels=int(gene.in_channels),
                     out_channels=int(gene.out_channels),
                     kernel_size=int(gene.kernel_size),
                     stride=int(gene.stride),
                     padding=int(gene.padding)
                 )
-                self.layers.append(conv_layer)
-                self.layers.append(activation_function(gene.activation))
-                # Update the channel count and spatial dimensions.
+                # Copy over the weights and biases if provided.
+                if hasattr(gene, "weights") and hasattr(gene, "biases"):
+                    conv_layer.weight.data.copy_(torch.from_numpy(gene.weights))
+                    conv_layer.bias.data.copy_(torch.from_numpy(gene.biases))
+                activation = activation_function(gene.activation)
+                layer_evals.append({"type": "conv", "params": {"layer": conv_layer, "activation": activation}})
+                curr_h, curr_w = out_h, out_w
                 curr_c = gene.out_channels
-                curr_h = (curr_h + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
-                curr_w = (curr_w + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
 
             elif isinstance(gene, CNNPoolGene):
+                out_h = (curr_h - gene.pool_size) // gene.stride + 1
+                out_w = (curr_w - gene.pool_size) // gene.stride + 1
+
                 if gene.pool_type == "max":
                     pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
                 else:
                     pool_layer = nn.AvgPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
-                self.layers.append(pool_layer)
-                # Update spatial dimensions based on the pooling operation.
-                curr_h = (curr_h - gene.pool_size) // gene.stride + 1
-                curr_w = (curr_w - gene.pool_size) // gene.stride + 1
+                layer_evals.append({"type": "pool", "params": {"layer": pool_layer}})
+                curr_h, curr_w = out_h, out_w
 
             elif isinstance(gene, CNNFCGene):
-                # When hitting the first fully connected layer, flatten the current tensor.
-                # Check if the last added layer is not already a Flatten.
-                if not self.layers or not isinstance(self.layers[-1], nn.Flatten):
-                    self.layers.append(nn.Flatten())
-                    fc_input_size = curr_c * curr_h * curr_w
-                else:
-                    # If flattening was already done, assume gene.input_size is precomputed.
-                    fc_input_size = gene.input_size
-                fc_layer = nn.Linear(in_features=int(fc_input_size), out_features=int(gene.fc_layer_size))
-                self.layers.append(fc_layer)
-                self.layers.append(activation_function(gene.activation))
-                # After an FC layer, the data is flat.
-                curr_c, curr_h, curr_w = gene.fc_layer_size, 1, 1
+                activation = activation_function(gene.activation)
+                fc_layer = nn.Linear(int(gene.input_size), int(gene.fc_layer_size))
+                if hasattr(gene, "weights") and hasattr(gene, "biases"):
+                    fc_layer.weight.data.copy_(torch.from_numpy(gene.weights))
+                    fc_layer.bias.data.copy_(torch.from_numpy(gene.biases))
+                layer_evals.append({"type": "fc", "params": {"layer": fc_layer, "activation": activation}})
+            else:
+                raise ValueError(f"Unknown gene type: {type(gene)}")
 
-        # Ensure the final tensor is flattened.
-        if not self.layers or not isinstance(self.layers[-1], nn.Flatten):
-            self.layers.append(nn.Flatten())
-            flattened_size = curr_c * curr_h * curr_w
-        else:
-            flattened_size = curr_c * curr_h * curr_w
+        # Determine the last FC gene to define the final output layer.
+        last_fc_size = None
+        for gene in reversed(genome.layer_config):
+            if isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True):
+                last_fc_size = gene.fc_layer_size
+                break
 
-        self.fc_policy = nn.Linear(int(flattened_size), self.output_size)
-        self.layers.append(self.fc_policy)
+        if last_fc_size is None:
+            fc_input_size = curr_c * curr_h * curr_w
+            last_fc_size = fc_input_size
+
+        output_layer = nn.Linear(int(last_fc_size), self.output_size)
+        layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
+
+        # Convert the layer evaluation list into a ModuleList.
+        for item in layer_evals:
+            ltype = item["type"]
+            params = item["params"]
+            if ltype in ["conv"]:
+                self.layers.append(params["layer"])
+                self.layers.append(params["activation"])
+            elif ltype in ["pool"]:
+                self.layers.append(params["layer"])
+            elif ltype in ["fc"]:
+                flatten_layer = nn.Flatten()
+                self.layers.append(flatten_layer)
+                self.layers.append(params["layer"])
+                self.layers.append(params["activation"])
 
     def _build_default(self):
         self.conv1 = nn.Conv2d(self.input_channels, 128, kernel_size=3, padding=1)
@@ -144,14 +167,9 @@ class ANET(nn.Module):
         return board
 
     def forward(self, game_state: torch.Tensor, extra_features):
-        """
-        Parameters:
-          game_state: Tensor of shape (batch, 4, board_size, board_size)
-          extra_features: Tensor or list with extra information (e.g., [0, 2, 1, 0, 0])
-                          indicating how many ships remain.
-        Returns:
-          policy: Tensor of shape (batch, output_size)
-        """
+        print("Running network")
+        print(self)
+
         # Ensure game_state is on the correct device.
         game_state = game_state.to(self.device)
 
@@ -173,6 +191,7 @@ class ANET(nn.Module):
             for layer in self.layers:
                 x = layer(x)
             return x
+
         elif hasattr(self, "logits"):
             # Layer config based architecture
             return self.logits(game_state)

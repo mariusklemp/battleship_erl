@@ -39,7 +39,7 @@ class ConvolutionalNeuralNetwork(nn.Module):
         output_shape = (board_size, board_size)
 
         # We'll track the current spatial dimensions as we add layers.
-        curr_c, curr_h, curr_w = input_channels, board_size, board_size
+        curr_h, curr_w, curr_c = board_size, board_size, input_channels
         layer_evals = []
 
         for gene in genome.layer_config:
@@ -51,11 +51,7 @@ class ConvolutionalNeuralNetwork(nn.Module):
                 # Check output dimension before building the layer.
                 out_h = compute_conv_output_dim(curr_h, gene.kernel_size, gene.stride, gene.padding)
                 out_w = compute_conv_output_dim(curr_w, gene.kernel_size, gene.stride, gene.padding)
-                if out_h < 1 or out_w < 1:
-                    raise ValueError(
-                        f"Invalid Conv layer: kernel={gene.kernel_size}, stride={gene.stride}, "
-                        f"padding={gene.padding} would produce spatial dims ({out_h}x{out_w})."
-                    )
+
                 conv_layer = nn.Conv2d(
                     in_channels=int(gene.in_channels),
                     out_channels=int(gene.out_channels),
@@ -68,17 +64,13 @@ class ConvolutionalNeuralNetwork(nn.Module):
                     conv_layer.bias.data.copy_(torch.from_numpy(gene.biases))
                 activation = ConvolutionalNeuralNetwork.get_activation_function(gene.activation)
                 layer_evals.append({"type": "conv", "params": {"layer": conv_layer, "activation": activation}})
-                curr_c = gene.out_channels
                 curr_h, curr_w = out_h, out_w
+                curr_c = gene.out_channels
 
             elif isinstance(gene, CNNPoolGene):
                 out_h = compute_pool_output_dim(curr_h, gene.pool_size, gene.stride)
                 out_w = compute_pool_output_dim(curr_w, gene.pool_size, gene.stride)
-                if out_h < 1 or out_w < 1:
-                    raise ValueError(
-                        f"Invalid Pool layer: pool_size={gene.pool_size}, stride={gene.stride} "
-                        f"would produce spatial dims ({out_h}x{out_w})."
-                    )
+
                 if gene.pool_type == "max":
                     pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
                 else:
@@ -96,14 +88,16 @@ class ConvolutionalNeuralNetwork(nn.Module):
             else:
                 raise ValueError(f"Unknown gene type: {type(gene)}")
 
-        # Check for at least one FC layer.
+        # Determine the last FC gene to define the final output layer.
         last_fc_size = None
         for gene in reversed(genome.layer_config):
             if isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True):
                 last_fc_size = gene.fc_layer_size
                 break
+
         if last_fc_size is None:
-            raise ValueError("No fully connected (FC) layer found in the genome.")
+            fc_input_size = curr_c * curr_h * curr_w
+            last_fc_size = fc_input_size
 
         output_layer = nn.Linear(int(last_fc_size), board_size ** 2)
         layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
