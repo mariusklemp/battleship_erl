@@ -2,7 +2,7 @@
     "board_size": 5,
     "ship_sizes": [3, 3, 2],
     "mcts": {
-        "simulations_number": 50,
+        "simulations_number": 100,
         "exploration_constant": 1.41
     },
     "training": {
@@ -14,12 +14,12 @@
     },
     "replay_buffer": {
         "max_size": 10000,
-        "load_from_file": false,
+        "load_from_file": true,
         "save_to_file": true,
         "file_path": "rbuf/rbuf.pkl"
     },
     "model": {
-        "save": false,
+        "save": true,
         "train": true,
         "save_path": "models/model_{}.pth"
     },

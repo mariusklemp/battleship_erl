@@ -148,46 +148,42 @@ class ANET(nn.Module):
 
     def extra_features_to_board(self, extra_features):
         """
-        Converts the ship count features into a binary matrix representation.
-        Each column represents a ship size, and each 1 in that column indicates a ship.
+        Handles the ship matrix representation.
+        The input is already a binary matrix where each column represents a ship size
+        and each 1 in that column indicates a ship.
         
         Args:
-            extra_features: Tensor containing the number of ships of each size
+            extra_features: Binary matrix of shape (batch_size, board_size, board_size) where:
+                          - Each column i represents ships of size i+1
+                          - Each 1 in column i indicates a ship of size i+1
             
         Returns:
-            A binary matrix of shape (board_size, board_size) where:
-            - Each column i represents ships of size i+1
-            - The number of 1s in column i represents the number of ships of size i+1
+            The same matrix, ensuring it's on the correct device
         """
-        # Ensure extra_features is a tensor.
+        # Ensure extra_features is a tensor and has the correct shape
         if not torch.is_tensor(extra_features):
             extra_features = torch.tensor(extra_features, dtype=torch.float32)
-
-        board = torch.zeros(self.board_size, self.board_size)
-
-        # Only process up to board_size features
-        for i, count in enumerate(extra_features[: self.board_size + 1]):
-            count = int(count)  # convert to integer count
-            # Clip count to board_size if needed.
-            count = min(count, self.board_size)
-            # Set the first `count` rows in column i to 1.
-            board[:count, i] = 1
-        return board
+            
+        # Ensure the matrix has the correct shape (including batch dimension)
+        if extra_features.shape[1:] != (self.board_size, self.board_size):
+            raise ValueError(f"Expected shape (batch_size, {self.board_size}, {self.board_size}), got {extra_features.shape}")
+            
+        return extra_features
 
     def forward(self, game_state: torch.Tensor, extra_features):
-       
-
         # Ensure game_state is on the correct device.
         game_state = game_state.to(self.device)
 
         # Convert extra_features to a board (of shape [board_size, board_size])
         board_extra = self.extra_features_to_board(extra_features)
+        
+        # Add channel dimension and repeat to match game_state batch size
         board_extra = (
-            board_extra.unsqueeze(0)
-            .unsqueeze(0)
-            .repeat(game_state.shape[0], 1, 1, 1)
+            board_extra.unsqueeze(1)  # Add channel dimension
+            .repeat(game_state.shape[0], 1, 1, 1)  # Repeat to match batch size
             .to(self.device)
         )
+        
         # Concatenate the extra channel to the board input along the channel dimension.
         game_state = torch.cat([game_state, board_extra], dim=1)
 
