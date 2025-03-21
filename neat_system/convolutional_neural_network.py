@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
+from neat_system.cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
 
 
 def compute_conv_output_dim(in_dim, kernel_size, stride, padding):

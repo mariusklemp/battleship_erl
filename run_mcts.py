@@ -160,11 +160,11 @@ def train_models(
 
     if save_rbuf:
         rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
-    if train_model:
-        search_agent.strategy.plot_metrics()
+    #if train_model:
+        #search_agent.strategy.plot_metrics()
 
-    if play_game:
-        visualize.plot_fitness(move_count, game_manager.size)
+    #if play_game:
+        #visualize.plot_fitness(move_count, game_manager.size)
 
 
 def load_config(config_path="config/mcts_config.json"):

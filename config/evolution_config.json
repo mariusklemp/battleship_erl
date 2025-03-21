@@ -10,6 +10,6 @@
     },
     "evolution": {
         "num_generations": 50,
-        "inner_loop_epochs": 10
+        "inner_loop_epochs": 5
     }
 } 

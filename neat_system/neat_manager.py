@@ -2,8 +2,6 @@ import configparser
 import os
 import sys
 
-from neat_system.convolutional_neural_network import ConvolutionalNeuralNetwork
-
 # Add the parent directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -18,6 +16,9 @@ import visualize
 from ai.models import ANET
 from game_logic.placement_agent import PlacementAgent
 from neat_system.weight_reporter import WeightStatsReporter
+
+from neat_system.convolutional_neural_network import ConvolutionalNeuralNetwork
+
 
 
 class NEAT_Manager:
@@ -84,9 +85,9 @@ class NEAT_Manager:
                 tqdm(genomes, desc="Evaluating generation")
         ):
             for placement_agent in self.placement_agents:
-                # net = ANET(genome=genome, config=config) # New
+                net = ANET(genome=genome, config=config) # New
 
-                net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
+                # net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
 
                 genome.fitness = self.evaluate(self.game_manager, net, placement_agent)
 
@@ -198,10 +199,14 @@ if __name__ == "__main__":
     config_path = os.path.join(local_dir, "config.txt")
 
     # === Static Parameters ===
-    BOARD_SIZE = 3
+    BOARD_SIZE = 5
     POPULATION_SIZE = 50
-    SHIP_SIZES = [3, 2]
-    CHROMOSOME = [(0, 0, 0), (1, 1, 1)]
+    SHIP_SIZES = [3, 2, 2]
+    CHROMOSOME = [
+        (0, 0, 0),
+        (1, 1, 1),
+        (2, 2, 2),
+    ]
     NUM_GENERATIONS = 60
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
@@ -251,8 +256,8 @@ if __name__ == "__main__":
         gen=NUM_GENERATIONS,
         board_size=BOARD_SIZE,
         ship_sizes=SHIP_SIZES,
-        strategy_placement="chromosome",
-        strategy_search="neat",
+        strategy_placement="random",
+        strategy_search="nn_search",
         chromosome=CHROMOSOME,
         range_evaluations=RANGE_EVALUATIONS,
     )

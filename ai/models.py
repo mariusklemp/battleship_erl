@@ -148,8 +148,16 @@ class ANET(nn.Module):
 
     def extra_features_to_board(self, extra_features):
         """
-        Converts an extra features vector into a 2D binary board.
-        For each index i, it sets the first extra_features[i] rows in column i to 1.
+        Converts the ship count features into a binary matrix representation.
+        Each column represents a ship size, and each 1 in that column indicates a ship.
+        
+        Args:
+            extra_features: Tensor containing the number of ships of each size
+            
+        Returns:
+            A binary matrix of shape (board_size, board_size) where:
+            - Each column i represents ships of size i+1
+            - The number of 1s in column i represents the number of ships of size i+1
         """
         # Ensure extra_features is a tensor.
         if not torch.is_tensor(extra_features):
@@ -167,8 +175,7 @@ class ANET(nn.Module):
         return board
 
     def forward(self, game_state: torch.Tensor, extra_features):
-        print("Running network")
-        print(self)
+       
 
         # Ensure game_state is on the correct device.
         game_state = game_state.to(self.device)

@@ -1,6 +1,6 @@
 {
-    "board_size": 3,
-    "ship_sizes": [2, 2],
+    "board_size": 5,
+    "ship_sizes": [3, 3, 2],
     "mcts": {
         "simulations_number": 50,
         "exploration_constant": 1.41
@@ -9,7 +9,8 @@
         "batch_size": 128,
         "save_interval": 10,
         "learning_rate": 0.0001,
-        "epochs": 10
+        "epochs": 10,
+        "number_actual_games": 100
     },
     "replay_buffer": {
         "max_size": 10000,

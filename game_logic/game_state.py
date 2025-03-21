@@ -21,12 +21,20 @@ class GameState:
         # Add batch dimension: (1, 4, board_size, board_size)
         board_tensor = board_tensor.unsqueeze(0)
 
-        # Create extra features tensor
+        # Create ship matrix representation
         ship_counts = Counter(self.remaining_ships)
-        feature_vector = [ship_counts.get(i, 0) for i in range(1, board_size + 1)]
-        extra_tensor = torch.tensor(feature_vector, dtype=torch.float32)
+        ship_matrix = torch.zeros((board_size, board_size), dtype=torch.float32)
+        
+        # Fill the matrix with ships - each column represents a ship size
+        for size in range(1, board_size + 1):
+            count = ship_counts.get(size, 0)
+            for i in range(count):
+                ship_matrix[i, size-1] = 1
 
-        return board_tensor, extra_tensor
+        # Add batch dimension: (1, board_size, board_size)
+        ship_matrix = ship_matrix.unsqueeze(0)
+
+        return board_tensor, ship_matrix
 
     def state_tensor_canonical(self):
         """
@@ -46,14 +54,20 @@ class GameState:
         # Add the batch dimension: (1, 4, board_size, board_size)
         canonical_board = canonical_board.unsqueeze(0)
 
-        # Extra features (ship counts remain unchanged)
-        ship_counts = Counter(
-            self.remaining_ships
-        )  # Changed to use remaining_ships like state_tensor
-        extra_features = [ship_counts.get(i, 0) for i in range(1, 6)]
-        extra_tensor = torch.tensor(extra_features, dtype=torch.float32)
+        # Create ship matrix representation
+        ship_counts = Counter(self.remaining_ships)
+        ship_matrix = torch.zeros((board_size, board_size), dtype=torch.float32)
+        
+        # Fill the matrix with ships - each column represents a ship size
+        for size in range(1, board_size + 1):
+            count = ship_counts.get(size, 0)
+            for i in range(count):
+                ship_matrix[i, size-1] = 1
 
-        return canonical_board, extra_tensor, rotation
+        # Add batch dimension: (1, board_size, board_size)
+        ship_matrix = ship_matrix.unsqueeze(0)
+
+        return canonical_board, ship_matrix, rotation
 
 
 def canonicalize_board(board: torch.Tensor):
