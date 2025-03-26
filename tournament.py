@@ -198,18 +198,66 @@ class Tournament:
         last_hit_move = None  # The move number of the last hit
         moves_between_hits_list = []  # List to store the number of moves between consecutive hits
         
-        # For entropy calculation
-        shots_made = []  # Track all shots at the end of the game
-        start_shots = []  # Track the first 10 shots
+        # For entropy calculation of action distributions
+        start_distributions = []  # Track action distributions at the start of the game
+        all_distributions = []  # Track all action distributions during the game
         
         while not game_manager.is_terminal(current_state):
             total_moves += 1
-            move = search_agent.strategy.find_move(current_state, topp=True)
             
-            # Track shots for entropy calculation
-            shots_made.append(move)
-            if total_moves <= 10:  # Track first 10 shots for start entropy
-                start_shots.append(move)
+            # Make the move and get the probability distribution if available
+            if hasattr(search_agent.strategy, "find_move"):
+                # Check if this is a neural network strategy by inspecting the method signature
+                try:
+                    # For neural network agents that return both move and probabilities
+                    move_result = search_agent.strategy.find_move(current_state, topp=True)
+                    
+                    if isinstance(move_result, tuple) and len(move_result) == 2:
+                        # Unpack move and probabilities
+                        move, probabilities_np = move_result
+                        
+                        # Track distributions for entropy calculation
+                        all_distributions.append(probabilities_np)
+                        if total_moves <= 5:  # Track first 5 distributions for start entropy
+                            start_distributions.append(probabilities_np)
+                    else:
+                        # Agent just returned a move without probabilities
+                        move = move_result
+                        
+                        # Create a uniform distribution for entropy calculation
+                        legal_moves = game_manager.get_legal_moves(current_state)
+                        distribution = np.zeros(self.board_size * self.board_size)
+                        if legal_moves:
+                            distribution[legal_moves] = 1.0 / len(legal_moves)
+                        
+                        all_distributions.append(distribution)
+                        if total_moves <= 5:
+                            start_distributions.append(distribution)
+                except Exception as e:
+                    # Fallback in case of errors
+                    print(f"Error getting move: {e}")
+                    legal_moves = game_manager.get_legal_moves(current_state)
+                    move = np.random.choice(legal_moves) if legal_moves else 0
+                    
+                    # Default distribution
+                    distribution = np.zeros(self.board_size * self.board_size)
+                    if legal_moves:
+                        distribution[legal_moves] = 1.0 / len(legal_moves)
+                    all_distributions.append(distribution)
+                    if total_moves <= 5:
+                        start_distributions.append(distribution)
+            else:
+                # Fallback for agents without find_move method
+                legal_moves = game_manager.get_legal_moves(current_state)
+                move = np.random.choice(legal_moves) if legal_moves else 0
+                
+                # Default distribution
+                distribution = np.zeros(self.board_size * self.board_size)
+                if legal_moves:
+                    distribution[legal_moves] = 1.0 / len(legal_moves)
+                all_distributions.append(distribution)
+                if total_moves <= 5:
+                    start_distributions.append(distribution)
             
             # Check if move will be a hit before applying it
             is_hit = move in current_state.placing.indexes
@@ -257,24 +305,14 @@ class Tournament:
         # Calculate average moves between consecutive hits
         avg_moves_between_hits = sum(moves_between_hits_list) / len(moves_between_hits_list) if moves_between_hits_list else 0
         
-        # Calculate entropy metrics
-        # Convert shot indices to a board representation for entropy calculation
-        board_size_squared = self.board_size * self.board_size
-        board_shots = [0] * board_size_squared
-        for shot in shots_made:
-            board_shots[shot] = 1
-            
-        # Calculate entropy for the full game
-        end_entropy = self.calculate_entropy(board_shots)
+        # Calculate entropy metrics for action distributions
+        # Average entropy of all distributions
+        all_entropies = [self.calculate_entropy(dist) for dist in all_distributions]
+        end_entropy = np.mean(all_entropies) if all_entropies else 0
         
-        # Calculate entropy for the start of the game
-        if start_shots:
-            start_board = [0] * board_size_squared
-            for shot in start_shots:
-                start_board[shot] = 1
-            start_entropy = self.calculate_entropy(start_board)
-        else:
-            start_entropy = 0
+        # Average entropy of starting distributions
+        start_entropies = [self.calculate_entropy(dist) for dist in start_distributions]
+        start_entropy = np.mean(start_entropies) if start_entropies else 0
         
         return current_state.move_count, accuracy, avg_sink_efficiency, avg_moves_between_hits, start_entropy, end_entropy
 

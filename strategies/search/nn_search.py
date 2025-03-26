@@ -97,7 +97,7 @@ class NNSearch(nn.Module, Strategy):
         else:
             # During training, use pure random sampling
             move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
-        return move
+        return move, probabilities_np
 
     def calculate_accuracy(self, predicted_values, target_values):
         predicted_probs = nn.functional.softmax(predicted_values, dim=1)
