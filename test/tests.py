@@ -1,5 +1,7 @@
 import numpy as np
+from matplotlib import pyplot as plt
 
+import visualize
 # Adjust the module paths as needed.
 from neat_system.cnn_genome import CNNGenome, CNNGenomeConfig
 from neat_system.cnn_layers import CNNFCGene, CNNConvGene, CNNPoolGene
@@ -347,7 +349,69 @@ def test_crossover_pool_first():
         print(gene)
 
 
+def create_manual_genomes_vis():
+    """
+    Create two genomes with:
+      - Genome 1: [ConvGene(innov=0), ConvGene(innov=1), FCGene(innov=2)]
+      - Genome 2: [ConvGene(innov=0), PoolGene(innov=3), ConvGene(innov=1), FCGene(innov=2)]
+    """
+    # --- Genome 1 ---
+    genome1 = CNNGenome(key=1)
+
+    # ConvGene with innov=0.
+    conv_gene1 = CNNConvGene(0)
+    conv_gene1.kernel_size = 3
+    conv_gene1.stride = 1
+    conv_gene1.padding = 0
+    conv_gene1.input_size = 3
+    conv_gene1.in_channels = 4
+    conv_gene1.out_channels = 32
+    conv_gene1.activation = "relu"
+    conv_gene1.enabled = False
+    conv_gene1.weights = np.random.randn(32, 4, 3, 3)
+    conv_gene1.biases = np.random.randn(32)
+
+    # ConvGene with innov=1.
+    conv_gene2 = CNNConvGene(3)
+    conv_gene2.kernel_size = 1
+    conv_gene2.stride = 1
+    conv_gene2.padding = 0
+    conv_gene2.input_size = 1
+    conv_gene2.in_channels = 32
+    conv_gene2.out_channels = 64
+    conv_gene2.activation = "relu"
+    conv_gene2.enabled = True
+    conv_gene2.weights = np.random.randn(64, 32, 1, 1)
+    conv_gene2.biases = np.random.randn(64)
+
+    # PoolGene with innov=3 (extra gene in Genome 2).
+    pool_gene = CNNPoolGene(7)
+    pool_gene.pool_size = 2
+    pool_gene.stride = 1
+    pool_gene.pool_type = "avg"
+    pool_gene.input_size = 1
+    pool_gene.in_channels = 40
+    pool_gene.enabled = True
+
+    # FCGene with innov=2.
+    fc_gene1 = CNNFCGene(4)
+    fc_gene1.fc_layer_size = 128
+    fc_gene1.input_size = 64
+    fc_gene1.activation = "relu"
+    fc_gene1.enabled = True
+    fc_gene1.weights = np.random.randn(128, 64)
+    fc_gene1.biases = np.random.randn(128)
+
+    genome1.layer_config = [conv_gene1, conv_gene2, pool_gene, fc_gene1]
+
+    return genome1
+
+
 if __name__ == '__main__':
     # Run both tests.
-    test_crossover_variability()
-    test_crossover_pool_first()
+    #test_crossover_variability()
+    #test_crossover_pool_first()
+    # Create the figure and axes
+    genome = create_manual_genomes_vis()
+    visualize.visualize_genome_simple(genome,"Genome structure")
+    visualize.plot_genome_simple(genome, "Genome structure")

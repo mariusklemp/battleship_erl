@@ -207,7 +207,7 @@ if __name__ == "__main__":
         (1, 1, 1),
         (2, 2, 2),
     ]
-    NUM_GENERATIONS = 60
+    NUM_GENERATIONS = 5
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
     CROSSOVER_ARCHITECTURE = True

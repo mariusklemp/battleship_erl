@@ -54,6 +54,16 @@ def plot_innovation_registry(innovation_registry):
     plt.show()
 
 
+def plot_genome_simple(genome, label="", max_cols=5, fig_size=(8, 4)):
+    """
+    Creates a new figure and axes, then plots the specified genome
+    using plot_genome. Finally, shows the plot.
+    """
+    fig, ax = plt.subplots(figsize=fig_size)
+    plot_genome(ax, genome, label, max_cols=max_cols)
+    plt.show()
+
+
 def plot_genome(ax, genome, label, max_cols=5):
     """
     Plots the layers (genes) of a single genome in a fixed grid,
@@ -277,6 +287,16 @@ def visualize_genome(genome, ax, title="Genome Architecture"):
     nx.draw(G, pos, with_labels=True, labels=node_labels, node_size=1500,
             node_color='lightblue', ax=ax)
     ax.set_title(title)
+
+
+def visualize_genome_simple(genome, title="Genome Architecture"):
+    """
+    Creates a new figure and axes, then calls visualize_genome
+    on the provided genome. Finally, shows the plot immediately.
+    """
+    fig, ax = plt.subplots(figsize=(5, 5))
+    visualize_genome(genome, ax, title=title)
+    plt.show()
 
 
 def visualize_species(statistics):

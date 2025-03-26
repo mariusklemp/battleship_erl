@@ -416,7 +416,6 @@ class CNNGenome(object):
         # 4) Assign back
         self.layer_config = new_config
 
-
     def _adjust_layer_sizes(self, config):
         # Only consider enabled genes for computing the active network structure.
         active_genes = [gene for gene in self.layer_config if getattr(gene, "enabled", True)]
