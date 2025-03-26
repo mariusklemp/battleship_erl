@@ -59,7 +59,6 @@ class Tournament:
         net = ANET(
             board_size=self.board_size,
             activation="relu",
-            output_size=self.board_size**2,
             device="cpu",
             layer_config=layer_config,
         )
@@ -105,6 +104,7 @@ class Tournament:
                     board_size=self.board_size,
                     strategy=strat,
                     name=strat,  # Add name for MCTS agent
+                    
                 )
                 mcts = MCTS(
                     self.game_manager, simulations_number=500, exploration_constant=1.41
@@ -205,13 +205,21 @@ def main(
 
     tournament.plot_results()
 
+def load_config(config_path="config/mcts_config.json"):
+    """Load configuration from JSON file."""
+    with open(config_path, "r") as f:
+        config = json.load(f)
+
+    return config
+
 
 if __name__ == "__main__":
+    config = load_config()
     main(
-        board_size=5,
+        board_size=config["board_size"],
         placing_strategy="random",
-        ship_sizes=[3, 2, 2],
-        num_games=1000,
+        ship_sizes=config["ship_sizes"],
+        num_games=config["training"]["number_actual_games"],
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],
     )
