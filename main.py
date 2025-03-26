@@ -1,5 +1,3 @@
-import pygame
-
 from ai.mcts import MCTS
 from game_logic.game import Game
 from game_logic.game_manager import GameManager
@@ -9,8 +7,134 @@ from gui import GUI
 from ai.model import ANET
 import json
 
+import pygame
 
-def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file_path):
+
+def get_ship_cells(x, y, size, orientation):
+    """Return a set of (col, row) tuples that the ship would occupy."""
+    cells = set()
+    if orientation == 0:  # horizontal
+        for i in range(size):
+            cells.add((x + i, y))
+    else:  # vertical
+        for i in range(size):
+            cells.add((x, y + i))
+    return cells
+
+
+def is_valid_ship_placement(existing_placements, x, y, size, orientation, board_size, ship_sizes):
+    """
+    Check if a ship of given size and orientation at (x, y) is valid.
+    existing_placements: list of tuples (x, y, orientation) already placed.
+    ship_sizes: list of ship sizes corresponding to the order of placements.
+    """
+    new_cells = get_ship_cells(x, y, size, orientation)
+
+    # Check boundaries
+    for cell in new_cells:
+        cx, cy = cell
+        if cx < 0 or cx >= board_size or cy < 0 or cy >= board_size:
+            return False
+
+    # Check overlap with already placed ships
+    for i, (px, py, porientation) in enumerate(existing_placements):
+        placed_size = ship_sizes[i]  # Assuming placements follow the ship_sizes order
+        placed_cells = get_ship_cells(px, py, placed_size, porientation)
+        if new_cells & placed_cells:
+            return False
+    return True
+
+
+def get_human_ship_placements_via_gui(gui, ship_sizes):
+    """
+    Let the user place ships manually via mouse clicks.
+    Returns a list of tuples (x, y, direction) for each ship.
+    """
+    # Set GUI to placement mode (centered board)
+    gui.set_mode("placement")
+
+    placements = []
+    current_orientation = 0  # 0: horizontal, 1: vertical
+    current_ship_index = 0
+    clock = pygame.time.Clock()
+
+    # Prepare fonts for displaying text and title
+    font = pygame.font.SysFont('Arial', 24)
+    title_font = pygame.font.SysFont('Arial', 36)
+
+    while current_ship_index < len(ship_sizes):
+        gui.SCREEN.fill((40, 50, 60))
+
+        # Compute centered board offset
+        board_left = (gui.WIDTH - gui.BOARD_SIZE * gui.SQUARE_SIZE) // 2
+        board_top = (gui.HEIGHT - gui.BOARD_SIZE * gui.SQUARE_SIZE) // 2
+
+        gui.draw_grid(state=None, left=board_left, top=board_top)
+
+        # Draw a title at the top
+        title_text = "Place Your Ships"
+        title_surface = title_font.render(title_text, True, (255, 255, 255))
+        title_rect = title_surface.get_rect(center=(gui.WIDTH // 2, 30))
+        gui.SCREEN.blit(title_surface, title_rect)
+
+        # Draw already placed ships relative to centered board
+        for i, (x, y, orientation) in enumerate(placements):
+            size = ship_sizes[i]
+            rect_x = board_left + x * gui.SQUARE_SIZE + gui.INDENT
+            rect_y = board_top + y * gui.SQUARE_SIZE + gui.INDENT
+            if orientation == 0:  # horizontal
+                width = size * gui.SQUARE_SIZE - 2 * gui.INDENT
+                height = gui.SQUARE_SIZE - 2 * gui.INDENT
+            else:  # vertical
+                width = gui.SQUARE_SIZE - 2 * gui.INDENT
+                height = size * gui.SQUARE_SIZE - 2 * gui.INDENT
+            ship_rect = pygame.Rect(rect_x, rect_y, width, height)
+            pygame.draw.rect(gui.SCREEN, (50, 200, 150), ship_rect, border_radius=15)
+
+        # Display information about the current ship
+        current_ship_size = ship_sizes[current_ship_index]
+        orientation_text = "Horizontal" if current_orientation == 0 else "Vertical"
+        info_text = f"Placing ship {current_ship_index + 1}/{len(ship_sizes)}: Size {current_ship_size} ({orientation_text})"
+        text_surface = font.render(info_text, True, (255, 255, 255))
+        gui.SCREEN.blit(text_surface, (10, gui.HEIGHT - 40))
+
+        # Display instruction to toggle orientation
+        instruction_text = "Press SPACE to toggle orientation"
+        inst_surface = font.render(instruction_text, True, (200, 200, 200))
+        gui.SCREEN.blit(inst_surface, (10, gui.HEIGHT - 70))
+
+        pygame.display.update()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                exit()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    current_orientation = 1 - current_orientation
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                pos = pygame.mouse.get_pos()
+                # Convert the click position to board coordinates based on the centered board
+                col = (pos[0] - board_left) // gui.SQUARE_SIZE
+                row = (pos[1] - board_top) // gui.SQUARE_SIZE
+
+                if is_valid_ship_placement(placements, col, row, current_ship_size, current_orientation, gui.BOARD_SIZE, ship_sizes):
+                    placements.append((col, row, current_orientation))
+                    current_ship_index += 1
+                else:
+                    print("Invalid placement, try again.")
+
+        clock.tick(30)
+
+    # Switch to game layout after placement is complete
+    gui.set_mode("game")
+    return placements
+
+
+
+def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file_path, chromosome=None):
     """Initializes Search and Placement Agents."""
     layer_config = json.load(open("ai/config.json"))
 
@@ -36,6 +160,7 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file
         board_size=board_size,
         ship_sizes=sizes,
         strategy=placing_strategy,
+        chromosome=chromosome,
     )
     return search_agent, placement_agent
 
@@ -56,16 +181,29 @@ def initialize_game(
     Supports both single-player (AI vs AI or Human vs AI) and two-player AI matches (Search 1 vs Placing 2).
     """
 
-    # Player 1 (Search 1 vs Placing 2)
+    # Initialize Pygame
+    pygame.init()
+    pygame.display.set_caption("Battleship")
+
+    # Initialize GUI
+    gui = GUI(board_size, human_player)
+
     search_agent_1, placement_agent_1 = initialize_agents(
         board_size, sizes, player1_search_strategy, player1_placing_strategy, file_path_1
     )
 
     # If player2_search_strategy is None, assume single-player mode
     if player2_search_strategy:
-        search_agent_2, placement_agent_2 = initialize_agents(
-            board_size, sizes, player2_search_strategy, player2_placing_strategy, file_path_2
-        )
+
+        if human_player:
+            chromosome = get_human_ship_placements_via_gui(gui, sizes)
+            search_agent_2, placement_agent_2 = initialize_agents(
+                board_size, sizes, player2_search_strategy, player2_placing_strategy, file_path_2, chromosome,
+            )
+        else:
+            search_agent_2, placement_agent_2 = initialize_agents(
+                board_size, sizes, player2_search_strategy, player2_placing_strategy, file_path_2
+            )
         game_manager_1 = GameManager(
             size=board_size
         )  # Player 1 attacks Player 2’s board
@@ -95,12 +233,6 @@ def initialize_game(
         mcts = MCTS(game_manager_2, simulations_number=10000, exploration_constant=1.41)
         search_agent_2.strategy.set_mcts(mcts)
 
-    # Initialize Pygame
-    pygame.init()
-    pygame.display.set_caption("Battleship")
-
-    # Initialize GUI
-    gui = GUI(board_size, human_player)
     gui.update_board(
         current_state_1, current_state_2 if player2_search_strategy else None
     )
@@ -137,16 +269,16 @@ if __name__ == "__main__":
         board_size=5,
         sizes=[3, 2, 2],
         human_player=True,
-        file_path_1="models/model_100.pth",
-        file_path_2="models/model_100.pth",
+        file_path_1="models/model.pth",
+        file_path_2="models/model.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",
-        player2_placing_strategy="random",
+        player2_placing_strategy="chromosome",
     )
 
     # Example: Human vs AI
-    #initialize_game(board_size=5, sizes=[3, 2, 2],
+    # initialize_game(board_size=5, sizes=[3, 2, 2],
     #                human_player=True,
     #                player1_search_strategy="nn_search",
     #                player1_placing_strategy="random",
