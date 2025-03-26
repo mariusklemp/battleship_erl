@@ -88,7 +88,7 @@ class NNSearch(nn.Module, Strategy):
         probabilities = nn.functional.softmax(output / temperature, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
 
-        visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
+        #visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
