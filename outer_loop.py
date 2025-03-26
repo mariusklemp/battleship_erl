@@ -7,7 +7,7 @@ from deap_system.evolution import Evolution
 from deap_system.evolution_evaluator import EvolutionEvaluator
 from game_logic.search_agent import SearchAgent
 from game_logic.game_manager import GameManager
-from ai.models import ANET
+from ai.model import ANET
 from deap_system.search_metrics import SearchMetricsTracker
 from run_mcts import run_mcts_inner_loop, load_config
 from neat_system.neat_manager import NEAT_Manager

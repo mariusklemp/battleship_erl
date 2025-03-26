@@ -2,7 +2,7 @@ import json
 import matplotlib.pyplot as plt
 import visualize
 from ai.mcts import MCTS
-from ai.models import ANET
+from ai.model import ANET
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent

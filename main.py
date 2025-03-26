@@ -6,7 +6,7 @@ from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 from gui import GUI
-from ai.models import ANET
+from ai.model import ANET
 import json
 
 

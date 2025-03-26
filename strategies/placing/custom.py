@@ -1,17 +1,13 @@
 import random
 from game_logic.ship import Ship
+from strategies.placing.strategy import Strategy
 
 
-class CustomPlacing:
+class CustomPlacing(Strategy):
+
     def __init__(self, placing_agent, chromosome=None):
-        """
-        Initialize the CustomPlacing strategy.
-        :param placing_agent: The agent that has board_size, ship_sizes, etc.
-        :param chromosome: A list of tuples (x, y, direction) for each ship.
-                           If None, ships will be placed randomly.
-        """
-        self.placing_agent = placing_agent
-        # Simply store the provided chromosome (it may be None)
+        super().__init__(placing_agent)
+        self.name = "random"
         self.chromosome = chromosome
 
     def place_ships(self):

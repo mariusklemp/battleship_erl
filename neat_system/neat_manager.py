@@ -13,7 +13,7 @@ from neat_system.cnn_genome import CNNGenome
 from game_logic.game_manager import GameManager
 from game_logic.search_agent import SearchAgent
 import visualize
-from ai.models import ANET
+from ai.model import ANET
 from game_logic.placement_agent import PlacementAgent
 from neat_system.weight_reporter import WeightStatsReporter
 

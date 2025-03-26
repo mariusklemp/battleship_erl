@@ -1,10 +1,12 @@
 import numpy as np
 from game_logic.ship import Ship
+from strategies.placing.strategy import Strategy
 
 
-class UniformSpreadPlacing:
+class UniformSpreadPlacing(Strategy):
     def __init__(self, placing_agent):
-        self.placing_agent = placing_agent
+        super().__init__(placing_agent)
+        self.name = "uniform_spread"
 
     def place_ships(self):
         ship_sizes = self.placing_agent.ship_sizes.copy()

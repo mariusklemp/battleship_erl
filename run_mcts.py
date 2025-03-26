@@ -7,7 +7,7 @@ from game_logic.search_agent import SearchAgent
 from ai.mcts import MCTS
 from game_logic.game_manager import GameManager
 from tqdm import tqdm
-from ai.models import ANET
+from ai.model import ANET
 from RBUF import RBUF
 import visualize
 from gui import GUI
