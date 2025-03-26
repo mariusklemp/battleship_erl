@@ -1,9 +1,9 @@
 from strategies.search.NEAT_Search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
 from strategies.search.probability import ProbabilisticStrategy
-from strategies.search.random_strategy import RandomStrategy
+from strategies.search.random import RandomStrategy
 from strategies.search.mcts import MCTSStrategy
-from strategies.search.NNSearch import NNSearch
+from strategies.search.nn_search import NNSearch
 
 
 class SearchAgent:
@@ -19,11 +19,9 @@ class SearchAgent:
             return RandomStrategy(self)
         elif strategy == "hunt_down":
             return HuntDownStrategy(self)
-        elif strategy == "probabilistic":
-            return ProbabilisticStrategy(self)
         elif strategy == "nn_search":
             return NNSearch(self, net, optimizer, lr)
-        elif strategy == "neat":
-            return NEAT_search(self, net)
         elif strategy == "mcts":
             return MCTSStrategy(self)
+        else:
+            raise ValueError("Unknown search strategy")

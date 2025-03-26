@@ -1,9 +1,9 @@
 import random
 from colorama import Fore, Style
 from game_logic.ship import Ship
-from strategies.placing.NNPlacing import NNPlacing
 from strategies.placing.custom import CustomPlacing
 from strategies.placing.random import RandomPlacing
+from strategies.placing.uniform_spread import UniformSpreadPlacing
 
 
 class PlacementAgent:
@@ -32,12 +32,12 @@ class PlacementAgent:
     def init_strategy(self, strategy, chromosome=None):
         if strategy == "random":
             return RandomPlacing(self)
-        elif strategy == "nn_placing":
-            return NNPlacing(self)
         elif strategy == "chromosome":
             return CustomPlacing(self, chromosome)
+        elif strategy == "uniform_spread":
+            return UniformSpreadPlacing(self)
         else:
-            raise ValueError("Unknown strategy")
+            raise ValueError("Unknown placing strategy")
 
     def new_placements(self):
         self.ships = []
@@ -285,3 +285,16 @@ class PlacementAgent:
         self.indexes = [i for sublist in self.list_of_ships for i in sublist]
 
         return self.list_of_ships
+
+
+if __name__ == "__main__":
+    # Example usage
+    board_size = 5
+    ship_sizes = [2, 3, 4]
+    strategy = "uniform_spread"
+    for i in range (5):
+        agent = PlacementAgent(board_size, ship_sizes, strategy)
+        agent.show_ships()
+        print("\n")
+
+

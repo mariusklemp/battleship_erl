@@ -13,7 +13,7 @@ from neat_system.cnn_genome import CNNGenome
 from game_logic.game_manager import GameManager
 from game_logic.search_agent import SearchAgent
 import visualize
-from ai.models import ANET
+from ai.model import ANET
 from game_logic.placement_agent import PlacementAgent
 from neat_system.weight_reporter import WeightStatsReporter
 
@@ -207,7 +207,7 @@ if __name__ == "__main__":
         (1, 1, 1),
         (2, 2, 2),
     ]
-    NUM_GENERATIONS = 60
+    NUM_GENERATIONS = 5
     RANGE_EVALUATIONS = 5
     MUTATE_ARCHITECTURE = True
     CROSSOVER_ARCHITECTURE = True

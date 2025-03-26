@@ -1,11 +1,13 @@
 import random
 
 from game_logic.ship import Ship
+from strategies.placing.strategy import Strategy
 
 
-class RandomPlacing:
+class RandomPlacing(Strategy):
     def __init__(self, placing_agent):
-        self.placing_agent = placing_agent
+        super().__init__(placing_agent)
+        self.name = "random"
 
     def place_ships(self):
         for size in self.placing_agent.ship_sizes:
