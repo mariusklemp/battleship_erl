@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import visualize
 import math
+import torch
+import torch.nn as nn
 from ai.mcts import MCTS
 from ai.model import ANET
 from game_logic.game_manager import GameManager
@@ -22,11 +24,10 @@ class Tournament:
         board_size,
         num_games,
         ship_sizes,
-        placing_strategy,
+        placing_strategies,
         search_strategies,
         num_players,
         game_manager,
-        placement_agent,
     ):
         """
         Initialize the Tournament.
@@ -34,27 +35,44 @@ class Tournament:
         :param board_size: Size of the board.
         :param num_games: Total number of games to play.
         :param ship_sizes: List of ship sizes.
-        :param placing_strategy: The placing strategy (e.g. "random").
+        :param placing_strategies: A list of placing strategies (e.g. ["random", "uniform_spread"]).
         :param search_strategies: A list of search strategy names (e.g. ["nn_search", "random", "hunt_down", "mcts"])
         """
         self.board_size = board_size
         self.num_games = num_games
         self.num_players = num_players
         self.ship_sizes = ship_sizes
-        self.placing_strategy = placing_strategy
+        self.placing_strategies = placing_strategies
         self.search_strategies = search_strategies
         self.players = {}  # Dictionary mapping an identifier to a search agent
+        self.placement_agents = {}  # Dictionary mapping a strategy name to a placement agent
         
-        # Store different metrics
-        self.result = {}  # Dictionary mapping an identifier to a list of move counts
-        self.hit_accuracy = {}  # Dictionary mapping an identifier to a list of hit accuracies
-        self.sink_efficiency = {}  # Dictionary mapping an identifier to a list of moves between hit and sink
-        self.moves_between_hits = {}  # Dictionary mapping an identifier to a list of avg moves between consecutive hits
-        self.start_entropy = {}  # Dictionary mapping an identifier to a list of distribution entropy at start
-        self.end_entropy = {}  # Dictionary mapping an identifier to a list of distribution entropy at end
+        # Store different metrics - now organized by placement strategy
+        self.result = {}  # Dict mapping a placement strategy to a dict mapping player ID to move counts
+        self.hit_accuracy = {}
+        self.sink_efficiency = {}
+        self.moves_between_hits = {}
+        self.start_entropy = {}
+        self.end_entropy = {}
+        
+        # Initialize metrics for each placement strategy
+        for placement_strategy in placing_strategies:
+            self.result[placement_strategy] = {}
+            self.hit_accuracy[placement_strategy] = {}
+            self.sink_efficiency[placement_strategy] = {}
+            self.moves_between_hits[placement_strategy] = {}
+            self.start_entropy[placement_strategy] = {}
+            self.end_entropy[placement_strategy] = {}
         
         self.game_manager = game_manager
-        self.placement_agent = placement_agent
+        
+        # Initialize placement agents for each strategy
+        for strategy in placing_strategies:
+            self.placement_agents[strategy] = PlacementAgent(
+                board_size=board_size,
+                ship_sizes=ship_sizes,
+                strategy=strategy,
+            )
 
     def set_nn_agent(self, i, layer_config):
         """Initializes a SearchAgent that uses a neural network.
@@ -97,12 +115,15 @@ class Tournament:
         for i in range(0, self.num_players + 1):
             agent, identifier = self.set_nn_agent(i, layer_config)
             self.players[identifier] = agent
-            self.result[identifier] = []  # Initialize an empty result list for this player
-            self.hit_accuracy[identifier] = []  # Initialize hit accuracy tracking
-            self.sink_efficiency[identifier] = []  # Initialize sink efficiency tracking
-            self.moves_between_hits[identifier] = []  # Initialize moves between hits tracking
-            self.start_entropy[identifier] = []  # Initialize start entropy tracking
-            self.end_entropy[identifier] = []  # Initialize end entropy tracking
+            
+            # Initialize result structures for this player for each placement strategy
+            for placement_strategy in self.placing_strategies:
+                self.result[placement_strategy][identifier] = []
+                self.hit_accuracy[placement_strategy][identifier] = []
+                self.sink_efficiency[placement_strategy][identifier] = []
+                self.moves_between_hits[placement_strategy][identifier] = []
+                self.start_entropy[placement_strategy][identifier] = []
+                self.end_entropy[placement_strategy][identifier] = []
 
         for i, strat in enumerate(self.search_strategies):
             if strat in ["random", "hunt_down"]:
@@ -128,64 +149,45 @@ class Tournament:
                 raise ValueError(f"Unknown search strategy: {strat}")
 
             self.players[identifier] = agent
-            self.result[identifier] = []  # Initialize an empty result list for this player
-            self.hit_accuracy[identifier] = []  # Initialize hit accuracy tracking
-            self.sink_efficiency[identifier] = []  # Initialize sink efficiency tracking
-            self.moves_between_hits[identifier] = []  # Initialize moves between hits tracking
-            self.start_entropy[identifier] = []  # Initialize start entropy tracking
-            self.end_entropy[identifier] = []  # Initialize end entropy tracking
             
-    def calculate_entropy(self, board):
+            # Initialize result structures for this player for each placement strategy
+            for placement_strategy in self.placing_strategies:
+                self.result[placement_strategy][identifier] = []
+                self.hit_accuracy[placement_strategy][identifier] = []
+                self.sink_efficiency[placement_strategy][identifier] = []
+                self.moves_between_hits[placement_strategy][identifier] = []
+                self.start_entropy[placement_strategy][identifier] = []
+                self.end_entropy[placement_strategy][identifier] = []
+            
+    def calculate_entropy(self, distribution):
         """
-        Calculate the entropy of the distribution of shots on the board.
+        Calculate the entropy of a probability distribution.
         Higher entropy means more uniform distribution (less concentrated).
-        Lower entropy means more concentrated shooting pattern.
+        Lower entropy means more concentrated distribution (more certainty).
         
-        :param board: A flattened board representation where 1s represent shots
+        :param distribution: A probability distribution (numpy array)
         :return: The entropy value
         """
-        # Get the board size
-        flat_size = len(board)
-        board_size = int(math.sqrt(flat_size))
+        # Filter out zero probabilities to avoid log(0)
+        probabilities = distribution[distribution > 0]
         
-        # Reshape the board for region analysis
-        reshaped_board = np.array(board).reshape(board_size, board_size)
-        
-        # Divide the board into regions (e.g., 4x4 grid for a 10x10 board)
-        region_size = max(2, board_size // 5)  # Ensure at least 2x2 regions
-        n_regions = board_size // region_size
-        
-        # Count shots in each region
-        region_counts = []
-        for i in range(0, board_size, region_size):
-            for j in range(0, board_size, region_size):
-                i_end = min(i + region_size, board_size)
-                j_end = min(j + region_size, board_size)
-                region = reshaped_board[i:i_end, j:j_end]
-                shot_count = np.sum(region)
-                region_counts.append(shot_count)
-        
-        # Convert to probabilities
-        total_shots = sum(region_counts)
-        if total_shots == 0:  # No shots yet
+        if len(probabilities) == 0:
             return 0
             
-        probabilities = [count / total_shots for count in region_counts if count > 0]
-        
         # Calculate entropy: -sum(p * log(p))
-        entropy = -sum(p * math.log(p, 2) for p in probabilities)
+        entropy = -np.sum(probabilities * np.log2(probabilities))
         
         # Normalize by maximum possible entropy (uniform distribution)
-        max_entropy = math.log(len(region_counts), 2)
+        max_entropy = np.log2(len(distribution))
         if max_entropy == 0:
             return 0
         normalized_entropy = entropy / max_entropy
         
         return normalized_entropy
 
-    def play(self, search_agent, game_manager):
+    def play(self, search_agent, game_manager, placement_agent):
         """Plays one game with the given search agent and returns the game metrics."""
-        current_state = game_manager.initial_state(placing=self.placement_agent)
+        current_state = game_manager.initial_state(placing=placement_agent)
         
         # Metrics tracking
         total_moves = 0
@@ -318,277 +320,284 @@ class Tournament:
 
     def plot_results(self):
         """
-        Plots the tournament results with multiple metrics:
+        Plots the tournament results with multiple metrics for each placement strategy:
         1. Average move count per player
         2. Hit accuracy per player
         3. Sink efficiency (avg moves between hit and sink) per player
         4. Average moves between consecutive hits
         5. Start and end entropy
         """
-        if not self.result:
-            print("[DEBUG] No results to plot.")
-            return
-
-        # Sort identifiers with neural network models sorted numerically
-        identifiers = list(self.result.keys())
-        
-        # Separate NN models from other strategies
-        nn_models = [id for id in identifiers if id.startswith('nn_')]
-        other_strategies = [id for id in identifiers if not id.startswith('nn_')]
-        
-        # Sort NN models numerically by extracting the number
-        nn_models.sort(key=lambda x: int(x.split('_')[1]))
-        
-        # Sort other strategies alphabetically
-        other_strategies.sort()
-        
-        # Combine the sorted lists
-        identifiers = nn_models + other_strategies
-        
-        # Calculate averages for each metric
-        avg_moves = []
-        avg_accuracy = []
-        avg_sink_efficiency = []
-        avg_moves_btwn_hits = []
-        avg_start_entropy = []
-        avg_end_entropy = []
-        
-        for identifier in identifiers:
-            # Move count
-            moves = self.result[identifier]
-            if moves:
-                avg = sum(moves) / len(moves)
-            else:
-                avg = 0
-            avg_moves.append(avg)
-            
-            # Hit accuracy
-            accuracy = self.hit_accuracy[identifier]
-            if accuracy:
-                acc_avg = sum(accuracy) / len(accuracy)
-            else:
-                acc_avg = 0
-            avg_accuracy.append(acc_avg)
-            
-            # Sink efficiency
-            efficiency = self.sink_efficiency[identifier]
-            if efficiency:
-                eff_avg = sum(efficiency) / len(efficiency)
-            else:
-                eff_avg = 0
-            avg_sink_efficiency.append(eff_avg)
-            
-            # Moves between hits
-            btwn_hits = self.moves_between_hits[identifier]
-            if btwn_hits:
-                btwn_avg = sum(btwn_hits) / len(btwn_hits)
-            else:
-                btwn_avg = 0
-            avg_moves_btwn_hits.append(btwn_avg)
-            
-            # Start entropy
-            start_ent = self.start_entropy[identifier]
-            if start_ent:
-                start_ent_avg = sum(start_ent) / len(start_ent)
-            else:
-                start_ent_avg = 0
-            avg_start_entropy.append(start_ent_avg)
-            
-            # End entropy
-            end_ent = self.end_entropy[identifier]
-            if end_ent:
-                end_ent_avg = sum(end_ent) / len(end_ent)
-            else:
-                end_ent_avg = 0
-            avg_end_entropy.append(end_ent_avg)
-            
-            print(
-                f"[DEBUG] {identifier}: {len(moves)} games, "
-                f"avg move count: {avg:.2f}, "
-                f"hit accuracy: {acc_avg:.2f}, "
-                f"sink efficiency: {eff_avg:.2f} moves, "
-                f"moves between hits: {btwn_avg:.2f}, "
-                f"start entropy: {start_ent_avg:.2f}, "
-                f"end entropy: {end_ent_avg:.2f}"
-            )
-
-        # Create separate plots for each metric
-        
-        # Plot 1: Average Move Count
-        plt.figure(figsize=(12, 6))
-        bars = plt.bar(identifiers, avg_moves, color="skyblue")
-        plt.xlabel("Player Identifier")
-        plt.ylabel("Average Move Count")
-        plt.title("Tournament Results: Average Move Count per Player")
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        # Add values on top of each bar
-        for bar in bars:
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                    f'{height:.1f}', ha='center', va='bottom', fontsize=8)
-        
-        plt.savefig("plots/avg_move_count.png")
-        plt.show()
-        
-        # Plot 2: Hit Accuracy
-        plt.figure(figsize=(12, 6))
-        bars = plt.bar(identifiers, avg_accuracy, color="lightgreen")
-        plt.xlabel("Player Identifier")
-        plt.ylabel("Hit Accuracy")
-        plt.title("Tournament Results: Hit Accuracy per Player")
-        plt.xticks(rotation=45)
-        plt.ylim(0, 1)  # Accuracy is between 0 and 1
-        plt.tight_layout()
-        
-        # Add values on top of each bar
-        for bar in bars:
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.2f}', ha='center', va='bottom', fontsize=8)
-        
-        plt.savefig("plots/hit_accuracy.png")
-        plt.show()
-        
-        # Plot 3: Sink Efficiency and Moves Between Hits
-        plt.figure(figsize=(12, 6))
-        x = np.arange(len(identifiers))
-        width = 0.35
-        
-        bars1 = plt.bar(x - width/2, avg_sink_efficiency, width, color="salmon", label="Moves to Sink")
-        bars2 = plt.bar(x + width/2, avg_moves_btwn_hits, width, color="orange", label="Moves Between Hits")
-        
-        plt.xlabel("Player Identifier")
-        plt.ylabel("Average Moves")
-        plt.title("Tournament Results: Efficiency Metrics")
-        plt.xticks(x, identifiers, rotation=45)
-        plt.legend()
-        plt.tight_layout()
-        
-        # Add values on top of each bar
-        for i, bar in enumerate(bars1):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                    f'{height:.1f}', ha='center', va='bottom', fontsize=8)
-        
-        for i, bar in enumerate(bars2):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
-                    f'{height:.1f}', ha='center', va='bottom', fontsize=8)
-        
-        plt.savefig("plots/efficiency_metrics.png")
-        plt.show()
-        
-        # Plot 4: Distribution Entropy
-        plt.figure(figsize=(12, 6))
-        x = np.arange(len(identifiers))
-        width = 0.35
-        
-        bars1 = plt.bar(x - width/2, avg_start_entropy, width, color="lightblue", label="Start Entropy")
-        bars2 = plt.bar(x + width/2, avg_end_entropy, width, color="steelblue", label="End Entropy")
-        
-        plt.xlabel("Player Identifier")
-        plt.ylabel("Entropy (0-1)")
-        plt.title("Tournament Results: Distribution Entropy")
-        plt.xticks(x, identifiers, rotation=45)
-        plt.ylim(0, 1)  # Normalized entropy is between 0 and 1
-        plt.legend()
-        plt.tight_layout()
-        
-        # Add values on top of each bar
-        for i, bar in enumerate(bars1):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.2f}', ha='center', va='bottom', fontsize=8)
-        
-        for i, bar in enumerate(bars2):
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.2f}', ha='center', va='bottom', fontsize=8)
-        
-        plt.savefig("plots/distribution_entropy.png")
-        plt.show()
-        
-        # Plot 5: Combined performance score
-        plt.figure(figsize=(12, 6))
-        
-        # Calculate combined performance score
-        combined_score = []
-        for i in range(len(identifiers)):
-            # Lower is better for moves and moves between hits
-            # Higher is better for accuracy
-            # Normalize all to 0-1 range where 1 is best
-            norm_moves = 1 - (avg_moves[i] / max(avg_moves)) if max(avg_moves) > 0 else 0
-            norm_acc = avg_accuracy[i]
-            norm_sink = 1 - (avg_sink_efficiency[i] / max(avg_sink_efficiency)) if max(avg_sink_efficiency) > 0 else 0
-            norm_btwn = 1 - (avg_moves_btwn_hits[i] / max(avg_moves_btwn_hits)) if max(avg_moves_btwn_hits) > 0 else 0
-            
-            # Simple weighted sum (can be adjusted)
-            score = (norm_moves + norm_acc + norm_sink + norm_btwn) / 4
-            combined_score.append(score)
-        
-        bars = plt.bar(identifiers, combined_score, color="purple")
-        plt.xlabel("Player Identifier")
-        plt.ylabel("Combined Performance Score")
-        plt.title("Tournament Results: Overall Performance (higher is better)")
-        plt.xticks(rotation=45)
-        plt.ylim(0, 1)
-        plt.tight_layout()
-        
-        # Add values on top of each bar
-        for bar in bars:
-            height = bar.get_height()
-            plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                    f'{height:.2f}', ha='center', va='bottom', fontsize=8)
-        
-        plt.savefig("plots/combined_score.png")
-        plt.show()
-        
         # Create directory for plots if it doesn't exist
         import os
         os.makedirs("plots", exist_ok=True)
+        
+        # Loop through each placement strategy and create plots
+        for placement_strategy in self.placing_strategies:
+            if not self.result[placement_strategy]:
+                print(f"[DEBUG] No results for placement strategy {placement_strategy}.")
+                continue
+                
+            print(f"\n=== Results for placement strategy: {placement_strategy} ===")
+            
+            # Sort identifiers with neural network models sorted numerically
+            identifiers = list(self.result[placement_strategy].keys())
+            
+            # Separate NN models from other strategies
+            nn_models = [id for id in identifiers if id.startswith('nn_')]
+            other_strategies = [id for id in identifiers if not id.startswith('nn_')]
+            
+            # Sort NN models numerically by extracting the number
+            nn_models.sort(key=lambda x: int(x.split('_')[1]))
+            
+            # Sort other strategies alphabetically
+            other_strategies.sort()
+            
+            # Combine the sorted lists
+            identifiers = nn_models + other_strategies
+            
+            # Calculate averages for each metric
+            avg_moves = []
+            avg_accuracy = []
+            avg_sink_efficiency = []
+            avg_moves_btwn_hits = []
+            avg_start_entropy = []
+            avg_end_entropy = []
+            
+            for identifier in identifiers:
+                # Move count
+                moves = self.result[placement_strategy][identifier]
+                if moves:
+                    avg = sum(moves) / len(moves)
+                else:
+                    avg = 0
+                avg_moves.append(avg)
+                
+                # Hit accuracy
+                accuracy = self.hit_accuracy[placement_strategy][identifier]
+                if accuracy:
+                    acc_avg = sum(accuracy) / len(accuracy)
+                else:
+                    acc_avg = 0
+                avg_accuracy.append(acc_avg)
+                
+                # Sink efficiency
+                efficiency = self.sink_efficiency[placement_strategy][identifier]
+                if efficiency:
+                    eff_avg = sum(efficiency) / len(efficiency)
+                else:
+                    eff_avg = 0
+                avg_sink_efficiency.append(eff_avg)
+                
+                # Moves between hits
+                btwn_hits = self.moves_between_hits[placement_strategy][identifier]
+                if btwn_hits:
+                    btwn_avg = sum(btwn_hits) / len(btwn_hits)
+                else:
+                    btwn_avg = 0
+                avg_moves_btwn_hits.append(btwn_avg)
+                
+                # Start entropy
+                start_ent = self.start_entropy[placement_strategy][identifier]
+                if start_ent:
+                    start_ent_avg = sum(start_ent) / len(start_ent)
+                else:
+                    start_ent_avg = 0
+                avg_start_entropy.append(start_ent_avg)
+                
+                # End entropy
+                end_ent = self.end_entropy[placement_strategy][identifier]
+                if end_ent:
+                    end_ent_avg = sum(end_ent) / len(end_ent)
+                else:
+                    end_ent_avg = 0
+                avg_end_entropy.append(end_ent_avg)
+                
+                print(
+                    f"[DEBUG] {identifier}: {len(moves)} games, "
+                    f"avg move count: {avg:.2f}, "
+                    f"hit accuracy: {acc_avg:.2f}, "
+                    f"sink efficiency: {eff_avg:.2f} moves, "
+                    f"moves between hits: {btwn_avg:.2f}, "
+                    f"start entropy: {start_ent_avg:.2f}, "
+                    f"end entropy: {end_ent_avg:.2f}"
+                )
+
+            # Create separate plots for each metric
+            
+            # Plot 1: Average Move Count
+            plt.figure(figsize=(12, 6))
+            bars = plt.bar(identifiers, avg_moves, color="skyblue")
+            plt.xlabel("Player Identifier")
+            plt.ylabel("Average Move Count")
+            plt.title(f"Tournament Results ({placement_strategy}): Average Move Count per Player")
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            # Add values on top of each bar
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{height:.1f}', ha='center', va='bottom', fontsize=8)
+            
+            plt.savefig(f"plots/avg_move_count_{placement_strategy}.png")
+            plt.show()
+            
+            # Plot 2: Hit Accuracy
+            plt.figure(figsize=(12, 6))
+            bars = plt.bar(identifiers, avg_accuracy, color="lightgreen")
+            plt.xlabel("Player Identifier")
+            plt.ylabel("Hit Accuracy")
+            plt.title(f"Tournament Results ({placement_strategy}): Hit Accuracy per Player")
+            plt.xticks(rotation=45)
+            plt.ylim(0, 1)  # Accuracy is between 0 and 1
+            plt.tight_layout()
+            
+            # Add values on top of each bar
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+            
+            plt.savefig(f"plots/hit_accuracy_{placement_strategy}.png")
+            plt.show()
+            
+            # Plot 3: Sink Efficiency and Moves Between Hits
+            plt.figure(figsize=(12, 6))
+            x = np.arange(len(identifiers))
+            width = 0.35
+            
+            bars1 = plt.bar(x - width/2, avg_sink_efficiency, width, color="salmon", label="Moves to Sink")
+            bars2 = plt.bar(x + width/2, avg_moves_btwn_hits, width, color="orange", label="Moves Between Hits")
+            
+            plt.xlabel("Player Identifier")
+            plt.ylabel("Average Moves")
+            plt.title(f"Tournament Results ({placement_strategy}): Efficiency Metrics")
+            plt.xticks(x, identifiers, rotation=45)
+            plt.legend()
+            plt.tight_layout()
+            
+            # Add values on top of each bar
+            for i, bar in enumerate(bars1):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{height:.1f}', ha='center', va='bottom', fontsize=8)
+            
+            for i, bar in enumerate(bars2):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{height:.1f}', ha='center', va='bottom', fontsize=8)
+            
+            plt.savefig(f"plots/efficiency_metrics_{placement_strategy}.png")
+            plt.show()
+            
+            # Plot 4: Distribution Entropy
+            plt.figure(figsize=(12, 6))
+            x = np.arange(len(identifiers))
+            width = 0.35
+            
+            bars1 = plt.bar(x - width/2, avg_start_entropy, width, color="lightblue", label="Start Entropy")
+            bars2 = plt.bar(x + width/2, avg_end_entropy, width, color="steelblue", label="End Entropy")
+            
+            plt.xlabel("Player Identifier")
+            plt.ylabel("Entropy (0-1)")
+            plt.title(f"Tournament Results ({placement_strategy}): Distribution Entropy")
+            plt.xticks(x, identifiers, rotation=45)
+            plt.ylim(0, 1)  # Normalized entropy is between 0 and 1
+            plt.legend()
+            plt.tight_layout()
+            
+            # Add values on top of each bar
+            for i, bar in enumerate(bars1):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+            
+            for i, bar in enumerate(bars2):
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+            
+            plt.savefig(f"plots/distribution_entropy_{placement_strategy}.png")
+            plt.show()
+            
+            # Plot 5: Combined performance score
+            plt.figure(figsize=(12, 6))
+            
+            # Calculate combined performance score
+            combined_score = []
+            for i in range(len(identifiers)):
+                # Lower is better for moves and moves between hits
+                # Higher is better for accuracy
+                # Normalize all to 0-1 range where 1 is best
+                norm_moves = 1 - (avg_moves[i] / max(avg_moves)) if max(avg_moves) > 0 else 0
+                norm_acc = avg_accuracy[i]
+                norm_sink = 1 - (avg_sink_efficiency[i] / max(avg_sink_efficiency)) if max(avg_sink_efficiency) > 0 else 0
+                norm_btwn = 1 - (avg_moves_btwn_hits[i] / max(avg_moves_btwn_hits)) if max(avg_moves_btwn_hits) > 0 else 0
+                
+                # Simple weighted sum (can be adjusted)
+                score = (norm_moves + norm_acc + norm_sink + norm_btwn) / 4
+                combined_score.append(score)
+            
+            bars = plt.bar(identifiers, combined_score, color="purple")
+            plt.xlabel("Player Identifier")
+            plt.ylabel("Combined Performance Score")
+            plt.title(f"Tournament Results ({placement_strategy}): Overall Performance (higher is better)")
+            plt.xticks(rotation=45)
+            plt.ylim(0, 1)
+            plt.tight_layout()
+            
+            # Add values on top of each bar
+            for bar in bars:
+                height = bar.get_height()
+                plt.text(bar.get_x() + bar.get_width()/2., height + 0.01,
+                        f'{height:.2f}', ha='center', va='bottom', fontsize=8)
+            
+            plt.savefig(f"plots/combined_score_{placement_strategy}.png")
+            plt.show()
 
 
 def main(
     board_size,
-    placing_strategy,
+    placing_strategies,
     ship_sizes,
     num_games,
     num_players,
     other_strategies=None,
     time_limit=0.5,
 ):
-
-    placement_agent = PlacementAgent(
-        board_size=board_size,
-        ship_sizes=ship_sizes,
-        strategy=placing_strategy,
-    )
     game_manager = GameManager(size=board_size)
 
     tournament = Tournament(
         board_size,
         num_games,
         ship_sizes,
-        placing_strategy,
+        placing_strategies,
         other_strategies,
         num_players,
         game_manager,
-        placement_agent,
     )
     tournament.init_players(time_limit)
 
-    for i in tqdm(range(int(num_games / 10)), desc="Tournament Progress"):
-        placement_agent.new_placements()
-        for identifier, search_agent in tournament.players.items():
-            move_count, accuracy, sink_efficiency, moves_between_hits, start_entropy, end_entropy = tournament.play(search_agent, game_manager)
-            tournament.result[identifier].append(move_count)
-            tournament.hit_accuracy[identifier].append(accuracy)
-            tournament.sink_efficiency[identifier].append(sink_efficiency)
-            tournament.moves_between_hits[identifier].append(moves_between_hits)
-            tournament.start_entropy[identifier].append(start_entropy)
-            tournament.end_entropy[identifier].append(end_entropy)
+    # For each placement strategy
+    for placing_strategy in placing_strategies:
+        print(f"\n=== Running tournament with placement strategy: {placing_strategy} ===")
+        placement_agent = tournament.placement_agents[placing_strategy]
+        
+        # Run the tournament
+        for i in tqdm(range(int(num_games / 10)), desc=f"Tournament Progress ({placing_strategy})"):
+            placement_agent.new_placements()
+            for identifier, search_agent in tournament.players.items():
+                move_count, accuracy, sink_efficiency, moves_between_hits, start_entropy, end_entropy = tournament.play(
+                    search_agent, 
+                    game_manager, 
+                    placement_agent
+                )
+                tournament.result[placing_strategy][identifier].append(move_count)
+                tournament.hit_accuracy[placing_strategy][identifier].append(accuracy)
+                tournament.sink_efficiency[placing_strategy][identifier].append(sink_efficiency)
+                tournament.moves_between_hits[placing_strategy][identifier].append(moves_between_hits)
+                tournament.start_entropy[placing_strategy][identifier].append(start_entropy)
+                tournament.end_entropy[placing_strategy][identifier].append(end_entropy)
 
     tournament.plot_results()
 
@@ -604,10 +613,10 @@ if __name__ == "__main__":
     config = load_config()
     main(
         board_size=config["board_size"],
-        placing_strategy="random",
+        placing_strategies=["random", "uniform_spread"],
         ship_sizes=config["ship_sizes"],
         num_games=config["training"]["number_actual_games"],
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],
         time_limit=config["mcts"]["time_limit"],
-    )
+    ) 
