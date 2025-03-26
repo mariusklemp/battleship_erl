@@ -31,6 +31,12 @@ class GUI:
         self.SCREEN = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         self.INDENT = 7
         self.human_player = human_player
+        self.mode = "game"  # default mode is game mode
+
+    def set_mode(self, mode):
+        """Set the display mode: 'placement' or 'game'."""
+        self.mode = mode
+
     def draw_grid(self, state, left=0, top=0, search=False):
         for i in range(self.BOARD_SIZE ** 2):
             x = left + i % self.BOARD_SIZE * self.SQUARE_SIZE
@@ -85,36 +91,33 @@ class GUI:
         return index
 
     def update_board(self, state_1, state_2=None):
-        """Updates the GUI board. Handles both two-player mode and single-agent mode."""
-
-        # Draw background
+        """Updates the GUI board according to the current mode."""
         self.SCREEN.fill(GREY)
+        if self.mode == "placement":
+            # In placement mode, display a single board centered
+            board_left = (self.WIDTH - self.BOARD_SIZE * self.SQUARE_SIZE) // 2
+            board_top = (self.HEIGHT - self.BOARD_SIZE * self.SQUARE_SIZE) // 2
+            self.draw_grid(state=state_1, left=board_left, top=board_top, search=True)
+        else:
+            # In game mode, use grid layout for both boards
+            self.draw_grid(state=state_1, search=True)
 
-        # Draw search grid for Player 1
-        self.draw_grid(state=state_1, search=True)
+            # Draw position grid for Player 1
+            if not self.human_player:
+                self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
 
-        # If playing against a placing agent (single-agent mode), don't draw Player 2's board
-        if state_2 is not None:
-            self.draw_grid(
-                state=state_2, search=True,
-                left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
-                top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN
-            )
-
-        # Draw position grid for Player 1
-        if not self.human_player:
-            self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-
-        if state_2 is not None:
-            self.draw_grid(
-                state=state_2, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN
-            )
-
-        # Draw Player 1's ships
+            if state_2 is not None:
+                self.draw_grid(
+                    state=state_2, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN
+                )
+                self.draw_grid(
+                    state=state_2, search=True,
+                    left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN,
+                    top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN
+                )
+        # Optionally, you can still draw ships if needed:
         if not self.human_player:
             self.draw_ships(state_1.placing, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
-
-        # Draw Player 2's ships only if it exists
         if state_2 is not None:
             self.draw_ships(
                 state_2.placing, left=(self.WIDTH - self.H_MARGIN) // 2 + self.H_MARGIN
