@@ -1,6 +1,4 @@
-from strategies.search.NEAT_Search import NEAT_search
 from strategies.search.hunt_down import HuntDownStrategy
-from strategies.search.probability import ProbabilisticStrategy
 from strategies.search.random import RandomStrategy
 from strategies.search.mcts import MCTSStrategy
 from strategies.search.nn_search import NNSearch

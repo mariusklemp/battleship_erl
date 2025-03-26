@@ -17,10 +17,8 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file
     net = ANET(
         board_size=board_size,
         activation="relu",
-        output_size=board_size ** 2,
         device="cpu",
         layer_config=layer_config,
-        extra_input_size=5,
     )
     search_agent = SearchAgent(
         board_size=board_size,
@@ -102,7 +100,7 @@ def initialize_game(
     pygame.display.set_caption("Battleship")
 
     # Initialize GUI
-    gui = GUI(board_size)
+    gui = GUI(board_size, human_player)
     gui.update_board(
         current_state_1, current_state_2 if player2_search_strategy else None
     )
@@ -139,8 +137,8 @@ if __name__ == "__main__":
         board_size=5,
         sizes=[3, 2, 2],
         human_player=True,
-        file_path_1="models/model.pth",
-        file_path_2="models/model.pth",
+        file_path_1="models/model_100.pth",
+        file_path_2="models/model_100.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",
@@ -148,7 +146,10 @@ if __name__ == "__main__":
     )
 
     # Example: Human vs AI
-    # initialize_game(board_size=5, sizes=[2, 1, 2],
-    #                 human_player=True,
-    #                 player1_search_strategy="nn_search",
-    #                 player1_placing_strategy="random")
+    #initialize_game(board_size=5, sizes=[3, 2, 2],
+    #                human_player=True,
+    #                player1_search_strategy="nn_search",
+    #                player1_placing_strategy="random",
+    #                file_path_1="models/model_100.pth",
+    #                file_path_2=""
+    #                )

@@ -4,7 +4,7 @@ from tqdm import tqdm
 import neat
 import configparser
 from deap_system.evolution import Evolution
-from deap_system.evolution_evaluator import EvolutionEvaluator
+from metrics.evolution_evaluator import EvolutionEvaluator
 from game_logic.search_agent import SearchAgent
 from game_logic.game_manager import GameManager
 from ai.model import ANET

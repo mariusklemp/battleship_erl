@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import matplotlib.pyplot as plt
-
+import visualize
 from strategies.search.strategy import Strategy
 
 
@@ -88,11 +88,12 @@ class NNSearch(nn.Module, Strategy):
         probabilities = nn.functional.softmax(output / temperature, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
 
+        visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
+
         # Choose a move based on the probability distribution
         if topp:
-            # Sample from the distribution with temperature
-            # This will still favor high probability moves but allow some exploration
-            move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
+            # argmax of the distribution
+            move = np.argmax(probabilities_np)
         else:
             # During training, use pure random sampling
             move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)

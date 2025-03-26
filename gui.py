@@ -21,7 +21,7 @@ COLORS_BOARD = {
 
 
 class GUI:
-    def __init__(self, board_size):
+    def __init__(self, board_size, human_player=False):
         self.BOARD_SIZE = board_size
         self.SQUARE_SIZE = 30
         self.H_MARGIN = self.SQUARE_SIZE * 4
@@ -30,7 +30,7 @@ class GUI:
         self.HEIGHT = self.SQUARE_SIZE * self.BOARD_SIZE * 2 + self.V_MARGIN
         self.SCREEN = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
         self.INDENT = 7
-
+        self.human_player = human_player
     def draw_grid(self, state, left=0, top=0, search=False):
         for i in range(self.BOARD_SIZE ** 2):
             x = left + i % self.BOARD_SIZE * self.SQUARE_SIZE
@@ -102,7 +102,8 @@ class GUI:
             )
 
         # Draw position grid for Player 1
-        self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
+        if not self.human_player:
+            self.draw_grid(state=state_1, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
 
         if state_2 is not None:
             self.draw_grid(
@@ -110,7 +111,8 @@ class GUI:
             )
 
         # Draw Player 1's ships
-        self.draw_ships(state_1.placing, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
+        if not self.human_player:
+            self.draw_ships(state_1.placing, top=(self.HEIGHT - self.V_MARGIN) // 2 + self.V_MARGIN)
 
         # Draw Player 2's ships only if it exists
         if state_2 is not None:
