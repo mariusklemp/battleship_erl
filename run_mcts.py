@@ -44,6 +44,7 @@ def simulate_game(
     current_state = game_manager.initial_state(
         placing=placement_agent
     )  # Reset the game and sets new board!
+    mcts.root_node = None
     if gui:
         gui.update_board(current_state)
         pygame.display.update()
@@ -63,8 +64,12 @@ def simulate_game(
         dynamic_c = mcts.exploration_constant * (1 - explored_ratio)
         best_child = current_node.best_child(c_param=dynamic_c)
 
-        move = best_child.move
+        if best_child is None:
+            print("Warning: No best child found")
+            break
 
+        move = best_child.move
+        
         # Assume state_tensor_canonical returns (canonical_board, extra_features, rotation)
         board_tensor, extra_features = current_node.state.state_tensor()
 
@@ -77,12 +82,13 @@ def simulate_game(
         # visualize.plot_action_distribution(original_action_dist, game_manager.size)
 
         # Add the canonical state and action distribution to the replay buffer.
-        rbuf.add_data_point(
-            (
-                (board_tensor, extra_features),  # The canonical input state.
-                action_distribution,  # The canonicalized action distribution.
+        if action_distribution is not None:
+            rbuf.add_data_point(
+                (
+                    (board_tensor, extra_features),  # The canonical input state.
+                    action_distribution,  # The canonicalized action distribution.
+                )
             )
-        )
 
         current_state = game_manager.next_state(current_state, move)
         move_count += 1
@@ -185,7 +191,7 @@ def load_config(config_path="config/mcts_config.json"):
 def run_mcts_inner_loop(
     game_manager,
     search_agent,
-    simulations_number,
+    simulations_number,  # Keep for backward compatibility
     exploration_constant,
     batch_size,
     device,
@@ -199,8 +205,7 @@ def run_mcts_inner_loop(
     Args:
         game_manager: The game manager instance
         search_agent: The search agent to train
-        number_actual_games: Ignored (kept for compatibility)
-        simulations_number: Number of MCTS simulations per move
+        simulations_number: Ignored (kept for backward compatibility)
         exploration_constant: MCTS exploration constant
         batch_size: Training batch size
         device: Computing device to use
@@ -210,7 +215,7 @@ def run_mcts_inner_loop(
     config = load_config()
     mcts = MCTS(
         game_manager,
-        simulations_number=simulations_number,
+        time_limit=config["mcts"]["time_limit"],
         exploration_constant=exploration_constant,
     )
 
@@ -264,7 +269,7 @@ def main():
 
     mcts = MCTS(
         game_manager,
-        simulations_number=config["mcts"]["simulations_number"],
+        time_limit=config["mcts"]["time_limit"],
         exploration_constant=config["mcts"]["exploration_constant"],
     )
 

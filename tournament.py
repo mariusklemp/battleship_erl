@@ -74,7 +74,7 @@ class Tournament:
         search_agent.strategy.load_model(path)
         return search_agent, f"nn_{model_number}"
 
-    def init_players(self):
+    def init_players(self, time_limit):
         """
         Initialize players using the specified search strategies.
         For "nn_search", we load a neural network from file.
@@ -107,7 +107,7 @@ class Tournament:
                     
                 )
                 mcts = MCTS(
-                    self.game_manager, simulations_number=500, exploration_constant=1.41
+                    self.game_manager, time_limit=time_limit, exploration_constant=1.41
                 )
                 agent.strategy.set_mcts(mcts)
                 identifier = f"{strat}"
@@ -176,6 +176,7 @@ def main(
     num_games,
     num_players,
     other_strategies=None,
+    time_limit=0.5,
 ):
 
     placement_agent = PlacementAgent(
@@ -195,7 +196,7 @@ def main(
         game_manager,
         placement_agent,
     )
-    tournament.init_players()
+    tournament.init_players(time_limit)
 
     for i in tqdm(range(int(num_games / 10)), desc="Tournament Progress"):
         placement_agent.new_placements()
@@ -222,4 +223,5 @@ if __name__ == "__main__":
         num_games=config["training"]["number_actual_games"],
         num_players=10,
         other_strategies=["random", "hunt_down", "mcts"],
+        time_limit=config["mcts"]["time_limit"],
     )

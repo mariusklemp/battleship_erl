@@ -1,4 +1,3 @@
-import visualize
 from strategies.search.strategy import Strategy
 
 
@@ -11,6 +10,7 @@ class MCTSStrategy(Strategy):
 
     def find_move(self, state, topp=False):
 
+        
         current_node = self.mcts.run(state, self.search_agent)
         # Picks the best move fully exploitation
         best_child = current_node.best_child(c_param=0)

@@ -3,6 +3,7 @@ import random
 import math
 import numpy as np
 import visualize
+import time
 
 MIN_VISITS_THRESHOLD = 10
 
@@ -125,20 +126,21 @@ class Node:
 
 
 class MCTS:
-    def __init__(self, game_manager, simulations_number=50, exploration_constant=1.41):
+    def __init__(self, game_manager, time_limit=1.0, exploration_constant=1.41):
         self.game_manager = game_manager
         self.root_node = None
         self.current_node = None
         self.actor = None
-        self.simulations_number = simulations_number
+        self.time_limit = time_limit
         self.exploration_constant = exploration_constant
+        self.simulations_count = 0  # Add counter for simulations
 
     def select_node(self, node):
-        while not node.is_fully_expanded():
+        if len(node.children) == 0 or random.random() < 0.3:
             return self.expand_node(node)
 
         while not self.game_manager.is_terminal(node.state):
-            if not node.is_fully_expanded():
+            if len(node.children) == 0 or random.random() < 0.3:
                 return self.expand_node(node)
             else:
                 node = node.best_child(c_param=self.exploration_constant)
@@ -151,11 +153,15 @@ class MCTS:
 
         # If no moves remain after pruning, this node becomes terminal
         if not moves_to_expand:
-            return node
+            moves_to_expand = self.game_manager.get_legal_moves(node.state)
+            # Apply pruning to the untried moves
+            pruned_moves = self.prune_moves(moves_to_expand, node.state)
+            moves_to_expand = pruned_moves
 
         move = random.choice(moves_to_expand)
         # Remove the chosen move from untried_moves
-        node.untried_moves.remove(move)
+        if move in node.untried_moves:
+            node.untried_moves.remove(move)
 
         # Create the next state
         state = copy.deepcopy(node.state)
@@ -230,9 +236,7 @@ class MCTS:
         current_state,
         actor,
     ):
-
         self.actor = actor
-
         self.current_node = self.find_current_node(current_state)
 
         # Ensure that the current node has its legal moves
@@ -244,8 +248,14 @@ class MCTS:
                 current_state
             )
 
-        # Simulate a number of games
-        for i in range(self.simulations_number):
+        # Reset simulation counter
+        self.simulations_count = 0
+        
+        # Start timing
+        start_time = time.time()
+        
+        # Run simulations until time limit is reached
+        while time.time() - start_time < self.time_limit:
             current_state = copy.deepcopy(self.current_node.state)
             new_placing = copy.deepcopy(current_state.placing)
 
@@ -267,26 +277,24 @@ class MCTS:
                     flush=True,
                 )
 
-            result = self.simulate(node, sim_id=i)
+            result = self.simulate(node, sim_id=0)  # sim_id is no longer needed but kept for compatibility
             self.backpropagate(node, result)
+            self.simulations_count += 1
 
         return self.current_node
 
     def find_current_node(self, current_state):
         # Check if we're starting a new game
+
         if self.root_node is None:
             self.root_node = Node(current_state, mcts_ref=self)
-            current_node = self.root_node
-
-        # Check if the current state equals the root node's state
-        elif self.equal(self.root_node.state, current_state):
             current_node = self.root_node
 
         else:
             matching_child = next(
                 (
                     child
-                    for child in self.current_node.children
+                    for child in self.root_node.children
                     if self.equal(child.state, current_state)
                 ),
                 None,
@@ -294,7 +302,6 @@ class MCTS:
             if matching_child:
                 current_node = matching_child
             else:
-
                 last_move = self.find_last_move(self.current_node, current_state)
                 if last_move is None:
                     print("Warning: Last move is None", flush=True)
@@ -306,8 +313,11 @@ class MCTS:
                     move=last_move,
                     mcts_ref=self,
                 )
-                self.current_node.add_child(new_node)
                 current_node = new_node
+
+            self.root_node = current_node
+            self.root_node.parent = None
+            current_node.parent = None
 
         return current_node
 
@@ -345,7 +355,7 @@ class MCTS:
         parent_visits = node.parent.visits if node.parent else node.visits
 
         print(
-            f"Prev Move: {node.move}, fitness: {fitness}, Visits: {node.visits}/{parent_visits} Board: {node.state.board}"
+            f"Prev Move: {node.move}, fitness: {fitness}, Visits: {node.visits}/{parent_visits} Board: {node.state.board[0]}"
         )
 
         for i, child in enumerate(node.children):
@@ -436,3 +446,27 @@ class MCTS:
 
         # If no valid placement exists for any ship size, then prune the move.
         return False
+    
+    def prune_tree(self, node, best_action):
+        """
+        Prunes the tree to only keep the subtree that branches out from the best action.
+        
+        Args:
+            node: The current node to prune from
+            best_action: The best action (move) to keep
+        """     
+        # Find the child node corresponding to the best action
+        best_child = None
+        for child in node.children:
+            if child.move == best_action:
+                best_child = child
+                break
+                
+        if best_child is None:
+            print("Warning: Best action not found in children")
+            return
+                        
+        # Update parent reference
+        best_child.parent = None
+
+        self.root_node = best_child
