@@ -151,7 +151,7 @@ def train_models(
             )
             # print(f"Finished game {i + 1} with {move_count[-1]} moves.")
             # print("Replay buffer length:", len(rbuf.data))
-
+        visualize.print_rbuf(rbuf.get_batch(batch_size), 10, game_manager.size)
         if train_model:
             for _ in range(epochs):
                 batch = rbuf.get_batch(batch_size)

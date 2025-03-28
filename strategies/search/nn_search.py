@@ -84,11 +84,10 @@ class NNSearch(nn.Module, Strategy):
         output[unknown_layer == 1] = float("-inf")
 
         # Apply softmax to convert logits to a probability distribution
-        temperature = 0.5 if topp else 1.0  # Lower temperature for tournament mode
-        probabilities = nn.functional.softmax(output / temperature, dim=-1).squeeze(0)
+        probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
 
-        #visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
+        visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
