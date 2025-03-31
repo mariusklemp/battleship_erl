@@ -10,7 +10,7 @@
         "save_interval": 10,
         "learning_rate": 0.0001,
         "epochs": 10,
-        "number_actual_games": 1000
+        "number_actual_games": 500
     },
     "replay_buffer": {
         "max_size": 10000,

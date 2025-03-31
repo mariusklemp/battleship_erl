@@ -6,7 +6,7 @@ import configparser
 
 from RBUF import RBUF
 from deap_system.evolution import Evolution
-from metrics.evolution_evaluator import EvolutionEvaluator
+from metrics.evaluator import EvolutionEvaluator
 from game_logic.search_agent import SearchAgent
 from game_logic.game_manager import GameManager
 from ai.model import ANET

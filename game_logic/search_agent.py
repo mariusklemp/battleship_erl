@@ -10,9 +10,9 @@ class SearchAgent:
     ):
         self.board_size = board_size
         self.name = name
-        self.strategy = self.init_strategy(strategy, net, optimizer, lr, name)
+        self.strategy = self.init_strategy(strategy, net, optimizer, lr)
 
-    def init_strategy(self, strategy, net, optimizer, lr, name):
+    def init_strategy(self, strategy, net, optimizer, lr):
         if strategy == "random":
             return RandomStrategy(self)
         elif strategy == "hunt_down":
