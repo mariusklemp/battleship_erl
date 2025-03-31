@@ -3,6 +3,8 @@ import os
 from tqdm import tqdm
 import neat
 import configparser
+
+from RBUF import RBUF
 from deap_system.evolution import Evolution
 from metrics.evolution_evaluator import EvolutionEvaluator
 from game_logic.search_agent import SearchAgent
@@ -191,7 +193,7 @@ class OuterLoopManager:
                 
         return search_agents
     
-    def _train_search_agents_with_mcts(self):
+    def _train_search_agents_with_mcts(self, rbuf):
         """Train search agents using Monte Carlo Tree Search."""
         print("\nTraining search agents against placing population...")
         for i, search_agent in tqdm(
@@ -211,6 +213,7 @@ class OuterLoopManager:
                     sizes=self.ship_sizes,
                     placement_agents=self.environment.pop_placing_agents,
                     epochs=self.mcts_config["training"]["epochs"],
+                    rbuf=rbuf,
                 )
     
     def _evaluate_neat_genomes(self, neat_manager, population, config, generation):
@@ -330,6 +333,11 @@ class OuterLoopManager:
     def run(self):
         """Run the outer evolutionary loop."""
         num_generations = self.evolution_config["evolution"]["num_generations"]
+
+        rbuf = RBUF(max_len=self.mcts_config["replay_buffer"]["max_size"])
+
+        if self.mcts_config["replay_buffer"]["load_from_file"]:
+            rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
         
         for gen in range(num_generations):
             print(f"\n=== Generation {gen + 1}/{num_generations} ===")
@@ -340,7 +348,7 @@ class OuterLoopManager:
             
             # Train search agents with MCTS if enabled
             if self.run_mcts:
-                self._train_search_agents_with_mcts()
+                self._train_search_agents_with_mcts(rbuf)
             
             # Handle NEAT evolution if enabled
             if self.use_neat:

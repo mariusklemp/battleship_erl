@@ -154,10 +154,11 @@ def train_models(
 
         if train_model:
             for _ in range(epochs):
-                batch = rbuf.get_batch(batch_size)
-                if len(batch) > 0 and len(rbuf.validation_set) > 0:
-                    search_agent.strategy.train_model(batch)
-                    search_agent.strategy.validate_model(rbuf.validation_set)
+                training_batch = rbuf.get_training_set(batch_size)
+                validation_batch = rbuf.get_validation_set(batch_size)
+                if len(training_batch) > 0 and len(validation_batch) > 0:
+                    search_agent.strategy.train_model(training_batch)
+                    search_agent.strategy.validate_model(validation_batch)
 
         # Save model at regular intervals
         if save_model and (i + 1) % (number_actual_games // M) == 0:
@@ -197,6 +198,7 @@ def run_mcts_inner_loop(
     device,
     sizes,
     placement_agents,
+    rbuf,
     epochs=1,
 ):
     """Train a search agent against a population of placing agents.
@@ -211,6 +213,7 @@ def run_mcts_inner_loop(
         device: Computing device to use
         sizes: Ship sizes
         placement_agents: List of placing agents to train against
+        :param rbuf:
     """
     config = load_config()
     mcts = MCTS(
@@ -218,11 +221,6 @@ def run_mcts_inner_loop(
         time_limit=config["mcts"]["time_limit"],
         exploration_constant=exploration_constant,
     )
-
-    rbuf = RBUF(max_len=config["replay_buffer"]["max_size"])
-
-    if config["replay_buffer"]["load_from_file"]:
-        rbuf.load_from_file(file_path=config["replay_buffer"]["file_path"])
 
     train_models(
         game_manager,
@@ -276,7 +274,7 @@ def main():
     rbuf = RBUF(max_len=config["replay_buffer"]["max_size"])
 
     if config["replay_buffer"]["load_from_file"]:
-        rbuf.load_from_file(file_path=config["replay_buffer"]["file_path"])
+        rbuf.init_from_file(file_path=config["replay_buffer"]["file_path"])
         print("Loaded replay buffer from file. Length:", len(rbuf.data))
 
     train_models(
