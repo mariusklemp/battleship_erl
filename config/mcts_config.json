@@ -2,25 +2,25 @@
     "board_size": 7,
     "ship_sizes": [4, 3, 3, 2],
     "mcts": {
-        "time_limit": 1,
+        "time_limit": 2,
         "exploration_constant": 1.41
     },
     "training": {
         "batch_size": 128,
         "save_interval": 10,
         "learning_rate": 0.0001,
-        "epochs": 10,
-        "number_actual_games": 1000
+        "epochs": 5,
+        "number_actual_games": 500
     },
     "replay_buffer": {
         "max_size": 10000,
         "load_from_file": true,
-        "save_to_file": false,
+        "save_to_file": true,
         "file_path": "rbuf/rbuf.pkl"
     },
     "model": {
-        "save": false,
-        "train": false,
+        "save": true,
+        "train": true,
         "save_path": "models/model_{}.pth"
     },
     "visualization": {
