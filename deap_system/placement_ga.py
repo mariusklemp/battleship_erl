@@ -3,6 +3,9 @@ from functools import partial
 import sys
 import os
 
+from ai.model import ANET
+from game_logic.game_manager import GameManager
+
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -10,7 +13,6 @@ from deap import base, creator, tools
 import matplotlib.pyplot as plt
 import numpy as np
 
-from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 
@@ -44,16 +46,17 @@ class HallOfShame:
         self.items = tools.selWorst(population, self.maxsize)
 
 
-class Evolution:
+class PlacementGeneticAlgorithm:
     def __init__(
-        self,
-        board_size,
-        ship_sizes,
-        population_size,
-        num_generations,
-        elite_size=1,
-        MUTPB=0.2,
-        TOURNAMENT_SIZE=3,
+            self,
+            game_manager,
+            board_size,
+            ship_sizes,
+            population_size,
+            num_generations,
+            elite_size=1,
+            MUTPB=0.2,
+            TOURNAMENT_SIZE=3,
     ):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
@@ -73,12 +76,10 @@ class Evolution:
         self.percent_vertical_over_gens = []  # Only store vertical percentage.
 
         # Set up game environment.
-        self.game_manager = GameManager(size=self.board_size)
+        self.game_manager = game_manager
 
         # Initialize population.
-        self.pop_placing_agents = self.initialize_placing_population(
-            self.population_size
-        )
+        self.pop_placing_agents = []
 
         # Register DEAP operators with our custom methods.
         toolbox.register("mate_chromosome", self.custom_crossover_placement)
@@ -148,69 +149,50 @@ class Evolution:
         percent_horizontal = 100 - percent_vertical
         return percent_vertical, percent_horizontal
 
-    # ------------------- Shared Sampling: Opponent Pool -------------------
-    def get_opponent_pool(self):
-        """
-        Build a diverse set of opponents.
-        """
-        opponents = []
-        # Hunt_down strategy opponent.
-        for i in range(self.population_size):
-            search_agent_hunt_down = SearchAgent(
-                board_size=self.board_size,
-                strategy="hunt_down",
-                name=f"hunt_down_{i}",  # Add a unique name for each hunt_down agent
-            )
-            opponents.append(search_agent_hunt_down)
-
-        return opponents
-
     # ------------------- Game Simulation and Evaluation -------------------
     def simulate_game(self, game_manager, placing_agent, search_agent):
         """Simulate a Battleship game and return the move count, hits, and misses."""
         current_state = game_manager.initial_state(placing=placing_agent)
         # Count total hits and misses at the end instead of tracking during the game
         while not game_manager.is_terminal(current_state):
-            move = search_agent.strategy.find_move(current_state)
+            result = search_agent.strategy.find_move(current_state)
+            move, distribution = (result, None) if not isinstance(result, tuple) else result
+
             current_state = game_manager.next_state(current_state, move)
 
-        # Count hits and misses from the final board state
-        # board[1] contains hits (1s)
-        # board[2] contains misses (1s)
         hits = sum(square == 1 for square in current_state.board[1])
         misses = sum(square == 1 for square in current_state.board[2])
 
         return current_state.move_count, hits, misses
 
     def evaluate_population(
-        self, population_placing, game_manager, search_agents, search_metrics=None
+            self, population_placing, game_manager, search_agents
     ):
         """
         Evaluate each placing agent by simulating games against a pool of opponents
         and assigning the average performance as fitness.
         """
-        opponents = search_agents
+
         for placing_agent in population_placing:
             fitness_scores = []
-            for opp in opponents:
+            for search_agent in search_agents:
                 moves, hits, misses = self.simulate_game(
-                    game_manager, placing_agent, opp
+                    game_manager, placing_agent, search_agent
                 )
                 fitness_scores.append(moves)
-                # Record search agent metrics if tracker is provided
-                if search_metrics is not None:
-                    search_metrics.record_game(opp, moves, hits, misses)
+
             placing_agent.fitness.values = (sum(fitness_scores) / len(fitness_scores),)
+
 
     def initialize_placing_population(self, n):
         """Initialize the placing agent population."""
         population = []
-        for _ in range(n):
+        for i in range(n):
             placing_agent = creator.IndividualPlacementAgent(
-                self.board_size, self.ship_sizes, strategy="chromosome"
+                self.board_size, self.ship_sizes, strategy="chromosome", name=f"placing_{i}"
             )
             population.append(placing_agent)
-        return population
+        self.pop_placing_agents = population
 
     # ------------------- Additional Helper for Diversity -------------------
     def compute_average_pairwise_distance(self, population):
@@ -403,20 +385,16 @@ class Evolution:
             plt.show()
 
     # ------------------- Evolutionary Process -------------------
-    def evolve(self, gen, search_agents, search_metrics=None):
-        print(f"\n-------------- Generation {gen} --------------")
-        # Evaluate population using shared sampling.
-        print("Evaluating population...")
-        toolbox.evaluate_population(
-            self.pop_placing_agents, self.game_manager, search_agents, search_metrics
-        )
+    def trigger_evaluate_population(self, search_agents):
+        # This will update fitness for each placing agent.
+        toolbox.evaluate_population(self.pop_placing_agents, self.game_manager, search_agents)
 
+    def evolve(self):
         # Record average fitness.
         avg_moves = sum(
             agent.fitness.values[0] for agent in self.pop_placing_agents
         ) / len(self.pop_placing_agents)
         self.avg_moves_over_gens.append(avg_moves)
-        print(f"Average moves in Generation {gen}: {avg_moves}")
 
         # Record board overlay for this generation.
         avg_board = self.record_generation_board(self.pop_placing_agents)
@@ -461,7 +439,6 @@ class Evolution:
         offspring_placing = list(map(toolbox.clone, offspring_placing))
 
         # Crossover
-        print("\n--- Crossover Step ---")
         for i in range(1, len(offspring_placing), 2):
             p1 = offspring_placing[i - 1].strategy.chromosome
             p2 = offspring_placing[i].strategy.chromosome
@@ -472,7 +449,6 @@ class Evolution:
             ) = toolbox.mate_chromosome(p1, p2)
 
         # Mutation
-        print("\n--- Mutation Step ---")
         for i in range(len(offspring_placing)):
             original = offspring_placing[i].strategy.chromosome
             mutated = toolbox.mutate_chromosome(original)[0]
@@ -508,7 +484,7 @@ class Evolution:
             # Offspring 1: Use parent's gene in fixed order.
             for gene in [parent1[i], parent2[i]]:
                 if is_gene_valid(
-                    board1, gene[0], gene[1], gene[2], self.board_size, size
+                        board1, gene[0], gene[1], gene[2], self.board_size, size
                 ):
                     gene1 = gene
                     break
@@ -520,7 +496,7 @@ class Evolution:
             # Offspring 2: Try parent's gene in reversed order.
             for gene in [parent2[i], parent1[i]]:
                 if is_gene_valid(
-                    board2, gene[0], gene[1], gene[2], self.board_size, size
+                        board2, gene[0], gene[1], gene[2], self.board_size, size
                 ):
                     gene2 = gene
                     break
@@ -543,13 +519,13 @@ class Evolution:
         for i, gene in enumerate(individual):
             size = self.ship_sizes[i]
             if not is_gene_valid(
-                board, gene[0], gene[1], gene[2], self.board_size, size
+                    board, gene[0], gene[1], gene[2], self.board_size, size
             ):
                 new_gene = random_valid_gene(board, self.board_size, size)
             elif random.random() < indpb:
                 new_gene = local_mutation_gene(gene, board, self.board_size, size)
                 if not is_gene_valid(
-                    board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size
+                        board, new_gene[0], new_gene[1], new_gene[2], self.board_size, size
                 ):
                     new_gene = random_valid_gene(board, self.board_size, size)
             else:
@@ -568,32 +544,54 @@ if __name__ == "__main__":
     # === Static Parameters (Adjustable) ===
     BOARD_SIZE = 10
     SHIP_SIZES = [5, 4, 3, 2, 2]
-    POPULATION_SIZE = 100
+    POPULATION_SIZE = 50
     ELITE_SIZE = 1
-    NUM_GENERATIONS = 1000
+    NUM_GENERATIONS = 100
     TOURNAMENT_SIZE = 3
     MUTPB = 0.2
-    PLACING_POPULATION_SIZE = 5
     # =======================================
 
-    environment = Evolution(
+    game_manager = GameManager(size=BOARD_SIZE)
+
+    environment = PlacementGeneticAlgorithm(
+        game_manager=game_manager,
         board_size=BOARD_SIZE,
         ship_sizes=SHIP_SIZES,
-        population_size=PLACING_POPULATION_SIZE,
+        population_size=POPULATION_SIZE,
         num_generations=NUM_GENERATIONS,
         elite_size=ELITE_SIZE,
         MUTPB=MUTPB,
         TOURNAMENT_SIZE=TOURNAMENT_SIZE,
     )
+    environment.initialize_placing_population(POPULATION_SIZE)
 
-    search_agents = environment.get_opponent_pool()
+    search_agents = []
+    for i in range(10):
+        search_agent = SearchAgent(
+            board_size=BOARD_SIZE, strategy="hunt_down", name=f"hunt_down_{i}"
+        )
+        # Create a new network instance for each model
+        # net = ANET(board_size=BOARD_SIZE,
+        #           activation="relu",
+        #           device="cpu")
+
+        # search_agent = SearchAgent(
+        #    board_size=BOARD_SIZE,
+        #    strategy="nn_search",
+        #    net=net,
+        #    optimizer="adam",
+        #    name=f"nn_{i}",
+        #    lr=0.001,
+        # )
+        search_agents.append(search_agent)
 
     # Outer loop for generations of placing agents and search agents
     for gen in range(NUM_GENERATIONS):
         print(f"\n=== Generation {gen + 1}/{NUM_GENERATIONS} ===")
 
+        environment.trigger_evaluate_population(search_agents)
+
         # Run evolution with metrics tracking
-        print("Evolving placing agents...")
-        environment.evolve(gen, search_agents)
+        environment.evolve()
 
     environment.plot_metrics()

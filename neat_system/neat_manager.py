@@ -16,9 +16,7 @@ import visualize
 from ai.model import ANET
 from game_logic.placement_agent import PlacementAgent
 from neat_system.weight_reporter import WeightStatsReporter
-
-from neat_system.convolutional_neural_network import ConvolutionalNeuralNetwork
-
+from neat_system.cnn_layers import global_innovation_registry
 
 
 class NEAT_Manager:
@@ -51,7 +49,7 @@ class NEAT_Manager:
         current_state = game_manager.initial_state(placement_agent)
 
         while not game_manager.is_terminal(current_state):
-            move = search_agent.strategy.find_move(current_state)
+            move, _ = search_agent.strategy.find_move(current_state)
 
             current_state = game_manager.next_state(
                 current_state, move, current_state.placing
@@ -59,14 +57,8 @@ class NEAT_Manager:
 
         return current_state.move_count
 
-    def evaluate(self, game_manager, net, placement_agent):
+    def evaluate(self, game_manager, search_agent, placement_agent):
         """Simulate games to evaluate the genome fitness."""
-
-        search_agent = SearchAgent(
-            board_size=self.board_size,
-            strategy=self.strategy_search,
-            net=net,
-        )
 
         sum_move_count = 0
 
@@ -85,11 +77,68 @@ class NEAT_Manager:
                 tqdm(genomes, desc="Evaluating generation")
         ):
             for placement_agent in self.placement_agents:
-                net = ANET(genome=genome, config=config) # New
+                net = ANET(genome=genome, config=config)
 
-                # net = ConvolutionalNeuralNetwork.create(genome=genome, config=config)
+                search_agent = SearchAgent(
+                    board_size=self.board_size,
+                    strategy=self.strategy_search,
+                    net=net,
+                )
 
-                genome.fitness = self.evaluate(self.game_manager, net, placement_agent)
+                genome.fitness = self.evaluate(self.game_manager, search_agent, placement_agent)
+
+
+def custom_neat_run(population, config, inner_loop_manager, rbuf, max_generations):
+    for gen in range(max_generations):
+        population.reporters.start_generation(population.generation)
+
+        # Evaluate each genome with RL fine-tuning.
+        for genome_id, genome in population.population.items():
+            # Create network from genome.
+            net = ANET(genome=genome, config=config)
+            search_agent = SearchAgent(
+                board_size=YOUR_BOARD_SIZE,
+                strategy="nn_search",
+                net=net,
+                optimizer="adam",
+                name=f"neat_agent_{genome_id}",
+                lr=0.001,
+            )
+            # Run the RL inner loop for fine-tuning.
+            inner_loop_manager.run(search_agent, rbuf=rbuf)
+
+            # Compute fitness after RL training.
+            genome.fitness = evaluate_agent_performance(search_agent)
+
+        # Report evaluation results.
+        best_genome = max(population.population.values(), key=lambda g: g.fitness)
+        population.reporters.post_evaluate(config, population.population, population.species, best_genome)
+
+        # Check for termination criteria, etc.
+        if termination_criteria_met(population, config):
+            population.reporters.found_solution(config, population.generation, best_genome)
+            break
+
+        # Create the next generation.
+        population.population = population.reproduction.reproduce(
+            config, population.species, config.pop_size, population.generation
+        )
+
+        if not population.species.species:
+            if config.reset_on_extinction:
+                population.population = population.reproduction.create_new(
+                    config.genome_type, config.genome_config, config.pop_size
+                )
+            else:
+                raise CompleteExtinctionException()
+
+        population.species.speciate(config, population.population, population.generation)
+        population.reporters.end_generation(config, population.population, population.species)
+
+        population.generation += 1
+
+    return population.best_genome
+
 
 
 def run(
@@ -148,7 +197,6 @@ def run(
         view=True,
     )
     visualize.plot_fitness_boxplot(stats)
-    from neat_system.cnn_layers import global_innovation_registry
 
     visualize.plot_innovation_registry(global_innovation_registry)
 
