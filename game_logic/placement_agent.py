@@ -16,7 +16,7 @@ class PlacementAgent:
         1: Fore.CYAN,
     }
 
-    def __init__(self, board_size, ship_sizes, strategy, chromosome=None):
+    def __init__(self, board_size, ship_sizes, strategy, chromosome=None, name=""):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
         self.ships = []  # List of Ship objects
@@ -28,6 +28,7 @@ class PlacementAgent:
         # Maintain a list-of-ships as lists of indexes and a flattened list of all indexes.
         self.list_of_ships = [ship.indexes for ship in self.ships]
         self.indexes = [i for sublist in self.list_of_ships for i in sublist]
+        self.name = name
 
     def init_strategy(self, strategy, chromosome=None):
         if strategy == "random":

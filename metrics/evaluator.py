@@ -24,7 +24,7 @@ class BaseEvaluator(ABC):
         pass
 
     @abstractmethod
-    def evaluate(self, agents, generation, baseline, baseline_name):
+    def evaluate(self, agents, generation, baseline_name):
         pass
 
     @abstractmethod
@@ -60,7 +60,7 @@ class SearchEvaluator(BaseEvaluator):
             self.start_entropy[strategy] = {}
             self.end_entropy[strategy] = {}
 
-    def evaluate(self, search_agents, generation, baseline, baseline_name):
+    def evaluate(self, search_agents, generation, baseline_name):
         """
         Evaluate search agents against baseline placement agents.
         Runs multiple games and averages the results for more reliable metrics.
@@ -80,6 +80,7 @@ class SearchEvaluator(BaseEvaluator):
 
         for _ in range(self.num_evaluation_games):
             # Create a new random placement agent for each game to ensure variety
+            baseline = self.baseline[baseline_name]
             baseline.new_placements()
 
             # Simulate a game
@@ -306,7 +307,6 @@ class SearchEvaluator(BaseEvaluator):
             plt.show()
 
 
-
 class PlacementEvaluator(BaseEvaluator):
     """
     Class to evaluate the performance of evolved placement agents against baseline opponents.
@@ -330,7 +330,7 @@ class PlacementEvaluator(BaseEvaluator):
             self.sparsity[strategy] = {}
             self.hit_to_sunk_ratio[strategy] = {}
 
-    def evaluate(self, placement_agents, generation, baseline, baseline_name):
+    def evaluate(self, placement_agents, generation, baseline_name):
         """
         Evaluate placement agents against baseline search agents.
         Runs multiple games and averages the results for more reliable metrics.
@@ -349,7 +349,7 @@ class PlacementEvaluator(BaseEvaluator):
             moves, sparsity, hit_to_sunk_ratio = self.simulate_game(
                 self.game_manager,
                 best_placement_agent,
-                self.baseline[baseline],
+                self.baseline[baseline_name],
             )
             all_moves.append(moves)
             all_sparsity.append(sparsity)
@@ -382,7 +382,11 @@ class PlacementEvaluator(BaseEvaluator):
         sparsity = x_range * y_range / (self.board_size ** 2)
 
         while not game_manager.is_terminal(current_state):
-            move, _ = search_agent.strategy.find_move(current_state, topp=True)
+            result = search_agent.strategy.find_move(current_state, topp=True)
+            if isinstance(result, tuple):
+                move, distribution = result
+            else:
+                move = result
 
             is_hit = move in current_state.placing.indexes
             next_state = game_manager.next_state(current_state, move)
@@ -408,7 +412,6 @@ class PlacementEvaluator(BaseEvaluator):
             "Move Count": self.move_count,
             "Sparsity": self.sparsity,
             "Hit-to-Sunk Ratio": self.hit_to_sunk_ratio,
-            "Orientation % (Horizontal)": self.orientation_percentage,
         }
 
         for metric_name, metric_data in metrics.items():
@@ -447,13 +450,13 @@ class Evaluator:
 
     def evaluate_search_agents(self, search_agents, gen):
         """Proxy to the search evaluator."""
-        for key, value in self.search_evaluator.baseline.items():
-            self.search_evaluator.evaluate(search_agents, gen, value, key)
+        for baseline_name in self.search_evaluator.baseline.keys():
+            self.search_evaluator.evaluate(search_agents, gen, baseline_name)
 
     def evaluate_placement_agents(self, placement_agents, gen):
         """Proxy to the placement evaluator."""
-        for key, value in self.placement_evaluator.baseline.items():
-            self.placement_evaluator.evaluate(placement_agents, gen, value, key)
+        for baseline_name in self.placement_evaluator.baseline.keys():
+            self.placement_evaluator.evaluate(placement_agents, gen, baseline_name)
 
     def plot_metrics_search(self):
         self.search_evaluator.plot_metrics()

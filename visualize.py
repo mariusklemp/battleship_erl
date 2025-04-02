@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 import torch
 import networkx as nx
@@ -631,9 +632,6 @@ def show_board(board, board_size):
         print(row)
 
     print("-" * (board_size * 2))  # Formatting line
-
-
-import numpy as np
 
 
 def print_rbuf(rbuf, num_samples, board_size):
