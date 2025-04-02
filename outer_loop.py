@@ -36,7 +36,7 @@ class OuterLoopManager:
         self.board_size = self.mcts_config["board_size"]
         self.ship_sizes = self.mcts_config["ship_sizes"]
         self.run_inner_loop = True
-        self.run_evolution = True
+        self.run_evolution = False
 
         # Initialize components
         self.game_manager = GameManager(size=self.board_size)
@@ -86,7 +86,7 @@ class OuterLoopManager:
         population_size = self.evolution_config["search_population"]["size"]
         search_agents = []
 
-        for i in range(population_size + 1):
+        for i in range(population_size):
             agent = self._create_nn_agent(i * 100)
             search_agents.append(agent)
 
@@ -216,6 +216,7 @@ class OuterLoopManager:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
 
         # Initialize neat (neat population)
+        placement_ga = None
         if self.run_evolution:
             self._initialize_neat()
             print(f"Initialized neat population (genomes) search agents")
@@ -251,7 +252,7 @@ class OuterLoopManager:
             if self.run_evolution:
                 self.evaluate_agents_baselines(self.search_agents, placement_ga.pop_placing_agents, gen)
             else:
-                self.evaluate_agents_baselines(self.search_agents, gen)
+                self.evaluate_agents_baselines(search_agents=self.search_agents, generation=gen)
 
             # Train search agents with MCTS if enabled
             if self.run_inner_loop:
@@ -330,8 +331,9 @@ class OuterLoopManager:
 
     def _generate_visualizations(self, placement_ga):
         """Generate all visualizations at the end of training."""
-        # Plot general metrics
-        placement_ga.plot_metrics()
+        # Plot general metrics  
+        if self.run_evolution:
+            placement_ga.plot_metrics()
         self.evaluator.plot_metrics_search()
 
         # Plot NEAT-specific visualizations if NEAT was used
