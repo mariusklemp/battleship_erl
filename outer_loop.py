@@ -1,12 +1,15 @@
 import json
 import os
+import time
 
+from matplotlib import pyplot as plt
 from neat import CompleteExtinctionException
 from tqdm import tqdm
 import neat
 import configparser
 
 from RBUF import RBUF
+from ai.mcts import MCTS
 from deap_system.placement_ga import PlacementGeneticAlgorithm
 from metrics.evaluator import Evaluator
 from game_logic.search_agent import SearchAgent
@@ -60,6 +63,7 @@ class OuterLoopManager:
     def _initialize_evaluator(self):
         """Initialize the evaluator for agent performance assessment."""
         self.evaluator = Evaluator(
+            game_manager=self.game_manager,
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
             num_evaluation_games=self.evolution_config.get("num_evaluation_games", 10),
@@ -210,20 +214,15 @@ class OuterLoopManager:
         visualize.plot_multiple_genomes(genomes, "Best Genomes")
 
     def run(self):
-        """Run the outer evolutionary loop."""
+        """Run the outer evolutionary loop and record timings and instance counts."""
         num_generations = self.evolution_config["evolution"]["num_generations"]
-
         rbuf = RBUF(max_len=self.mcts_config["replay_buffer"]["max_size"])
-
         if self.mcts_config["replay_buffer"]["load_from_file"]:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
 
-        # Initialize neat (neat population)
         if self.run_evolution:
             self._initialize_neat()
             print(f"Initialized neat population (genomes) search agents")
-
-            # Initialize placement agents
             placement_ga = PlacementGeneticAlgorithm(
                 game_manager=self.game_manager,
                 board_size=self.board_size,
@@ -234,83 +233,105 @@ class OuterLoopManager:
                 MUTPB=self.evolution_config["placing_population"]["mutation_probability"],
                 TOURNAMENT_SIZE=self.evolution_config["placing_population"]["tournament_size"],
             )
-
             placement_ga.initialize_placing_population(self.evolution_config["placing_population"]["size"])
             print(f"\nInitialized {len(placement_ga.pop_placing_agents)} placement agents...")
+        else:
+            placement_ga = None
 
         print("\nStarting evolution...")
+
+        # Define the classes you wish to track
+        tracked_classes = (
+            GameManager,
+            RBUF,
+            Evaluator,
+            MCTS,
+            neat.Population,
+            PlacementGeneticAlgorithm,
+            PlacementAgent,
+            SearchAgent,
+            ANET,
+            CNNGenome,
+        )
+
+        # Data structures for timing and instance counts.
+        timings = {
+            'baseline_evaluation': [],
+            'inner_loop_training': [],
+            'placement_evolution': [],
+            'neat_evolution': [],
+        }
+        total_objects_list = []
+        instance_counts = {cls.__name__: [] for cls in tracked_classes}
+
         for gen in range(num_generations):
+            gen_start_time = time.perf_counter()
             print(f"\n=== Generation {gen + 1}/{num_generations} ===")
 
-            # Force a garbage collection
+            # --- Step 1: Garbage Collection and Instance Counting ---
             gc.collect()
+            objects = gc.get_objects()
+            total_objs = len(objects)
+            print("Total objects:", total_objs)
+            total_objects_list.append(total_objs)
 
-            # Get the total number of objects tracked by the garbage collector
-            print("Total objects:", len(gc.get_objects()))
-
-            # Create a dictionary to count instances by type
+            # Count instances of tracked classes
             count = {}
-
-            # List all the classes you're interested in
-            classes_to_track = (
-                GameManager,
-                RBUF,
-                Evaluator,
-                neat.Population,
-                PlacementGeneticAlgorithm,
-                PlacementAgent,
-                SearchAgent,
-                ANET,
-                CNNGenome,
-            )
-
-            for obj in gc.get_objects():
-                if isinstance(obj, classes_to_track):
-                    # Use the object's type as the key
+            for obj in objects:
+                if isinstance(obj, tracked_classes):
                     obj_type = type(obj)
                     count[obj_type] = count.get(obj_type, 0) + 1
 
-            # Print the count of each object type using the type's name
+            # Record counts for each class (even if zero)
+            for cls in tracked_classes:
+                cls_name = cls.__name__
+                instance_counts[cls_name].append(count.get(cls, 0))
+
+            # Optionally, print counts for this generation
             for cls, cnt in count.items():
-                # If the class has no __name__, fallback to str(cls)
                 cls_name = getattr(cls, '__name__', str(cls))
                 print(f"{cls_name}: {cnt}")
 
+            # --- Step 2: Create Search Agents (NEAT or NN) ---
             if self.run_evolution:
                 self.neat_population.reporters.start_generation(self.neat_population.generation)
-
-                # Get search agents from NEAT genomes
                 search_agents_mapping = self.create_search_agent_genomes(self.neat_population, self.neat_config)
                 self.search_agents = [agent for (genome, agent) in search_agents_mapping.values()]
             else:
                 self.search_agents = self._initialize_nn_search_agents()
 
-            # Evaluate agents against baseline opponents
+            # --- Step 3: Baseline Evaluation ---
+            step_start = time.perf_counter()
             if self.run_evolution:
                 self.evaluate_agents_baselines(self.search_agents, placement_ga.pop_placing_agents, gen)
             else:
                 self.evaluate_agents_baselines(self.search_agents, gen)
+            step_end = time.perf_counter()
+            timings['baseline_evaluation'].append(step_end - step_start)
 
-            # Train search agents with MCTS if enabled
+            # --- Step 4: Inner Loop Training ---
+            step_start = time.perf_counter()
             if self.run_inner_loop:
-                print(f"\nInner loop: Training {len(self.search_agents)} search agents against")
+                print(f"\nInner loop: Training {len(self.search_agents)} search agents")
                 inner_loop_manager = InnerLoopManager(game_manager=self.game_manager)
-
                 for i, search_agent in tqdm(enumerate(self.search_agents), desc="Training search agents",
                                             total=len(self.search_agents)):
                     print(f"\nTraining search agent {i + 1}/{len(self.search_agents)}")
                     inner_loop_manager.run(search_agent, rbuf=rbuf)
+            step_end = time.perf_counter()
+            timings['inner_loop_training'].append(step_end - step_start)
 
-            # Competitively evaluate search agents against placement agents
+            # --- Step 5: Placement Evaluation and Evolution ---
+            step_start = time.perf_counter()
             if self.run_evolution:
-                # Evaluate placing agents
-                placement_ga.trigger_evaluate_population(self.search_agents)
-
-                # Evolve placing agents
                 print("Evolving placing agents...")
+                placement_ga.trigger_evaluate_population(self.search_agents)
                 placement_ga.evolve()
-                # Evaluate search agents and update corresponding genome fitness
+                step_end = time.perf_counter()
+                timings['placement_evolution'].append(step_end - step_start)
 
+                print("Evolving search agents...")
+                step_start = time.perf_counter()
                 for genome_id, (genome, search_agent) in search_agents_mapping.items():
                     total_fitness = 0.0
                     for placement_agent in placement_ga.pop_placing_agents:
@@ -318,12 +339,54 @@ class OuterLoopManager:
                         total_fitness += fitness
                     genome.fitness = total_fitness / len(placement_ga.pop_placing_agents)
 
-                # Evolve searching agents
-                print("\nEvolving search agents...")
                 self.evolve_neat()
+                step_end = time.perf_counter()
+                timings['neat_evolution'].append(step_end - step_start)
 
-        # Plot metrics at the end
+            gen_end_time = time.perf_counter()
+            print(f"Generation {gen + 1} took {gen_end_time - gen_start_time:.2f} seconds.")
+
+        # After all generations, plot the timings and instance counts.
+        self._plot_timings_and_instance_counts(timings, total_objects_list, instance_counts)
+
+        # Plot any additional metrics you already have.
         self._generate_visualizations(placement_ga)
+
+    def _plot_timings_and_instance_counts(self, timings, total_objects_list, instance_counts):
+        """Plot the timing data and instance counts per generation."""
+        generations = range(1, len(total_objects_list) + 1)
+
+        # Plot timings for each step
+        plt.figure(figsize=(10, 6))
+        for key, time_list in timings.items():
+            plt.plot(generations, time_list, label=key)
+        plt.xlabel("Generation")
+        plt.ylabel("Time (seconds)")
+        plt.title("Timing per Generation")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        # Plot total object counts per generation
+        plt.figure(figsize=(10, 6))
+        plt.plot(generations, total_objects_list, label="Total Objects", marker='o')
+        plt.xlabel("Generation")
+        plt.ylabel("Number of Objects")
+        plt.title("Total Object Count per Generation")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+
+        # Plot instance counts for each tracked class
+        plt.figure(figsize=(10, 6))
+        for cls_name, counts in instance_counts.items():
+            plt.plot(generations, counts, label=cls_name)
+        plt.xlabel("Generation")
+        plt.ylabel("Instance Count")
+        plt.title("Instance Counts per Generation")
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
 
     def evolve_neat(self):
         # Shortcut reference for neat population

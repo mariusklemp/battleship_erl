@@ -4,20 +4,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 from game_logic.search_agent import SearchAgent
 from game_logic.placement_agent import PlacementAgent
-from game_logic.game_manager import GameManager
-
 
 class BaseEvaluator(ABC):
     """Base class with common functionality for evaluating agents."""
 
-    def __init__(self, board_size, ship_sizes, num_evaluation_games=10, mode="model"):
+    def __init__(self, game_manager, board_size, ship_sizes, num_evaluation_games=10):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
-        self.game_manager = GameManager(size=board_size)
+        self.game_manager = game_manager
         self.num_evaluation_games = num_evaluation_games
         self.generations = []
         self.baseline = {}
-        self.mode = mode  # "model" or "population"
 
     @abstractmethod
     def simulate_game(self, game_manager, agent1, agent2):
@@ -38,8 +35,8 @@ class SearchEvaluator(BaseEvaluator):
     Tracks performance metrics over generations.
     """
 
-    def __init__(self, board_size, ship_sizes, baselines, num_evaluation_games=10):
-        super().__init__(board_size, ship_sizes, num_evaluation_games)
+    def __init__(self, game_manager, board_size, ship_sizes, baselines, num_evaluation_games=10):
+        super().__init__(game_manager, board_size, ship_sizes, num_evaluation_games)
 
         # Create baseline opponents
         for strategy in baselines:
@@ -313,8 +310,8 @@ class PlacementEvaluator(BaseEvaluator):
     Tracks performance metrics over generations.
     """
 
-    def __init__(self, board_size, ship_sizes, baselines, num_evaluation_games=10):
-        super().__init__(board_size, ship_sizes, num_evaluation_games)
+    def __init__(self, game_manager, board_size, ship_sizes, baselines, num_evaluation_games=10):
+        super().__init__(game_manager, board_size, ship_sizes, num_evaluation_games)
 
         # Create baseline opponents
         for strategy in baselines:
@@ -436,16 +433,14 @@ class Evaluator:
     Maintains backward compatibility with existing code.
     """
 
-    def __init__(self, board_size, ship_sizes, num_evaluation_games=10):
-        self.search_evaluator = SearchEvaluator(board_size, ship_sizes, ["random", "uniform_spread"],
+    def __init__(self, game_manager, board_size, ship_sizes, num_evaluation_games=10):
+        self.search_evaluator = SearchEvaluator(game_manager, board_size, ship_sizes, ["random", "uniform_spread"],
                                                 num_evaluation_games, )
-        self.placement_evaluator = PlacementEvaluator(board_size, ship_sizes, ["random", "hunt_down"],
+        self.placement_evaluator = PlacementEvaluator(game_manager, board_size, ship_sizes, ["random", "hunt_down"],
                                                       num_evaluation_games)
 
-        # For compatibility with existing code
         self.board_size = board_size
         self.ship_sizes = ship_sizes
-        self.game_manager = GameManager(size=board_size)
         self.num_evaluation_games = num_evaluation_games
 
     def evaluate_search_agents(self, search_agents, gen):
