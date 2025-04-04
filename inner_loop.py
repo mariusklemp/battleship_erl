@@ -113,7 +113,7 @@ class InnerLoopManager:
         )
 
         for i in tqdm(range(num_games)):
-            if self.config.get("play_game", True):
+            if self.config["training"]["play_game"]:
                 # Play a game with mcts (Creates training data)
                 move_counts.append(self.simulate_game(search_agent, placement_agent, rbuf, gui))
 

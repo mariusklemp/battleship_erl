@@ -18,6 +18,8 @@ from neat_system.neat_manager import NEAT_Manager
 from neat_system.cnn_genome import CNNGenome
 import visualize
 from neat_system.weight_reporter import WeightStatsReporter
+import gc
+
 
 class OuterLoopManager:
     """
@@ -208,8 +210,6 @@ class OuterLoopManager:
         visualize.plot_multiple_genomes(genomes, "Best Genomes")
 
     def run(self):
-        import gc
-
         """Run the outer evolutionary loop."""
         num_generations = self.evolution_config["evolution"]["num_generations"]
 
@@ -248,29 +248,33 @@ class OuterLoopManager:
             # Get the total number of objects tracked by the garbage collector
             print("Total objects:", len(gc.get_objects()))
 
+            # Create a dictionary to count instances by type
             count = {}
-            # Optionally, filter objects of a particular type
-            for obj in gc.get_objects():
-                if isinstance(obj, PlacementGeneticAlgorithm):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, SearchAgent):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, ANET):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, CNNGenome):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, neat.Population):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, PlacementAgent):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, GameManager):
-                    count[obj] = count.get(obj, 0) + 1
-                elif isinstance(obj, RBUF):
-                    count[obj] = count.get(obj, 0) + 1
 
-            # Print the count of each object type
-            for obj_type, obj_count in count.items():
-                print(f"{obj_type.__name__}: {obj_count}")
+            # List all the classes you're interested in
+            classes_to_track = (
+                GameManager,
+                RBUF,
+                Evaluator,
+                neat.Population,
+                PlacementGeneticAlgorithm,
+                PlacementAgent,
+                SearchAgent,
+                ANET,
+                CNNGenome,
+            )
+
+            for obj in gc.get_objects():
+                if isinstance(obj, classes_to_track):
+                    # Use the object's type as the key
+                    obj_type = type(obj)
+                    count[obj_type] = count.get(obj_type, 0) + 1
+
+            # Print the count of each object type using the type's name
+            for cls, cnt in count.items():
+                # If the class has no __name__, fallback to str(cls)
+                cls_name = getattr(cls, '__name__', str(cls))
+                print(f"{cls_name}: {cnt}")
 
             if self.run_evolution:
                 self.neat_population.reporters.start_generation(self.neat_population.generation)
@@ -314,7 +318,7 @@ class OuterLoopManager:
                         total_fitness += fitness
                     genome.fitness = total_fitness / len(placement_ga.pop_placing_agents)
 
-                 # Evolve searching agents
+                # Evolve searching agents
                 print("\nEvolving search agents...")
                 self.evolve_neat()
 
