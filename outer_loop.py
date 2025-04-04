@@ -10,6 +10,7 @@ from RBUF import RBUF
 from deap_system.placement_ga import PlacementGeneticAlgorithm
 from metrics.evaluator import Evaluator
 from game_logic.search_agent import SearchAgent
+from game_logic.placement_agent import PlacementAgent
 from game_logic.game_manager import GameManager
 from ai.model import ANET
 from inner_loop import InnerLoopManager
@@ -207,6 +208,8 @@ class OuterLoopManager:
         visualize.plot_multiple_genomes(genomes, "Best Genomes")
 
     def run(self):
+        import gc
+
         """Run the outer evolutionary loop."""
         num_generations = self.evolution_config["evolution"]["num_generations"]
 
@@ -238,6 +241,37 @@ class OuterLoopManager:
         print("\nStarting evolution...")
         for gen in range(num_generations):
             print(f"\n=== Generation {gen + 1}/{num_generations} ===")
+
+            # Force a garbage collection
+            gc.collect()
+
+            # Get the total number of objects tracked by the garbage collector
+            print("Total objects:", len(gc.get_objects()))
+
+            count = {}
+            # Optionally, filter objects of a particular type
+            for obj in gc.get_objects():
+                if isinstance(obj, PlacementGeneticAlgorithm):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, SearchAgent):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, ANET):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, CNNGenome):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, neat.Population):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, PlacementAgent):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, GameManager):
+                    count[obj] = count.get(obj, 0) + 1
+                elif isinstance(obj, RBUF):
+                    count[obj] = count.get(obj, 0) + 1
+
+            # Print the count of each object type
+            for obj_type, obj_count in count.items():
+                print(f"{obj_type.__name__}: {obj_count}")
+
             if self.run_evolution:
                 self.neat_population.reporters.start_generation(self.neat_population.generation)
 

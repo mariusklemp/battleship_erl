@@ -1,14 +1,14 @@
 {
     "placing_population": {
-        "size": 2,
+        "size": 10,
         "elite_size": 1,
         "tournament_size": 2,
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 2
+        "size": 10
     },
     "evolution": {
-        "num_generations": 2
+        "num_generations": 10
     }
 } 

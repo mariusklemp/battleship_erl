@@ -130,22 +130,24 @@ class InnerLoopManager:
                 search_agent.strategy.save_model(f"models/model_{i + 1}.pth")
 
         if self.config["replay_buffer"]["save_to_file"]:
-            rbuf.save_to_file(file_path="rbuf/rbuf.pkl")
+            rbuf.save_to_file(file_path=self.config["replay_buffer"]["file_path"])
 
 
 def main():
-    rbuf = RBUF(max_len=10000)
-    rbuf.init_from_file(file_path="rbuf/rbuf.pkl")
-
     board_size = 5
 
     game_manager = GameManager(board_size)
 
     inner_loop_manager = InnerLoopManager(game_manager)
 
+    rbuf = RBUF(max_len=10000)
+
+    if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
+        rbuf.init_from_file(file_path="rbuf/rbuf.pkl")
+
     search_agents = []
 
-    for i in range(10):
+    for i in range(1):
         net = ANET(
             board_size=board_size,
             activation="relu",
@@ -160,7 +162,6 @@ def main():
             lr=0.0001,
         )
         search_agents.append(search_agent)
-
 
     for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
         print(f"Training search agent {i + 1}")
