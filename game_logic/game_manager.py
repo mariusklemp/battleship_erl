@@ -74,3 +74,16 @@ class GameManager:
 
     def is_terminal(self, state):
         return len(state.remaining_ships) == 0
+
+    def simulate_game(self, placing_agent, search_agent):
+        """Simulate a Battleship game and return the move count, hits, and misses."""
+
+        current_state = self.initial_state(placing=placing_agent)
+        # Count total hits and misses at the end instead of tracking during the game
+        while not self.is_terminal(current_state):
+            result = search_agent.strategy.find_move(current_state)
+            move, distribution = (result, None) if not isinstance(result, tuple) else result
+
+            current_state = self.next_state(current_state, move)
+
+        return current_state.move_count

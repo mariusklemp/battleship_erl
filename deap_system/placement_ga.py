@@ -180,6 +180,7 @@ class PlacementGeneticAlgorithm:
 
         return current_state.move_count, hits, misses
 
+
     def evaluate_population(
             self, population_placing, game_manager, search_agents
     ):

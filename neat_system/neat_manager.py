@@ -1,311 +1,161 @@
 import configparser
-import os
-import sys
-
-# Add the parent directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-
 import neat
-import tqdm
-from tqdm import tqdm
 
-from neat_system.cnn_genome import CNNGenome
-from game_logic.game_manager import GameManager
-from game_logic.search_agent import SearchAgent
 import visualize
-from ai.model import ANET
-from game_logic.placement_agent import PlacementAgent
+from neat_system.cnn_genome import CNNGenome
 from neat_system.weight_reporter import WeightStatsReporter
 from neat_system.cnn_layers import global_innovation_registry
 
 
-class NEAT_Manager:
-    def __init__(
-            self,
-            board_size,
-            ship_sizes,
-            strategy_placement,
-            strategy_search,
-            range_evaluations,
-            config,
-            game_manager,
-    ):
+class NeatManager:
+    """
+    Manages the NEAT evolutionary process including configuration updates,
+    population creation, genome/agent mapping, and evolution steps.
+    """
+
+    def __init__(self,
+                 neat_config_path: str,
+                 evolution_config: dict,
+                 board_size: int,
+                 ship_sizes: list):
+        """
+        Initialize the NeatManager.
+
+        Parameters:
+            neat_config_path (str): Path to the NEAT configuration file.
+            evolution_config (dict): Evolution configuration parameters.
+            board_size (int): Board dimensions for the game.
+            ship_sizes (list): List of ship sizes to calculate fitness thresholds.
+        """
+        self.neat_config_path = neat_config_path
+        self.evolution_config = evolution_config
         self.board_size = board_size
         self.ship_sizes = ship_sizes
-        self.strategy_placement = strategy_placement
-        self.strategy_search = strategy_search
 
-        self.config = config
-        self.range_evaluations = range_evaluations
+        # Update NEAT configuration based on current board and evolution parameters.
+        self._update_neat_config()
 
-        self.game_manager = game_manager
+        # Initialize the NEAT configuration and population.
+        self.config = self._initialize_neat_config()
+        self.population = self._create_population()
+        self.stats = neat.StatisticsReporter()
+        self.population.add_reporter(self.stats)
+        self.weight_stats_reporter = WeightStatsReporter()
+        self.population.add_reporter(self.weight_stats_reporter)
 
-    def set_placement_agents(self, placement_agents):
-        self.placement_agents = placement_agents
+        # Mapping from genome id/index to (genome, agent)
+        self.agents_mapping = {}
 
-    def simulate_game(self, game_manager, search_agent, placement_agent):
-        """Simulate a Battleship game and return the move count."""
+    def _update_neat_config(self) -> None:
+        """
+        Update the NEAT configuration file with current parameters.
+        """
+        cp = configparser.ConfigParser()
+        cp.read(self.neat_config_path)
 
-        current_state = game_manager.initial_state(placement_agent)
+        # Set fitness threshold and population size for the NEAT process.
+        cp["NEAT"]["fitness_threshold"] = str(self.board_size ** 2 - sum(self.ship_sizes))
+        cp["NEAT"]["pop_size"] = str(self.evolution_config["search_population"]["size"])
 
-        while not game_manager.is_terminal(current_state):
-            move, _ = search_agent.strategy.find_move(current_state)
+        # Update CNNGenome parameters.
+        cp["CNNGenome"]["input_size"] = str(self.board_size)
+        cp["CNNGenome"]["output_size"] = str(self.board_size ** 2)
 
-            current_state = game_manager.next_state(
-                current_state, move, current_state.placing
-            )
+        # Write the updated configuration back to disk.
+        with open(self.neat_config_path, "w") as f:
+            cp.write(f)
 
-        return current_state.move_count
-
-    def evaluate(self, game_manager, search_agent, placement_agent):
-        """Simulate games to evaluate the genome fitness."""
-
-        sum_move_count = 0
-
-        for i in range(self.range_evaluations):
-            move_count = self.simulate_game(game_manager, search_agent, placement_agent)
-            sum_move_count += move_count
-
-        # Return the genome fitness
-        avg_moves = sum_move_count / self.range_evaluations
-        return self.board_size ** 2 - avg_moves
-
-    def eval_genomes(self, genomes, config):
-        """Evaluate the fitness of each genome in the population."""
-
-        for i, (genome_id, genome) in enumerate(
-                tqdm(genomes, desc="Evaluating generation")
-        ):
-            for placement_agent in self.placement_agents:
-                net = ANET(genome=genome, config=config)
-
-                search_agent = SearchAgent(
-                    board_size=self.board_size,
-                    strategy=self.strategy_search,
-                    net=net,
-                )
-
-                genome.fitness = self.evaluate(self.game_manager, search_agent, placement_agent)
-
-
-def custom_neat_run(population, config, inner_loop_manager, rbuf, max_generations):
-    for gen in range(max_generations):
-        population.reporters.start_generation(population.generation)
-
-        # Evaluate each genome with RL fine-tuning.
-        for genome_id, genome in population.population.items():
-            # Create network from genome.
-            net = ANET(genome=genome, config=config)
-            search_agent = SearchAgent(
-                board_size=YOUR_BOARD_SIZE,
-                strategy="nn_search",
-                net=net,
-                optimizer="adam",
-                name=f"neat_agent_{genome_id}",
-                lr=0.001,
-            )
-            # Run the RL inner loop for fine-tuning.
-            inner_loop_manager.run(search_agent, rbuf=rbuf)
-
-            # Compute fitness after RL training.
-            genome.fitness = evaluate_agent_performance(search_agent)
-
-        # Report evaluation results.
-        best_genome = max(population.population.values(), key=lambda g: g.fitness)
-        population.reporters.post_evaluate(config, population.population, population.species, best_genome)
-
-        # Check for termination criteria, etc.
-        if termination_criteria_met(population, config):
-            population.reporters.found_solution(config, population.generation, best_genome)
-            break
-
-        # Create the next generation.
-        population.population = population.reproduction.reproduce(
-            config, population.species, config.pop_size, population.generation
+    def _initialize_neat_config(self) -> neat.Config:
+        """
+        Load and return the NEAT configuration object using the updated config file.
+        """
+        return neat.Config(
+            CNNGenome,
+            neat.DefaultReproduction,
+            neat.DefaultSpeciesSet,
+            neat.DefaultStagnation,
+            self.neat_config_path
         )
 
-        if not population.species.species:
-            if config.reset_on_extinction:
-                population.population = population.reproduction.create_new(
-                    config.genome_type, config.genome_config, config.pop_size
+    def _create_population(self) -> neat.Population:
+        """
+        Create and return a NEAT population.
+        """
+        pop = neat.Population(self.config)
+        # Optionally, add the standard reporter to see output in stdout.
+        pop.add_reporter(neat.StdOutReporter(True))
+        return pop
+
+    def evolve_one_generation(self) -> bool:
+        """
+        Performs one generation of evolution in the NEAT population.
+
+        Returns:
+            bool: True if a solution meeting the fitness threshold is found, else False.
+        """
+        # Find the best genome in the current population.
+        best = max(self.population.population.values(), key=lambda g: g.fitness)
+        self.population.reporters.post_evaluate(self.config, self.population.population, self.population.species, best)
+
+        # Update the best genome ever seen.
+        if self.population.best_genome is None or best.fitness > self.population.best_genome.fitness:
+            self.population.best_genome = best
+
+        # Check for termination by fitness threshold.
+        if not self.config.no_fitness_termination:
+            best_fitness = self.config.fitness_criterion(g.fitness for g in self.population.population.values())
+            if best_fitness >= self.config.fitness_threshold:
+                self.population.reporters.found_solution(self.config, self.population.generation, best)
+                return True  # A solution was found!
+
+        # Reproduce the next generation.
+        self.population.population = self.population.reproduction.reproduce(self.config,
+                                                                            self.population.species,
+                                                                            self.config.pop_size,
+                                                                            self.population.generation)
+
+        # Handle the case of complete extinction.
+        if not self.population.species.species:
+            self.population.reporters.complete_extinction()
+            if self.config.reset_on_extinction:
+                self.population.population = self.population.reproduction.create_new(
+                    self.config.genome_type,
+                    self.config.genome_config,
+                    self.config.pop_size
                 )
             else:
-                raise CompleteExtinctionException()
+                raise neat.CompleteExtinctionException()
 
-        population.species.speciate(config, population.population, population.generation)
-        population.reporters.end_generation(config, population.population, population.species)
+        # Speciate the newly created population.
+        self.population.species.speciate(self.config, self.population.population, self.population.generation)
+        self.population.reporters.end_generation(self.config, self.population.population, self.population.species)
 
-        population.generation += 1
+        # Increment the generation counter.
+        self.population.generation += 1
+        return False
 
-    return population.best_genome
+    def visualize_results(self):
+        """Generate visualizations for NEAT results."""
+        visualize.visualize_hof(statistics=self.stats)
+        visualize.plot_weight_stats(self.weight_stats_reporter.get_weight_stats())
+        visualize.plot_species_weight_stats(
+            self.weight_stats_reporter.get_species_weight_stats()
+        )
+        species_analysis = visualize.analyze_species_from_population(self.population.species)
+        visualize.plot_species_analysis(species_analysis)
+        visualize.visualize_species(self.stats)
+        visualize.plot_stats(
+            statistics=self.stats,
+            best_possible=(self.board_size ** 2 - sum(self.ship_sizes)),
+            ylog=False,
+            view=True,
+        )
+        visualize.plot_fitness_boxplot(self.stats)
 
+        visualize.plot_innovation_registry(global_innovation_registry)
 
+        best_genomes = self.stats.best_genomes(5)
+        genomes = [(genome, "") for genome in best_genomes]
+        visualize.plot_multiple_genomes(genomes, "Best Genomes")
+        visualize.plot_multiple_genomes_active(genomes, "Best Genomes Active")
 
-def run(
-        config,
-        gen,
-        board_size,
-        ship_sizes,
-        strategy_placement,
-        strategy_search,
-        chromosome,
-        range_evaluations,
-):
-    # Searching Agent
-    # p = neat.Checkpointer.restore_checkpoint("neat-checkpoint-0")
-    p = neat.Population(config)
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
-    # Attach custom WeightStatsReporter
-    weight_stats_reporter = WeightStatsReporter()
-    p.add_reporter(weight_stats_reporter)
-
-    # p.add_reporter(neat.Checkpointer(10))
-
-    game_manager = GameManager(size=board_size)
-
-    manager = NEAT_Manager(
-        board_size,
-        ship_sizes,
-        strategy_placement,
-        strategy_search,
-        range_evaluations,
-        config,
-        game_manager,
-    )
-    placement_agents = []
-    placement_agents.append(
-        PlacementAgent(board_size, ship_sizes, strategy_placement, chromosome)
-    )
-    manager.set_placement_agents(placement_agents)
-
-    p.run(manager.eval_genomes, gen)
-
-    visualize.visualize_hof(statistics=stats)
-    visualize.plot_weight_stats(weight_stats_reporter.get_weight_stats())
-    visualize.plot_species_weight_stats(
-        weight_stats_reporter.get_species_weight_stats()
-    )
-    species_analysis = visualize.analyze_species_from_population(p.species)
-    visualize.plot_species_analysis(species_analysis)
-    visualize.visualize_species(stats)
-    visualize.plot_stats(
-        statistics=stats,
-        best_possible=(board_size ** 2 - sum(ship_sizes)),
-        ylog=False,
-        view=True,
-    )
-    visualize.plot_fitness_boxplot(stats)
-
-    visualize.plot_innovation_registry(global_innovation_registry)
-
-    best_genomes = stats.best_genomes(5)
-    genomes = []
-    for genome in best_genomes:
-        genomes.append((genome, ""))
-    visualize.plot_multiple_genomes(genomes, "Best Genomes")
-
-
-def get_kernel_sizes(board_size):
-    # Use the board size if it's odd; otherwise, subtract 1 to get the largest odd
-    max_odd = board_size if board_size % 2 == 1 else board_size - 1
-    # Calculate a middle kernel size that's also odd
-    mid = (1 + max_odd) // 2
-    if mid % 2 == 0:
-        mid += 1
-    # Remove duplicates (e.g., for board_size=3, 1 may appear twice)
-    return list(dict.fromkeys([1, mid, max_odd]))
-
-
-def get_strides(board_size):
-    # For strides, we'll keep it simple: always include 1 and board_size//2
-    return list(dict.fromkeys([1, board_size // 2]))
-
-
-def get_paddings(board_size):
-    # For paddings, use 0 and board_size//4
-    return list(dict.fromkeys([0, board_size // 4]))
-
-
-def get_pool_sizes(board_size):
-    """Returns a list of valid pooling sizes, ensuring they fit within the board."""
-    max_pool = (
-        board_size if board_size % 2 == 0 else board_size - 1
-    )  # Largest even size
-    mid_pool = max(2, board_size // 2)  # Half the board, but at least 2
-    return list(dict.fromkeys([2, mid_pool, max_pool]))
-
-
-def get_pool_strides(board_size):
-    """Returns a list of valid pooling strides, ensuring valid downsampling."""
-    return list(dict.fromkeys([1, board_size // 2]))
-
-
-if __name__ == "__main__":
-    local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, "config.txt")
-
-    # === Static Parameters ===
-    BOARD_SIZE = 5
-    POPULATION_SIZE = 50
-    SHIP_SIZES = [3, 2, 2]
-    CHROMOSOME = [
-        (0, 0, 0),
-        (1, 1, 1),
-        (2, 2, 2),
-    ]
-    NUM_GENERATIONS = 5
-    RANGE_EVALUATIONS = 5
-    MUTATE_ARCHITECTURE = True
-    CROSSOVER_ARCHITECTURE = True
-    MUTATE_WEIGHTS = True
-    CROSSOVER_WEIGHTS = False
-    # =======================================
-
-    # Read the existing config file
-    cp = configparser.ConfigParser()
-    cp.read(config_path)
-
-    # Update [NEAT] section values
-    cp["NEAT"]["fitness_threshold"] = str(BOARD_SIZE ** 2 - sum(SHIP_SIZES))
-    cp["NEAT"]["pop_size"] = str(POPULATION_SIZE)
-
-    # Update [CNNGenome] section values
-    cp["CNNGenome"]["input_size"] = str(BOARD_SIZE)
-    cp["CNNGenome"]["output_size"] = str(BOARD_SIZE ** 2)
-    cp["CNNGenome"]["kernel_sizes"] = str(get_kernel_sizes(BOARD_SIZE))
-    cp["CNNGenome"]["strides"] = str(get_strides(BOARD_SIZE))
-    cp["CNNGenome"]["paddings"] = str(get_paddings(BOARD_SIZE))
-
-    cp["CNNGenome"]["pool_sizes"] = str(get_pool_sizes(BOARD_SIZE))
-    cp["CNNGenome"]["pool_strides"] = str(get_pool_strides(BOARD_SIZE))
-
-    cp["CNNGenome"]["mutate_architecture"] = str(MUTATE_ARCHITECTURE)
-    cp["CNNGenome"]["mutate_weights"] = str(MUTATE_WEIGHTS)
-    cp["CNNGenome"]["crossover_architecture"] = str(CROSSOVER_ARCHITECTURE)
-    cp["CNNGenome"]["crossover_weights"] = str(CROSSOVER_WEIGHTS)
-
-    # Write the updated config back to disk
-    with open(config_path, "w") as f:
-        cp.write(f)
-
-    # Now load the NEAT configuration from the updated config file
-    config = neat.Config(
-        CNNGenome,
-        neat.DefaultReproduction,
-        neat.DefaultSpeciesSet,
-        neat.DefaultStagnation,
-        config_path,
-    )
-
-    run(
-        config=config,
-        gen=NUM_GENERATIONS,
-        board_size=BOARD_SIZE,
-        ship_sizes=SHIP_SIZES,
-        strategy_placement="random",
-        strategy_search="nn_search",
-        chromosome=CHROMOSOME,
-        range_evaluations=RANGE_EVALUATIONS,
-    )

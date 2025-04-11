@@ -79,16 +79,15 @@ class CNNConvGene(BaseGene):
             new_out_channels = randint(config.out_channels_min, config.out_channels_max)
             self.out_channels = new_out_channels
 
-            if mutate_weights:
-                weights, biases = _mutate_weights_conv(self,
-                                                       config.weight_mutate_rate,
-                                                       config.weight_mutate_power,
-                                                       config.weight_replace_rate,
-                                                       config.weight_min_value,
-                                                       config.weight_max_value,
-                                                       config)
-                self.weights = weights
-                self.biases = biases
+            weights, biases = _mutate_weights_conv(self,
+                                                   config.weight_mutate_rate,
+                                                   config.weight_mutate_power,
+                                                   config.weight_replace_rate,
+                                                   config.weight_min_value,
+                                                   config.weight_max_value,
+                                                   config)
+            self.weights = weights
+            self.biases = biases
 
         return self
 
@@ -225,16 +224,15 @@ class CNNFCGene(BaseGene):
 
             self.fc_layer_size = new_fc_size
 
-            if config.mutate_weights:
-                weights, biases = _mutate_weights_fc(self,
-                                                       config.weight_mutate_rate,
-                                                       config.weight_mutate_power,
-                                                       config.weight_replace_rate,
-                                                       config.weight_min_value,
-                                                       config.weight_max_value,
-                                                       config)
-                self.weights = weights
-                self.biases = biases
+            weights, biases = _mutate_weights_fc(self,
+                                                 config.weight_mutate_rate,
+                                                 config.weight_mutate_power,
+                                                 config.weight_replace_rate,
+                                                 config.weight_min_value,
+                                                 config.weight_max_value,
+                                                 config)
+            self.weights = weights
+            self.biases = biases
 
         return self
 

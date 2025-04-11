@@ -160,6 +160,103 @@ def plot_multiple_genomes(genome_label_list, fig_title, max_cols=8):
     plt.show()
 
 
+def plot_multiple_genomes_active(genome_label_list, fig_title, max_cols=8):
+    """
+    Plots several genomes in subplots arranged vertically (one per row).
+    Each genome uses the same 'fixed-size' box approach.
+    """
+    n_genomes = len(genome_label_list)
+    nrows = n_genomes
+    ncols = 1
+
+    # Increase width & height to give enough space.
+    # The width of 1.5*max_cols matches your registry style;
+    # multiply the height to accommodate multiple genomes.
+    fig, axes = plt.subplots(nrows, ncols, figsize=(1.5 * max_cols, 3 * n_genomes))
+
+    # If only one genome, make `axes` iterable.
+    if n_genomes == 1:
+        axes = [axes]
+    else:
+        axes = list(axes)
+
+    # Plot each genome in its own subplot row.
+    for ax, (genome, label) in zip(axes, genome_label_list):
+        plot_genome_active(ax, genome, label, max_cols=max_cols)
+
+    plt.suptitle(fig_title, fontsize=14)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_genome_active(ax, genome, label, max_cols=5):
+    """
+    Plots the layers (genes) of a single genome in a fixed grid,
+    ensuring each gene box has the same size as in the innovation registry.
+    """
+    n = len(genome.layer_config)
+    nrows = (n + max_cols - 1) // max_cols  # total rows needed
+
+    color_map = {
+        "CNNConvGene": "#c2f0c2",  # pale green
+        "CNNPoolGene": "#c2e0f0",  # pale blue
+        "CNNFCGene": "#f0d9c2",  # pale orange
+    }
+    # Only plot enabled genes
+    genome.layer_config = [gene for gene in genome.layer_config if getattr(gene, "enabled", True)]
+
+    for i, gene in enumerate(genome.layer_config):
+        # Column and row within this grid
+        col = i % max_cols
+        row = i // max_cols
+
+        # We plot from top (row=0) to bottom (row=nrows-1),
+        # so we invert row by subtracting from nrows-1:
+        y = (nrows - 1) - row
+        x = col
+
+        gtype = gene.__class__.__name__ if hasattr(gene, "__class__") else "Unknown"
+        if gtype == "CNNConvGene":
+            gene_type = f"Conv {gene.key}"
+            details1 = f"k={gene.kernel_size}, s={gene.stride}, p={gene.padding}"
+            details2 = f"out={gene.out_channels}"
+        elif gtype == "CNNPoolGene":
+            gene_type = f"Pool {gene.key}"
+            details1 = f"size={gene.pool_size}, s={gene.stride}"
+            details2 = f"type={gene.pool_type}"
+        elif gtype == "CNNFCGene":
+            gene_type = f"FC {gene.key}"
+            details1 = f"size={gene.fc_layer_size}"
+            details2 = f"act={gene.activation}"
+        else:
+            gene_type = f"Unknown {gene.key}"
+            details1 = "???"
+            details2 = ""
+
+        status = "enabled" if gene.enabled else "disabled"
+        face_color = color_map.get(gtype, "#dddddd") if gene.enabled else "#dddddd"
+
+        # Each box is 0.9 wide and 1.0 tall, just like in your registry.
+        rect = Rectangle((x, y), 0.9, 1, facecolor=face_color, edgecolor="black")
+        ax.add_patch(rect)
+        text_str = f"{gene_type}\n{details1}\n{details2}\n{status}"
+        ax.text(x + 0.45, y + 0.5, text_str, ha="center", va="center",
+                wrap=True, fontsize=9)
+
+    # Force the axis to span exactly from 0..max_cols in X and 0..nrows in Y.
+    ax.set_xlim(0, max_cols)
+    ax.set_ylim(0, nrows)
+
+    # Keep each box square. This ensures the boxes remain the same physical size.
+    ax.set_aspect("equal", adjustable="box")
+
+    # Hide the axis lines/ticks.
+    ax.axis("off")
+
+    # Title for this genome.
+    ax.set_title(f"Genome ({genome.key}): {label}")
+
+
 def plot_species_weight_stats(species_weight_stats):
     """
     Plots the evolution of the mean weight value per species over generations.
