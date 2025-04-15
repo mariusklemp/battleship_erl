@@ -1,10 +1,19 @@
 import json
+import json
+import sys
+import os
+
+# Add the parent directory to the path so we can import modules from there
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from tqdm import tqdm
+
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
 from ai.model import ANET
 from evaluator import Evaluator
+
 
 
 class Tournament:
@@ -34,7 +43,7 @@ class Tournament:
 
     def set_nn_agent(self, i, layer_config):
         model_number = i * (self.num_games // self.num_players)
-        path = f"../models/model_{model_number}.pth"
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/7/erl", f"model_gen{model_number}.pth")
 
         net = ANET(
             board_size=self.board_size,
@@ -55,9 +64,12 @@ class Tournament:
         return search_agent
 
     def init_players(self, time_limit):
-        layer_config = json.load(open("../ai/config.json"))
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
+        layer_config = json.load(open(config_path))
 
         for i in range(self.num_players + 1):
+            if i == 0:
+                continue
             agent = self.set_nn_agent(i, layer_config)
             self.players[agent.name] = agent
 
@@ -79,7 +91,8 @@ class Tournament:
 
 
 def main():
-    config = json.load(open("../config/mcts_config.json"))
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "mcts_config.json")
+    config = json.load(open(config_path))
     game_manager = GameManager(size=config["board_size"])
 
     tournament = Tournament(

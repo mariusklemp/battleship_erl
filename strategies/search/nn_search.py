@@ -279,10 +279,10 @@ class NNSearch(nn.Module, Strategy):
 
     def save_model(self, path):
         # Save the model
-        torch.save(self.net.state_dict(), path)
+        torch.save(self.net, path)
 
     def load_model(self, path):
         print(f"Loading model from {path}")
         # Load new state
-        self.net.load_state_dict(torch.load(path))
+        self.net = torch.load(path)
         self.net.eval()

@@ -2,10 +2,15 @@ import pygame
 import json
 import torch
 import numpy as np
+import os
 from game_logic.placement_agent import PlacementAgent
 from ai.mcts import MCTS
 from tqdm import tqdm
 from gui import GUI
+from game_logic.game_manager import GameManager
+from RBUF import RBUF
+from ai.model import ANET
+from game_logic.search_agent import SearchAgent
 
 
 class InnerLoopManager:
@@ -117,13 +122,17 @@ class InnerLoopManager:
                 if self.config["model"]["train"]:
                     self.train_validate(rbuf, search_agent)
 
+                if self.config["model"]["save"] and gen == -1 and (i + 1) % 10 == 0:
+                    model_path = f"{self.config['model']['save_path']}/rl/model_gen{i + 1}.pth"
+                    search_agent.strategy.save_model(model_path)
+
         # Train only from buffer if not playing
         elif self.config["model"]["train"]:
             self.train_validate(rbuf, search_agent)
 
         # Save model only every 10 generations
         if self.config["model"]["save"] and (gen + 1) % 10 == 0:
-            model_path = f"{self.config['model']['save_path']}/model_gen{gen + 1}.pth"
+            model_path = f"{self.config['model']['save_path']}/erl/model_gen{gen + 1}.pth"
             search_agent.strategy.save_model(model_path)
 
         # Save the buffer if requested
@@ -131,39 +140,41 @@ class InnerLoopManager:
             rbuf.save_to_file(file_path=self.config["replay_buffer"]["file_path"])
 
 
-# def main():
-#     board_size = 5
-#
-#     game_manager = GameManager(board_size)
-#
-#     inner_loop_manager = InnerLoopManager(game_manager)
-#
-#     rbuf = RBUF(max_len=10000)
-#
-#     if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
-#         rbuf.init_from_file(file_path=inner_loop_manager.config["replay_buffer"]["file_path"])
-#
-#     search_agents = []
-#
-#     for i in range(1):
-#         net = ANET(
-#             board_size=board_size,
-#             activation="relu",
-#             device="cpu",
-#         )
-#
-#         search_agent = SearchAgent(
-#             board_size=board_size,
-#             strategy="nn_search",
-#             net=net,
-#             optimizer="adam",
-#             lr=0.0001,
-#         )
-#         search_agents.append(search_agent)
-#
-#     for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
-#         print(f"Training search agent {i + 1}")
-#         inner_loop_manager.run(search_agent, rbuf)
+def main():
+    with open("config/mcts_config.json", "r") as f:
+        config = json.load(f)
+    board_size = config["board_size"]
+
+    game_manager = GameManager(board_size)
+
+    inner_loop_manager = InnerLoopManager(game_manager)
+
+    rbuf = RBUF(max_len=10000)
+
+    if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
+        rbuf.init_from_file(file_path=inner_loop_manager.config["replay_buffer"]["file_path"])
+
+    search_agents = []
+
+    for i in range(1):
+        net = ANET(
+            board_size=board_size,
+            activation="relu",
+            device="cpu",
+        )
+
+        search_agent = SearchAgent(
+            board_size=board_size,
+            strategy="nn_search",
+            net=net,
+            optimizer="adam",
+            lr=0.0001,
+        )
+        search_agents.append(search_agent)
+
+    for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
+        print(f"Training search agent {i + 1}")
+        inner_loop_manager.run(search_agent, rbuf, gen=-1)
 
 
 if __name__ == "__main__":
