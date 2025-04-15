@@ -48,7 +48,7 @@ class Tournament:
             strategy="nn_search",
             net=net,
             optimizer="adam",
-            name=f"nn_{model_number}",
+            name=model_number,
             lr=0.001,
         )
         search_agent.strategy.load_model(path)
@@ -65,10 +65,9 @@ class Tournament:
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
-            num_evaluation_games=self.num_games // 10
+            num_evaluation_games=self.num_games // 10,
+            game_manager=self.game_manager,
         )
-
-
 
         for name, search_agent in tqdm(self.players.items()):
             evaluator.evaluate_search_agents(

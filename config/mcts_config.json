@@ -1,7 +1,7 @@
 {
     "run_inner_loop": true,
-    "board_size": 5,
-    "ship_sizes": [3, 3, 2],
+    "board_size": 7,
+    "ship_sizes": [4, 3, 3, 2],
     "mcts": {
         "time_limit": 1.2,
         "exploration_constant": 1.41
