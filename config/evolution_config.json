@@ -1,4 +1,6 @@
 {
+    "run_neat": true,
+    "run_ga": true,
     "placing_population": {
         "size": 2,
         "elite_size": 1,
@@ -9,6 +11,6 @@
         "size": 2
     },
     "evolution": {
-        "num_generations": 2
+        "num_generations": 3
     }
 } 

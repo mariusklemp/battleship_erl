@@ -1,6 +1,9 @@
+import os
+
 import numpy as np
 import random
 import pickle
+
 
 class RBUF:
     def __init__(self, max_len=10000):
@@ -14,6 +17,7 @@ class RBUF:
     def init_from_file(self, file_path):
         try:
             with open(file_path, "rb") as f:
+                print("File size:", os.path.getsize(file_path))
                 data = pickle.load(f)
                 self.data = data[-self.max_len:] if len(data) > self.max_len else data
                 split = int(0.8 * len(self.data))

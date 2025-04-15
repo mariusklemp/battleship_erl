@@ -24,25 +24,29 @@ class ANET(nn.Module):
             device="cpu",
             genome=None,
             config=None,
-            layer_config=None
+            layer_config=None,
     ):
         super(ANET, self).__init__()
         self.device = device
         self.input_channels = 5
+        self.config = config
+        self.board_size = board_size
+        self.output_size = board_size * board_size
 
-        if genome is not None and config is not None:
+        if genome is not None and self.config is not None:
             self.board_size = config.genome_config.input_size
             self.output_size = config.genome_config.output_size
-            self._build_from_genome(genome, config)
+            layer_list = self._build_from_genome(genome)
+            self.logits = nn.Sequential(*layer_list)
+            self.layers = list(self.logits.children())
+            self.read_weights_biases_from_genome(genome)
+
         elif layer_config is not None:
-            self.board_size = board_size
             self.activation_func = activation_function(activation)
-            self.output_size = board_size * board_size
             self._build_from_layer_config(layer_config)
+
         else:
-            self.board_size = board_size
             self.activation_func = activation_function(activation)
-            self.output_size = board_size * board_size
             self._build_default()
 
         self.to(device)
@@ -51,25 +55,23 @@ class ANET(nn.Module):
         self.layer_config = layer_config
         self.logits = nn.Sequential(*self.getLayers())
 
-    def _build_from_genome(self, genome, config):
-        # Initialize the module list and the spatial/channel counters.
-        self.layers = nn.ModuleList()
+    def _build_from_genome(self, genome):
+        layer_list = []
+        curr_h, curr_w = self.board_size, self.board_size
+        curr_c = self.config.genome_config.input_channels
 
-        curr_h, curr_w, curr_c = self.board_size, self.board_size, config.genome_config.input_channels
-        layer_evals = []
+        # Precompute the last enabled FC gene.
+        enabled_fc_genes = [gene for gene in genome.layer_config
+                            if isinstance(gene, CNNFCGene) and (not hasattr(gene, "enabled") or gene.enabled)]
+        last_fc_gene = enabled_fc_genes[-1] if enabled_fc_genes else None
 
         # Iterate over the genome's layer configuration.
         for gene in genome.layer_config:
-            # Skip any disabled genes.
+            # Skip disabled genes.
             if hasattr(gene, "enabled") and not gene.enabled:
                 continue
 
             if isinstance(gene, CNNConvGene):
-                # Compute expected output dimensions.
-                out_h = (curr_h + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
-                out_w = (curr_w + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
-
-                # Create the convolution layer.
                 conv_layer = nn.Conv2d(
                     in_channels=int(gene.in_channels),
                     out_channels=int(gene.out_channels),
@@ -77,64 +79,33 @@ class ANET(nn.Module):
                     stride=int(gene.stride),
                     padding=int(gene.padding)
                 )
-                # Copy over the weights and biases if provided.
-                if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    conv_layer.weight.data.copy_(torch.from_numpy(gene.weights))
-                    conv_layer.bias.data.copy_(torch.from_numpy(gene.biases))
-                activation = activation_function(gene.activation)
-                layer_evals.append({"type": "conv", "params": {"layer": conv_layer, "activation": activation}})
+                layer_list.append(conv_layer)
+                layer_list.append(activation_function(gene.activation))
+                out_h = (curr_h + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
+                out_w = (curr_w + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
                 curr_h, curr_w = out_h, out_w
                 curr_c = gene.out_channels
 
             elif isinstance(gene, CNNPoolGene):
-                out_h = (curr_h - gene.pool_size) // gene.stride + 1
-                out_w = (curr_w - gene.pool_size) // gene.stride + 1
-
-                if gene.pool_type == "max":
-                    pool_layer = nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
-                else:
-                    pool_layer = nn.AvgPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
-                layer_evals.append({"type": "pool", "params": {"layer": pool_layer}})
-                curr_h, curr_w = out_h, out_w
+                pool_layer = (nn.MaxPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride))
+                              if gene.pool_type == "max"
+                              else nn.AvgPool2d(kernel_size=int(gene.pool_size), stride=int(gene.stride)))
+                layer_list.append(pool_layer)
+                curr_h = (curr_h - gene.pool_size) // gene.stride + 1
+                curr_w = (curr_w - gene.pool_size) // gene.stride + 1
 
             elif isinstance(gene, CNNFCGene):
-                activation = activation_function(gene.activation)
+                if not any(isinstance(layer, nn.Flatten) for layer in layer_list):
+                    layer_list.append(nn.Flatten())
                 fc_layer = nn.Linear(int(gene.input_size), int(gene.fc_layer_size))
-                if hasattr(gene, "weights") and hasattr(gene, "biases"):
-                    fc_layer.weight.data.copy_(torch.from_numpy(gene.weights))
-                    fc_layer.bias.data.copy_(torch.from_numpy(gene.biases))
-                layer_evals.append({"type": "fc", "params": {"layer": fc_layer, "activation": activation}})
+                layer_list.append(fc_layer)
+                # Only append activation if this FC gene is not the last enabled FC gene.
+                if gene != last_fc_gene:
+                    layer_list.append(activation_function(gene.activation))
             else:
                 raise ValueError(f"Unknown gene type: {type(gene)}")
+        return layer_list
 
-        # Determine the last FC gene to define the final output layer.
-        last_fc_size = None
-        for gene in reversed(genome.layer_config):
-            if isinstance(gene, CNNFCGene) and getattr(gene, "enabled", True):
-                last_fc_size = gene.fc_layer_size
-                break
-
-        if last_fc_size is None:
-            fc_input_size = curr_c * curr_h * curr_w
-            last_fc_size = fc_input_size
-
-        output_layer = nn.Linear(int(last_fc_size), self.output_size)
-        layer_evals.append({"type": "fc", "params": {"layer": output_layer, "activation": nn.Identity()}})
-
-        # Convert the layer evaluation list into a ModuleList.
-        for item in layer_evals:
-            ltype = item["type"]
-            params = item["params"]
-            if ltype in ["conv"]:
-                self.layers.append(params["layer"])
-                self.layers.append(params["activation"])
-            elif ltype in ["pool"]:
-                self.layers.append(params["layer"])
-            elif ltype in ["fc"]:
-                flatten_layer = nn.Flatten()
-                self.layers.append(flatten_layer)
-                self.layers.append(params["layer"])
-                self.layers.append(params["activation"])
 
     def _build_default(self):
         self.conv1 = nn.Conv2d(self.input_channels, 128, kernel_size=3, padding=1)
@@ -147,59 +118,21 @@ class ANET(nn.Module):
         self.apply(self.init_weights)
 
     def extra_features_to_board(self, extra_features):
-        """
-        Handles the ship matrix representation.
-        The input is already a binary matrix where each column represents a ship size
-        and each 1 in that column indicates a ship.
-        
-        Args:
-            extra_features: Binary matrix of shape (batch_size, board_size, board_size) where:
-                          - Each column i represents ships of size i+1
-                          - Each 1 in column i indicates a ship of size i+1
-            
-        Returns:
-            The same matrix, ensuring it's on the correct device
-        """
-        # Ensure extra_features is a tensor and has the correct shape
         if not torch.is_tensor(extra_features):
             extra_features = torch.tensor(extra_features, dtype=torch.float32)
-            
-        # Ensure the matrix has the correct shape (including batch dimension)
         if extra_features.shape[1:] != (self.board_size, self.board_size):
-            raise ValueError(f"Expected shape (batch_size, {self.board_size}, {self.board_size}), got {extra_features.shape}")
-            
+            raise ValueError(
+                f"Expected shape (batch_size, {self.board_size}, {self.board_size}), got {extra_features.shape}")
         return extra_features
 
     def forward(self, game_state: torch.Tensor, extra_features):
-        # Ensure game_state is on the correct device.
         game_state = game_state.to(self.device)
-
-        # Convert extra_features to a board (of shape [board_size, board_size])
         board_extra = self.extra_features_to_board(extra_features)
-        
-        # Add channel dimension and repeat to match game_state batch size
-        board_extra = (
-            board_extra.unsqueeze(1)  # Add channel dimension
-            .repeat(game_state.shape[0], 1, 1, 1)  # Repeat to match batch size
-            .to(self.device)
-        )
-        
-        # Concatenate the extra channel to the board input along the channel dimension.
+        board_extra = board_extra.unsqueeze(1).repeat(game_state.shape[0], 1, 1, 1).to(self.device)
         game_state = torch.cat([game_state, board_extra], dim=1)
-
-        # Forward pass through the network
-        if hasattr(self, "layers"):
-            # NEAT-based architecture
-            x = game_state
-            for layer in self.layers:
-                x = layer(x)
-            return x
-
-        elif hasattr(self, "logits"):
-            # Layer config based architecture
+        if hasattr(self, "logits"):
             return self.logits(game_state)
         else:
-            # Default architecture
             x = self.conv1(game_state)
             x = self.activation_func(x)
             x = self.conv2(x)
@@ -270,3 +203,88 @@ class ANET(nn.Module):
 
     def save(self, path: str):
         torch.save(self.state_dict(), path)
+
+    def read_weights_biases_from_genome(self, genome):
+        """
+        Reads the weights and biases from the genome and copies them into the model's
+        convolutional and fully connected layers.
+
+        Assumes:
+          - The model has been built from the genome (using _build_from_genome).
+          - The ordering of enabled genome genes in genome.layer_config matches the
+            corresponding layers in self.layers (filtered for nn.Conv2d and nn.Linear).
+        """
+        # Filter out the network's Conv2d and Linear layers.
+        net_conv_layers = [layer for layer in self.layers if isinstance(layer, nn.Conv2d)]
+        net_fc_layers = [layer for layer in self.layers if isinstance(layer, nn.Linear)]
+        conv_index = 0
+        fc_index = 0
+
+        for gene in genome.layer_config:
+            # Only process enabled genes (or genes without an "enabled" attribute)
+            if hasattr(gene, "enabled") and not gene.enabled:
+                continue
+
+            if isinstance(gene, CNNConvGene):
+                if conv_index >= len(net_conv_layers):
+                    raise ValueError("Mismatch between number of conv genes and conv layers in the model.")
+
+                conv_layer = net_conv_layers[conv_index]
+                # Copy gene weights and biases into the conv layer using your method.
+                if hasattr(gene, "weights") and hasattr(gene, "biases"):
+                    with torch.no_grad():
+                        conv_layer.weight.copy_(
+                            torch.tensor(gene.weights, device=self.device, dtype=conv_layer.weight.dtype)
+                        )
+                        conv_layer.bias.copy_(
+                            torch.tensor(gene.biases, device=self.device, dtype=conv_layer.bias.dtype)
+                        )
+                conv_index += 1
+
+            elif isinstance(gene, CNNFCGene):
+                if fc_index >= len(net_fc_layers):
+                    raise ValueError("Mismatch between number of fc genes and fc layers in the model.")
+                fc_layer = net_fc_layers[fc_index]
+                if hasattr(gene, "weights") and hasattr(gene, "biases"):
+                    with torch.no_grad():
+                        fc_layer.weight.copy_(
+                            torch.tensor(gene.weights, device=self.device, dtype=fc_layer.weight.dtype)
+                        )
+                        fc_layer.bias.copy_(
+                            torch.tensor(gene.biases, device=self.device, dtype=fc_layer.bias.dtype)
+                        )
+                fc_index += 1
+
+    def read_weights_biases_to_genome(self, genome):
+        """
+        Copies the model's current weights and biases from its convolutional and
+        fully connected layers back into the corresponding genome genes.
+
+        Assumes:
+          - The model has been built from the genome (using _build_from_genome).
+          - The enabled gene ordering in genome.layer_config corresponds to the order
+            of trainable layers (nn.Conv2d and nn.Linear) in self.layers.
+        """
+        net_conv_layers = [layer for layer in self.layers if isinstance(layer, nn.Conv2d)]
+        net_fc_layers = [layer for layer in self.layers if isinstance(layer, nn.Linear)]
+        conv_index = 0
+        fc_index = 0
+
+        for gene in genome.layer_config:
+            if hasattr(gene, "enabled") and not gene.enabled:
+                continue
+
+            if isinstance(gene, CNNConvGene):
+                conv_layer = net_conv_layers[conv_index]
+                gene.weights = conv_layer.weight.data.cpu().numpy()
+                gene.biases = conv_layer.bias.data.cpu().numpy()
+                conv_index += 1
+
+            elif isinstance(gene, CNNFCGene):
+                fc_layer = net_fc_layers[fc_index]
+                gene.weights = fc_layer.weight.data.cpu().numpy()
+                gene.biases = fc_layer.bias.data.cpu().numpy()
+                fc_index += 1
+
+        return genome
+

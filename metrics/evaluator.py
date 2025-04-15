@@ -4,20 +4,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from game_logic.search_agent import SearchAgent
 from game_logic.placement_agent import PlacementAgent
-from game_logic.game_manager import GameManager
 
 
 class BaseEvaluator(ABC):
     """Base class with common functionality for evaluating agents."""
 
-    def __init__(self, board_size, ship_sizes, num_evaluation_games=10, mode="model"):
+    def __init__(self, game_manager, board_size, ship_sizes, num_evaluation_games=10):
         self.board_size = board_size
         self.ship_sizes = ship_sizes
-        self.game_manager = GameManager(size=board_size)
+        self.game_manager = game_manager
         self.num_evaluation_games = num_evaluation_games
         self.generations = []
         self.baseline = {}
-        self.mode = mode  # "model" or "population"
 
     @abstractmethod
     def simulate_game(self, game_manager, agent1, agent2):
@@ -38,8 +36,8 @@ class SearchEvaluator(BaseEvaluator):
     Tracks performance metrics over generations.
     """
 
-    def __init__(self, board_size, ship_sizes, baselines, num_evaluation_games=10):
-        super().__init__(board_size, ship_sizes, num_evaluation_games)
+    def __init__(self, game_manager, board_size, ship_sizes, baselines, num_evaluation_games=10):
+        super().__init__(game_manager, board_size, ship_sizes, num_evaluation_games)
 
         # Create baseline opponents
         for strategy in baselines:
@@ -62,15 +60,12 @@ class SearchEvaluator(BaseEvaluator):
 
     def evaluate(self, search_agents, generation, baseline_name):
         """
-        Evaluate search agents against baseline placement agents.
-        Runs multiple games and averages the results for more reliable metrics.
+        Evaluate the average performance of all search agents in the population
+        against a baseline placement agent.
         """
         self.generations.append(generation)
 
-        # Get the best search agent (assuming it's the last one in the list)
-        best_search_agent = search_agents[-1]
-
-        # Evaluate against baselines multiple times
+        # Metrics across all agents
         all_moves = []
         all_accuracy = []
         all_sink_efficiency = []
@@ -78,23 +73,26 @@ class SearchEvaluator(BaseEvaluator):
         all_start_entropy = []
         all_end_entropy = []
 
-        for _ in range(self.num_evaluation_games):
-            # Create a new random placement agent for each game to ensure variety
-            baseline = self.baseline[baseline_name]
-            baseline.new_placements()
+        # Use a fresh random baseline each time
+        baseline_placement_agent = self.baseline[baseline_name]
 
-            # Simulate a game
-            moves, accuracy, sink_efficiency, moves_between_hits, start_entropy, end_entropy = self.simulate_game(
-                self.game_manager, baseline, best_search_agent
-            )
-            all_moves.append(moves)
-            all_accuracy.append(accuracy)
-            all_sink_efficiency.append(sink_efficiency)
-            all_moves_between_hits.append(moves_between_hits)
-            all_start_entropy.append(start_entropy)
-            all_end_entropy.append(end_entropy)
+        for agent in search_agents:
+            for _ in range(self.num_evaluation_games):
+                baseline_placement_agent.new_placements()
 
-        # Calculate averages
+                # Simulate a game with the current agent
+                moves, accuracy, sink_efficiency, moves_between_hits, start_entropy, end_entropy = self.simulate_game(
+                    self.game_manager, baseline_placement_agent, agent
+                )
+
+                all_moves.append(moves)
+                all_accuracy.append(accuracy)
+                all_sink_efficiency.append(sink_efficiency)
+                all_moves_between_hits.append(moves_between_hits)
+                all_start_entropy.append(start_entropy)
+                all_end_entropy.append(end_entropy)
+
+        # Compute average metrics across all games and all agents
         avg_moves = np.mean(all_moves)
         avg_accuracy = np.mean(all_accuracy)
         avg_sink_efficiency = np.mean(all_sink_efficiency)
@@ -102,7 +100,7 @@ class SearchEvaluator(BaseEvaluator):
         avg_start_entropy = np.mean(all_start_entropy)
         avg_end_entropy = np.mean(all_end_entropy)
 
-        # Store the average performance
+        # Store the results
         self.result[baseline_name][generation] = avg_moves
         self.hit_accuracy[baseline_name][generation] = avg_accuracy
         self.sink_efficiency[baseline_name][generation] = avg_sink_efficiency
@@ -220,17 +218,17 @@ class SearchEvaluator(BaseEvaluator):
         return normalized_entropy
 
     def plot_metrics(self):
-        """Plot grouped metrics as bar charts with one combined bar per generation/model."""
-
-        group_bar_metrics = {
+        """Plot entropy as grouped bars, and other metrics separately for clarity."""
+        grouped_bar_metrics = {
             "Distribution Entropy": {
                 "metrics": ("Start Entropy", "End Entropy"),
                 "colors": ("lightblue", "steelblue"),
             },
-            "Efficiency Metrics": {
-                "metrics": ("Sink Efficiency", "Moves Between Hits"),
-                "colors": ("salmon", "orange"),
-            },
+        }
+
+        single_bar_metrics = {
+            "Sink Efficiency": ("sink_efficiency", "salmon"),
+            "Moves Between Hits": ("moves_between_hits", "orange"),
         }
 
         line_metrics = {
@@ -249,8 +247,8 @@ class SearchEvaluator(BaseEvaluator):
                 combined[gen] /= count[gen]
             return combined
 
-        # Grouped bar charts with one bar per generation/model (averaged across baselines)
-        for group_title, meta in group_bar_metrics.items():
+        # === Grouped Bar Chart ===
+        for group_title, meta in grouped_bar_metrics.items():
             metric1, metric2 = meta["metrics"]
             color1, color2 = meta["colors"]
 
@@ -261,10 +259,7 @@ class SearchEvaluator(BaseEvaluator):
             avg_data2 = average_across_baselines(data2)
 
             all_generations = list(set(avg_data1.keys()) | set(avg_data2.keys()))
-            try:
-                all_generations = sorted(all_generations, key=lambda k: int(k.split("_")[1]) if "_" in k else int(k))
-            except:
-                all_generations = sorted(all_generations)
+            all_generations = sorted(all_generations, key=lambda k: int(k))
 
             x = np.arange(len(all_generations))
             values1 = [avg_data1.get(gen, 0) for gen in all_generations]
@@ -290,7 +285,32 @@ class SearchEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.show()
 
-        # Line plots per baseline
+        # === Individual Bar Charts for Efficiency Metrics ===
+        for title, (attr_name, color) in single_bar_metrics.items():
+            data = getattr(self, attr_name)
+            avg_data = average_across_baselines(data)
+
+            all_generations = sorted(avg_data.keys(),
+                                     key=lambda k: int(k.split("_")[1]) if isinstance(k, str) and "_" in k else int(k))
+            x = np.arange(len(all_generations))
+            values = [avg_data.get(gen, 0) for gen in all_generations]
+
+            plt.figure(figsize=(10, 5))
+            bars = plt.bar(x, values, width=0.5, color=color, label=title)
+            for b in bars:
+                h = b.get_height()
+                plt.text(b.get_x() + b.get_width() / 2., h + 0.05, f'{h:.2f}',
+                         ha='center', va='bottom', fontsize=8)
+
+            plt.xticks(x, all_generations, rotation=45)
+            plt.title(f"Search Agent: {title}")
+            plt.xlabel("Generation")
+            plt.ylabel(title)
+            plt.tight_layout()
+            plt.grid(alpha=0.3)
+            plt.show()
+
+        # === Line Plots ===
         for metric_name, metric_data in line_metrics.items():
             plt.figure(figsize=(10, 6))
             for baseline, values in metric_data.items():
@@ -298,8 +318,8 @@ class SearchEvaluator(BaseEvaluator):
                 values_sorted = [values[k] for k in keys]
                 plt.plot(keys, values_sorted, marker="o", label=baseline)
 
-            plt.title(f"Search Agent: {metric_name} over Generations")
-            plt.xlabel("Generation or Model")
+            plt.title(f"Baseline evaluation Search Agent: {metric_name}")
+            plt.xlabel("Generation")
             plt.ylabel(metric_name)
             plt.legend()
             plt.grid(alpha=0.3)
@@ -313,8 +333,8 @@ class PlacementEvaluator(BaseEvaluator):
     Tracks performance metrics over generations.
     """
 
-    def __init__(self, board_size, ship_sizes, baselines, num_evaluation_games=10):
-        super().__init__(board_size, ship_sizes, num_evaluation_games)
+    def __init__(self, game_manager, board_size, ship_sizes, baselines, num_evaluation_games=10):
+        super().__init__(game_manager, board_size, ship_sizes, num_evaluation_games)
 
         # Create baseline opponents
         for strategy in baselines:
@@ -337,80 +357,83 @@ class PlacementEvaluator(BaseEvaluator):
         """
         self.generations.append(generation)
 
-        # Get the best placement agent (assuming it's the first one in the list)
-        best_placement_agent = placement_agents[0]  # Assuming the first one is the best
-
         # Evaluate against baseline search multiple times
         all_moves = []
-        all_sparsity = []
         all_hit_to_sunk_ratio = []
 
-        for _ in range(self.num_evaluation_games):
-            moves, sparsity, hit_to_sunk_ratio = self.simulate_game(
-                self.game_manager,
-                best_placement_agent,
-                self.baseline[baseline_name],
-            )
-            all_moves.append(moves)
-            all_sparsity.append(sparsity)
-            all_hit_to_sunk_ratio.append(hit_to_sunk_ratio)
+        baseline_search_agent = self.baseline[baseline_name]
+        for agent in placement_agents:
+            for _ in range(self.num_evaluation_games):
+                moves, hit_to_sunk_ratio = self.simulate_game(
+                    self.game_manager,
+                    agent,
+                    baseline_search_agent,
+                )
+                all_moves.append(moves)
+                all_hit_to_sunk_ratio.append(hit_to_sunk_ratio)
 
         # Calculate averages for random search
         avg_moves = np.mean(all_moves)
-        avg_sparsity = np.mean(all_sparsity)
         avg_hit_ratio = np.mean(all_hit_to_sunk_ratio)
 
         # Store the average performance
         self.move_count[baseline_name][generation] = avg_moves
-        self.sparsity[baseline_name][generation] = avg_sparsity
         self.hit_to_sunk_ratio[baseline_name][generation] = avg_hit_ratio
 
-    def simulate_game(self, game_manager, placement_agent, search_agent):
-        """Simulate a game between a placement agent and search agent, returning placement metrics."""
-        current_state = game_manager.initial_state(placing=placement_agent)
-
+    def simulate_game(self, game_manager, placing_agent, search_agent):
+        """
+        Simulate a Battleship game and return:
+          - total_moves: total number of moves taken in the game,
+          - avg_moves_per_ship: average number of moves from the first hit on a ship until it is sunk,
+          - sparsity: a measure of how spread out the ships are.
+        """
+        # Initialize game state using the placement agent's board
+        current_state = game_manager.initial_state(placing=placing_agent)
         total_moves = 0
-        hits = 0
-        misses = 0
-        sunk_ships = 0
 
-        # Measure sparsity: how spread out ships are
-        all_ship_cells = current_state.placing.indexes
-        xs, ys = zip(*[divmod(idx, self.board_size) for idx in all_ship_cells])
-        x_range = max(xs) - min(xs) + 1
-        y_range = max(ys) - min(ys) + 1
-        sparsity = x_range * y_range / (self.board_size ** 2)
+        # Dictionaries to record when each ship is first hit and when it gets sunk
+        ship_first_hit_move = {}  # key: sorted tuple of ship indexes, value: move count of first hit
+        per_ship_moves = []  # list of (ship_key, moves_from_first_hit_to_sunk)
 
         while not game_manager.is_terminal(current_state):
-            result = search_agent.strategy.find_move(current_state, topp=True)
-            if isinstance(result, tuple):
-                move, distribution = result
-            else:
-                move = result
-
-            is_hit = move in current_state.placing.indexes
-            next_state = game_manager.next_state(current_state, move)
-
-            if is_hit:
-                hits += 1
-                sunk, size, ship_cells = game_manager.check_ship_sunk(move, next_state.board, current_state.placing)
-                if sunk:
-                    sunk_ships += 1
-            else:
-                misses += 1
-
-            current_state = next_state
             total_moves += 1
+            # Get move from the search agent strategy (handle tuple vs. single value)
+            result = search_agent.strategy.find_move(current_state)
+            move, distribution = (result, None) if not isinstance(result, tuple) else result
 
-        hit_to_sunk_ratio = sunk_ships / hits if hits > 0 else 0
+            # Execute the move: this updates the board and the remaining ships.
+            current_state = game_manager.next_state(current_state, move)
 
-        return total_moves, sparsity, hit_to_sunk_ratio
+            # Check if the move was a hit.
+            if move in placing_agent.indexes:
+                # Identify the ship that was hit. We iterate over the ships list.
+                for ship in placing_agent.ships:
+                    if move in ship.indexes:
+                        ship_key = tuple(sorted(ship.indexes))
+                        # Record the first hit for the ship if not already recorded.
+                        if ship_key not in ship_first_hit_move:
+                            ship_first_hit_move[ship_key] = total_moves
+
+                        # Check if this hit sinks the ship.
+                        sunk, ship_size, hit_ship = game_manager.check_ship_sunk(move, current_state.board,
+                                                                                 placing_agent)
+                        if sunk:
+                            moves_for_ship = total_moves - ship_first_hit_move[ship_key] + 1
+                            if ship_key not in [k for (k, _) in per_ship_moves]:
+                                per_ship_moves.append((ship_key, moves_for_ship))
+
+        # Compute average moves per sunk ship
+        if per_ship_moves:
+            avg_moves_per_ship = sum(moves for (_, moves) in per_ship_moves) / len(per_ship_moves)
+        else:
+            avg_moves_per_ship = float('inf')  # Or use another indicator for "no ship sunk"
+
+        return total_moves, avg_moves_per_ship
 
     def plot_metrics(self):
         """Plot placement agent metrics (one figure per metric, one line per baseline)."""
         metrics = {
             "Move Count": self.move_count,
-            "Sparsity": self.sparsity,
             "Hit-to-Sunk Ratio": self.hit_to_sunk_ratio,
         }
 
@@ -421,7 +444,7 @@ class PlacementEvaluator(BaseEvaluator):
                 metric_values = [values[gen] for gen in generations]
                 plt.plot(generations, metric_values, marker="o", label=baseline)
 
-            plt.title(f"Placement Agent: {metric_name} over Generations")
+            plt.title(f"Baseline evaluation Placement Agent: {metric_name}")
             plt.xlabel("Generation")
             plt.ylabel(metric_name)
             plt.legend()
@@ -436,16 +459,14 @@ class Evaluator:
     Maintains backward compatibility with existing code.
     """
 
-    def __init__(self, board_size, ship_sizes, num_evaluation_games=10):
-        self.search_evaluator = SearchEvaluator(board_size, ship_sizes, ["random", "uniform_spread"],
+    def __init__(self, game_manager, board_size, ship_sizes, num_evaluation_games=10):
+        self.search_evaluator = SearchEvaluator(game_manager, board_size, ship_sizes, ["random", "uniform_spread"],
                                                 num_evaluation_games, )
-        self.placement_evaluator = PlacementEvaluator(board_size, ship_sizes, ["random", "hunt_down"],
+        self.placement_evaluator = PlacementEvaluator(game_manager, board_size, ship_sizes, ["random", "hunt_down"],
                                                       num_evaluation_games)
 
-        # For compatibility with existing code
         self.board_size = board_size
         self.ship_sizes = ship_sizes
-        self.game_manager = GameManager(size=board_size)
         self.num_evaluation_games = num_evaluation_games
 
     def evaluate_search_agents(self, search_agents, gen):

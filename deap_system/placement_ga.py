@@ -1,20 +1,22 @@
+import gc
 import random
 from functools import partial
 import sys
 import os
 
-from ai.model import ANET
 from game_logic.game_manager import GameManager
+from game_logic.search_agent import SearchAgent
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from deap import base, creator, tools
+from deap import base, creator
 import matplotlib.pyplot as plt
 import numpy as np
+import copy
+from deap import tools
 
 from game_logic.placement_agent import PlacementAgent
-from game_logic.search_agent import SearchAgent
 
 from deap_system.helpers import (
     is_gene_valid,
@@ -33,17 +35,28 @@ creator.create("IndividualPlacementAgent", PlacementAgent, fitness=creator.Fitne
 toolbox = base.Toolbox()
 
 
-# ---------------------------------------------------------------------
-# Define a simple HallOfShame class to store worst individuals.
-# ---------------------------------------------------------------------
-class HallOfShame:
+class ChromosomeHallOfFame:
     def __init__(self, maxsize):
         self.maxsize = maxsize
         self.items = []
 
     def update(self, population):
-        # Select the worst individuals from the population
-        self.items = tools.selWorst(population, self.maxsize)
+        # Select the best individuals from the population.
+        best = tools.selBest(population, self.maxsize)
+        # Store only a deep copy of each individual's chromosome.
+        self.items = [copy.deepcopy(agent.strategy.chromosome) for agent in best]
+
+
+class ChromosomeHallOfShame:
+    def __init__(self, maxsize):
+        self.maxsize = maxsize
+        self.items = []
+
+    def update(self, population):
+        # Select the worst individuals from the population.
+        worst = tools.selWorst(population, self.maxsize)
+        # Store only a deep copy of each individual's chromosome.
+        self.items = [copy.deepcopy(agent.strategy.chromosome) for agent in worst]
 
 
 class PlacementGeneticAlgorithm:
@@ -68,8 +81,9 @@ class PlacementGeneticAlgorithm:
         # Metrics for visualization:
         self.avg_moves_over_gens = []
         self.boards_over_generations = []  # Average board overlay per generation
-        self.hof = tools.HallOfFame(maxsize=5)
-        self.hos = HallOfShame(maxsize=5)
+        # Use the custom hall-of-fame and hall-of-shame classes.
+        self.hof = ChromosomeHallOfFame(maxsize=5)
+        self.hos = ChromosomeHallOfShame(maxsize=5)
         self.avg_fitness_over_gens = []
         self.diversity_over_gens = []
         self.sparsity_over_gens = []
@@ -80,6 +94,7 @@ class PlacementGeneticAlgorithm:
 
         # Initialize population.
         self.pop_placing_agents = []
+        self.population_chromosomes = []  # Store chromosomes separately.
 
         # Register DEAP operators with our custom methods.
         toolbox.register("mate_chromosome", self.custom_crossover_placement)
@@ -165,6 +180,7 @@ class PlacementGeneticAlgorithm:
 
         return current_state.move_count, hits, misses
 
+
     def evaluate_population(
             self, population_placing, game_manager, search_agents
     ):
@@ -183,15 +199,16 @@ class PlacementGeneticAlgorithm:
 
             placing_agent.fitness.values = (sum(fitness_scores) / len(fitness_scores),)
 
-
     def initialize_placing_population(self, n):
-        """Initialize the placing agent population."""
         population = []
+        self.population_chromosomes = []  # separate list for chromosomes
         for i in range(n):
             placing_agent = creator.IndividualPlacementAgent(
                 self.board_size, self.ship_sizes, strategy="chromosome", name=f"placing_{i}"
             )
             population.append(placing_agent)
+            # Store a deep copy of the initial chromosome
+            self.population_chromosomes.append(copy.deepcopy(placing_agent.strategy.chromosome))
         self.pop_placing_agents = population
 
     # ------------------- Additional Helper for Diversity -------------------
@@ -229,7 +246,7 @@ class PlacementGeneticAlgorithm:
             coeffs = np.polyfit(generations, self.avg_moves_over_gens, 1)
             poly_eqn = np.poly1d(coeffs)
             ax.plot(generations, poly_eqn(generations), "r--", label="Regression Line")
-        ax.set_title("Average Fitness per Generation")
+        ax.set_title("Average Fitness per Generation (Placement)")
         ax.set_xlabel("Generation")
         ax.set_ylabel("Average Move Count")
         ax.legend()
@@ -239,7 +256,7 @@ class PlacementGeneticAlgorithm:
         fig2, ax2 = plt.subplots(figsize=(6, 5))
         gens_div = np.arange(len(self.diversity_over_gens))
         ax2.plot(gens_div, self.diversity_over_gens, marker="o")
-        ax2.set_title("Population Diversity Over Generations")
+        ax2.set_title("Population Diversity Over Generations (Placement)")
         ax2.set_xlabel("Generation")
         ax2.set_ylabel("Average Pairwise Distance")
         plt.show()
@@ -268,72 +285,47 @@ class PlacementGeneticAlgorithm:
         plt.tight_layout()
         plt.show()
 
-        # Figure 4: Centroid Evolution of Ship Placements.
-        centroids = []
-        for board in self.boards_over_generations:
-            total = board.sum()
-            if total == 0:
-                centroids.append((np.nan, np.nan))
-            else:
-                rows_idx, cols_idx = np.indices(board.shape)
-                centroid_row = (rows_idx * board).sum() / total
-                centroid_col = (cols_idx * board).sum() / total
-                centroids.append((centroid_row, centroid_col))
-        centroids = np.array(centroids)
-        fig4, ax4 = plt.subplots(figsize=(6, 5))
-        ax4.plot(
-            centroids[:, 1], centroids[:, 0], marker="o", linestyle="-", color="magenta"
-        )
-        ax4.set_title("Centroid Evolution of Ship Placements")
-        ax4.set_xlabel("Column")
-        ax4.set_ylabel("Row")
-        for i, (row, col) in enumerate(centroids):
-            ax4.text(col, row, str(i), color="black", ha="left", va="bottom")
-        plt.show()
-
-        # Figure 5: Hall of Fame Boards.
-        if len(self.hof) > 0:
-            num_hof = len(self.hof)
+        # Figure 4: Hall of Fame Boards.
+        if len(self.hof.items) > 0:
+            num_hof = len(self.hof.items)
             fig5, axs5 = plt.subplots(1, num_hof, figsize=(5 * num_hof, 5))
             if num_hof == 1:
                 axs5 = [axs5]
-            for i, hof_ind in enumerate(self.hof):
-                board = self.create_board_from_chromosome(hof_ind.strategy.chromosome)
-                im = axs5[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs5[i].set_title(f"HOF {i}\nFitness = {hof_ind.fitness.values[0]:.2f}")
+            for i, chromosome in enumerate(self.hof.items):
+                board = self.create_board_from_chromosome(chromosome)
+                axs5[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                axs5[i].set_title(f"HOF {i}")
                 axs5[i].set_xticks(range(self.board_size))
                 axs5[i].set_yticks(range(self.board_size))
-            fig5.suptitle("Hall of Fame Boards")
+            plt.suptitle("Hall of Fame Boards")
             plt.show()
 
-        # Figure 6: Worst Boards (Hall of Shame).
+        # Figure 5: Worst Boards (Hall of Shame).
         if len(self.hos.items) > 0:
             num_worst = len(self.hos.items)
             fig6, axs6 = plt.subplots(1, num_worst, figsize=(5 * num_worst, 5))
             if num_worst == 1:
                 axs6 = [axs6]
-            for i, worst_ind in enumerate(self.hos.items):
-                board = self.create_board_from_chromosome(worst_ind.strategy.chromosome)
-                im = axs6[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs6[i].set_title(
-                    f"Worst {i}\nFitness = {worst_ind.fitness.values[0]:.2f}"
-                )
+            for i, chromosome in enumerate(self.hos.items):
+                board = self.create_board_from_chromosome(chromosome)
+                axs6[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                axs6[i].set_title(f"HOS {i}")
                 axs6[i].set_xticks(range(self.board_size))
                 axs6[i].set_yticks(range(self.board_size))
-            fig6.suptitle("Worst Boards (Hall of Shame)")
+            plt.suptitle("Hall of Shame Boards")
             plt.show()
 
-        # Figure 7: Sparsity Over Generations.
+        # Figure 6: Sparsity Over Generations.
         if len(self.sparsity_over_gens) > 0:
             fig7, ax7 = plt.subplots(figsize=(6, 5))
             gens_sparse = np.arange(len(self.sparsity_over_gens))
             ax7.plot(gens_sparse, self.sparsity_over_gens, marker="o")
-            ax7.set_title("Average Board Sparsity per Generation")
+            ax7.set_title("Average Board Sparsity per Generation (Placement)")
             ax7.set_xlabel("Generation")
             ax7.set_ylabel("Average Intra-individual Ship Distance")
             plt.show()
 
-        # Figure 8: Orientation Percentages Over Generations.
+        # Figure 7: Orientation Percentages Over Generations.
         if len(self.percent_vertical_over_gens) > 0:
             fig8, ax8 = plt.subplots(figsize=(6, 5))
             gens_orient = np.arange(len(self.percent_vertical_over_gens))
@@ -429,47 +421,40 @@ class PlacementGeneticAlgorithm:
         self.hof.update(self.pop_placing_agents)
         self.hos.update(self.pop_placing_agents)
 
-        # --- Elitism: Preserve best individuals ---
-        elite = tools.selBest(self.pop_placing_agents, self.elite_size)
+        # --- Elitism: Preserve best chromosomes ---
+        elite_agents = tools.selBest(self.pop_placing_agents, self.elite_size)
+        elite_chromosomes = [copy.deepcopy(agent.strategy.chromosome) for agent in elite_agents]
 
-        # Selection
-        offspring_placing = toolbox.select(
-            self.pop_placing_agents, len(self.pop_placing_agents)
-        )
-        offspring_placing = list(map(toolbox.clone, offspring_placing))
+        # Get the non-elite agents.
+        non_elite_agents = [agent for agent in self.pop_placing_agents if agent not in elite_agents]
+        assert len(non_elite_agents) == self.population_size - self.elite_size
 
-        # Crossover
-        for i in range(1, len(offspring_placing), 2):
-            p1 = offspring_placing[i - 1].strategy.chromosome
-            p2 = offspring_placing[i].strategy.chromosome
+        # Apply the selection operator on the non-elite agents.
+        # For example, if toolbox.select is defined to perform tournament selection:
+        selected_agents = toolbox.select(non_elite_agents, len(non_elite_agents))
+        selected_chromosomes = [copy.deepcopy(agent.strategy.chromosome) for agent in selected_agents]
 
-            (
-                offspring_placing[i - 1].strategy.chromosome,
-                offspring_placing[i].strategy.chromosome,
-            ) = toolbox.mate_chromosome(p1, p2)
-
-        # Mutation
-        for i in range(len(offspring_placing)):
-            original = offspring_placing[i].strategy.chromosome
-            mutated = toolbox.mutate_chromosome(original)[0]
-            offspring_placing[i].strategy.chromosome = mutated
-
-        # Reinitialize individuals with updated chromosomes.
-        offspring_placing = [
-            creator.IndividualPlacementAgent(
-                self.board_size,
-                self.ship_sizes,
-                strategy="chromosome",
-                chromosome=ind.strategy.chromosome,
+        # Apply Crossover on selected chromosomes (pairwise)
+        for i in range(1, len(selected_chromosomes), 2):
+            selected_chromosomes[i - 1], selected_chromosomes[i] = toolbox.mate_chromosome(
+                selected_chromosomes[i - 1], selected_chromosomes[i]
             )
-            for ind in offspring_placing
-        ]
 
-        # --- Merge Elite with Offspring ---
-        combined_population = offspring_placing + elite
-        self.pop_placing_agents[:] = tools.selBest(
-            combined_population, self.population_size
-        )
+        # Apply Mutation on the selected chromosomes
+        for i in range(len(selected_chromosomes)):
+            selected_chromosomes[i] = toolbox.mutate_chromosome(selected_chromosomes[i])[0]
+
+        # Combine the updated non-elite chromosomes with the elite chromosomes.
+        new_chromosomes = selected_chromosomes + elite_chromosomes
+
+        # Update the stored chromosome list.
+        self.population_chromosomes = new_chromosomes
+
+        # Finally, update each agent’s chromosome using the new chromosome list.
+        for agent, new_chrom in zip(self.pop_placing_agents, self.population_chromosomes):
+            agent.strategy.chromosome = new_chrom
+            # Reinitialize or rebuild any internal state that depends on the chromosome.
+            agent.new_placements()
 
     # ------------------- Custom Operators -------------------
     def custom_crossover_placement(self, parent1, parent2):
@@ -546,7 +531,7 @@ if __name__ == "__main__":
     SHIP_SIZES = [5, 4, 3, 2, 2]
     POPULATION_SIZE = 50
     ELITE_SIZE = 1
-    NUM_GENERATIONS = 100
+    NUM_GENERATIONS = 50
     TOURNAMENT_SIZE = 3
     MUTPB = 0.2
     # =======================================

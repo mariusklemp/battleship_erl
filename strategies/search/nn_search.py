@@ -8,32 +8,20 @@ import visualize
 from strategies.search.strategy import Strategy
 
 
-def get_optimizer(optimizer: str, model, lr: float) -> torch.optim.Optimizer:
-    if optimizer == "adam":
-        return optim.Adam(model.parameters(), lr=lr)
-    elif optimizer == "sgd":
-        return optim.SGD(model.parameters(), lr=lr)
-    elif optimizer == "rmsprop":
-        return optim.RMSprop(model.parameters(), lr=lr)
-    elif optimizer == "adagrad":
-        return optim.Adagrad(model.parameters(), lr=lr)
-    else:
-        raise ValueError("Invalid optimizer")
-
-
 class NNSearch(nn.Module, Strategy):
     def __init__(self, search_agent, net, optimizer="adam", lr=0.001):
         super().__init__()
         self.name = "nn_search"
         self.search_agent = search_agent
         self.net = net
-        self.device = net.device  # Get device from the network
+        self.device = net.device
+        self.lr = lr
+        self.optimizer_name = optimizer
 
-        # Ensure the network is on the correct device
-        self.net = self.net.to(self.device)
-
-        self.optimizer = get_optimizer(optimizer, self.net, lr)
         self.criterion = nn.CrossEntropyLoss()
+
+        # Check if net has parameters — if so, init optimizer now
+        self.optimizer = self.get_optimizer()
 
         self.avg_error_history = []
         self.avg_validation_history = []
@@ -43,7 +31,6 @@ class NNSearch(nn.Module, Strategy):
         self.val_top3_accuracy_history = []
 
     # ===== Helper Functions =====
-
     def _reshape_board(self, board_tensor):
         """Reshape board_tensor to (batch, 4, board_size, board_size)."""
         board_size = int(board_tensor.shape[-1])
@@ -59,13 +46,25 @@ class NNSearch(nn.Module, Strategy):
             target_tensor = target_tensor.unsqueeze(0)
         return target_tensor.to(self.device)
 
+    def get_optimizer(self) -> torch.optim.Optimizer:
+        if self.optimizer_name == "adam":
+            return optim.Adam(self.net.parameters(), lr=self.lr)
+        elif self.optimizer_name == "sgd":
+            return optim.SGD(self.net.parameters(), lr=self.lr)
+        elif self.optimizer_name == "rmsprop":
+            return optim.RMSprop(self.net.parameters(), lr=self.lr)
+        elif self.optimizer_name == "adagrad":
+            return optim.Adagrad(self.net.parameters(), lr=self.lr)
+        else:
+            raise ValueError("Invalid optimizer")
+
     def _apply_illegal_mask(self, output, board_tensor):
-        """
-        Mask the output logits so that positions corresponding to illegal moves
-        (as indicated in the first channel of board_tensor) are set to -inf.
-        """
-        illegal_mask = board_tensor[0, 0].reshape(-1) == 1
-        output[0, illegal_mask] = float("-inf")
+        # Create a mask matching the output shape.
+        illegal_mask = board_tensor[0, 0].reshape(-1) == 1  # shape: [board_size^2]
+        # Unsqueeze to match the batch dimension: now shape becomes [1, board_size^2]
+        illegal_mask = illegal_mask.unsqueeze(0)
+        # Use masked_fill to return a new tensor, without modifying 'output' in-place.
+        output = output.masked_fill(illegal_mask, float("-inf"))
         return output
 
     def find_move(self, state, topp=False):
@@ -79,15 +78,14 @@ class NNSearch(nn.Module, Strategy):
         output = self.net(board_tensor, extra_features).view(1, -1)
         output = output.to(self.device)
 
-        # Mask the output based on the 'unknown' layer (first channel in state.board)
-        unknown_layer = torch.tensor(state.board[0], dtype=torch.float32).view(1, -1)
-        output[unknown_layer == 1] = float("-inf")
+        # Apply illegal move mask via helper function.
+        output = self._apply_illegal_mask(output, board_tensor)
 
         # Apply softmax to convert logits to a probability distribution
         probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
         probabilities_np = probabilities.detach().numpy()
 
-        #visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
+        # visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
         # Choose a move based on the probability distribution
         if topp:
@@ -95,7 +93,7 @@ class NNSearch(nn.Module, Strategy):
             move = np.argmax(probabilities_np)
         else:
             # During training, use pure random sampling
-            move = np.random.choice(self.search_agent.board_size**2, p=probabilities_np)
+            move = np.random.choice(self.search_agent.board_size ** 2, p=probabilities_np)
         return move, probabilities_np
 
     def calculate_accuracy(self, predicted_values, target_values):
@@ -219,7 +217,7 @@ class NNSearch(nn.Module, Strategy):
         avg_train_top1 = [
             np.mean(
                 self.top1_accuracy_history[
-                    i * batches_per_epoch : (i + 1) * batches_per_epoch
+                i * batches_per_epoch: (i + 1) * batches_per_epoch
                 ]
             )
             for i in range(len(self.avg_error_history))
@@ -227,7 +225,7 @@ class NNSearch(nn.Module, Strategy):
         avg_train_top3 = [
             np.mean(
                 self.top3_accuracy_history[
-                    i * batches_per_epoch : (i + 1) * batches_per_epoch
+                i * batches_per_epoch: (i + 1) * batches_per_epoch
                 ]
             )
             for i in range(len(self.avg_error_history))
@@ -242,7 +240,7 @@ class NNSearch(nn.Module, Strategy):
         avg_val_top1 = [
             np.mean(
                 self.val_top1_accuracy_history[
-                    i * batches_per_epoch_val : (i + 1) * batches_per_epoch_val
+                i * batches_per_epoch_val: (i + 1) * batches_per_epoch_val
                 ]
             )
             for i in range(len(self.avg_validation_history))
@@ -250,7 +248,7 @@ class NNSearch(nn.Module, Strategy):
         avg_val_top3 = [
             np.mean(
                 self.val_top3_accuracy_history[
-                    i * batches_per_epoch_val : (i + 1) * batches_per_epoch_val
+                i * batches_per_epoch_val: (i + 1) * batches_per_epoch_val
                 ]
             )
             for i in range(len(self.avg_validation_history))
