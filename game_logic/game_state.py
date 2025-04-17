@@ -18,23 +18,24 @@ class GameState:
         # Reshape from (4, board_size*board_size) to (4, board_size, board_size)
         board_tensor = board_tensor.view(4, board_size, board_size)
 
-        # Add batch dimension: (1, 4, board_size, board_size)
-        board_tensor = board_tensor.unsqueeze(0)
-
         # Create ship matrix representation
         ship_counts = Counter(self.remaining_ships)
-        ship_matrix = torch.zeros((board_size, board_size), dtype=torch.float32)
+        ship_matrix = torch.zeros((1, board_size, board_size), dtype=torch.float32)
         
         # Fill the matrix with ships - each column represents a ship size
         for size in range(1, board_size + 1):
             count = ship_counts.get(size, 0)
             for i in range(count):
-                ship_matrix[i, size-1] = 1
+                ship_matrix[0, i, size-1] = 1
 
-        # Add batch dimension: (1, board_size, board_size)
-        ship_matrix = ship_matrix.unsqueeze(0)
+        # Concatenate ship matrix as the 5th channel
+        board_tensor = torch.cat([board_tensor, ship_matrix], dim=0)
+        
+        # Add batch dimension: (1, 5, board_size, board_size)
+        board_tensor = board_tensor.unsqueeze(0)
 
-        return board_tensor, ship_matrix
+        # Return the board tensor (with ship matrix) and None for extra features
+        return board_tensor
 
     def state_tensor_canonical(self):
         """

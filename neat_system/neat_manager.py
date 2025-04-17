@@ -54,7 +54,7 @@ class NeatManager:
         cp.read(self.neat_config_path)
 
         # Set fitness threshold and population size for the NEAT process.
-        cp["NEAT"]["fitness_threshold"] = str(self.board_size ** 2 - sum(self.ship_sizes))
+        cp["NEAT"]["fitness_threshold"] = str(0.8*(self.board_size ** 2 - sum(self.ship_sizes)))
         cp["NEAT"]["pop_size"] = str(self.evolution_config["search_population"]["size"])
 
         # Update CNNGenome parameters.

@@ -138,7 +138,7 @@ class OuterLoopManager:
                 net=net,
                 optimizer="adam",
                 name=f"agent_{i}",
-                lr=0.001,
+                lr=0.0001,
             )
             self.search_agents_mapping[i] = (genome, agent)
 
@@ -162,7 +162,7 @@ class OuterLoopManager:
             'evolution': [],
         }
         num_generations = self.evolution_config["evolution"]["num_generations"]
-        rbuf = RBUF(max_len=self.mcts_config["replay_buffer"]["max_size"])
+        rbuf = RBUF()
         if self.mcts_config["replay_buffer"]["load_from_file"]:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
 

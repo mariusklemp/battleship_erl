@@ -218,15 +218,15 @@ class SearchEvaluator(BaseEvaluator):
         return normalized_entropy
 
     def plot_metrics(self):
-        """Plot entropy as grouped bars, and other metrics separately for clarity."""
-        grouped_bar_metrics = {
+        """Plot metrics as line charts for better readability."""
+        grouped_line_metrics = {
             "Distribution Entropy": {
                 "metrics": ("Start Entropy", "End Entropy"),
                 "colors": ("lightblue", "steelblue"),
             },
         }
 
-        single_bar_metrics = {
+        single_line_metrics = {
             "Sink Efficiency": ("sink_efficiency", "salmon"),
             "Moves Between Hits": ("moves_between_hits", "orange"),
         }
@@ -247,8 +247,8 @@ class SearchEvaluator(BaseEvaluator):
                 combined[gen] /= count[gen]
             return combined
 
-        # === Grouped Bar Chart ===
-        for group_title, meta in grouped_bar_metrics.items():
+        # === Convert Grouped Bar Charts to Line Charts ===
+        for group_title, meta in grouped_line_metrics.items():
             metric1, metric2 = meta["metrics"]
             color1, color2 = meta["colors"]
 
@@ -261,22 +261,20 @@ class SearchEvaluator(BaseEvaluator):
             all_generations = list(set(avg_data1.keys()) | set(avg_data2.keys()))
             all_generations = sorted(all_generations, key=lambda k: int(k))
 
-            x = np.arange(len(all_generations))
             values1 = [avg_data1.get(gen, 0) for gen in all_generations]
             values2 = [avg_data2.get(gen, 0) for gen in all_generations]
 
-            width = 0.35
             plt.figure(figsize=(12, 6))
-            bar1 = plt.bar(x - width / 2, values1, width, label=metric1, color=color1)
-            bar2 = plt.bar(x + width / 2, values2, width, label=metric2, color=color2)
+            plt.plot(all_generations, values1, 'o-', label=metric1, color=color1, linewidth=2)
+            plt.plot(all_generations, values2, 'o-', label=metric2, color=color2, linewidth=2)
 
-            for bars in [bar1, bar2]:
-                for b in bars:
-                    h = b.get_height()
-                    plt.text(b.get_x() + b.get_width() / 2., h + 0.05, f'{h:.2f}',
-                             ha='center', va='bottom', fontsize=8)
+            # Only show a subset of x-ticks if there are too many
+            if len(all_generations) > 10:
+                step = max(1, len(all_generations) // 10)
+                plt.xticks(all_generations[::step], rotation=45)
+            else:
+                plt.xticks(all_generations, rotation=45)
 
-            plt.xticks(x, all_generations, rotation=45)
             plt.title(f"Search Agent: {group_title}")
             plt.xlabel("Generation or Model")
             plt.ylabel(group_title)
@@ -285,24 +283,25 @@ class SearchEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.show()
 
-        # === Individual Bar Charts for Efficiency Metrics ===
-        for title, (attr_name, color) in single_bar_metrics.items():
+        # === Convert Individual Bar Charts to Line Charts ===
+        for title, (attr_name, color) in single_line_metrics.items():
             data = getattr(self, attr_name)
             avg_data = average_across_baselines(data)
 
             all_generations = sorted(avg_data.keys(),
                                      key=lambda k: int(k.split("_")[1]) if isinstance(k, str) and "_" in k else int(k))
-            x = np.arange(len(all_generations))
             values = [avg_data.get(gen, 0) for gen in all_generations]
 
             plt.figure(figsize=(10, 5))
-            bars = plt.bar(x, values, width=0.5, color=color, label=title)
-            for b in bars:
-                h = b.get_height()
-                plt.text(b.get_x() + b.get_width() / 2., h + 0.05, f'{h:.2f}',
-                         ha='center', va='bottom', fontsize=8)
-
-            plt.xticks(x, all_generations, rotation=45)
+            plt.plot(all_generations, values, 'o-', color=color, linewidth=2, label=title)
+            
+            # Only show a subset of x-ticks if there are too many
+            if len(all_generations) > 10:
+                step = max(1, len(all_generations) // 10)
+                plt.xticks(all_generations[::step], rotation=45)
+            else:
+                plt.xticks(all_generations, rotation=45)
+                
             plt.title(f"Search Agent: {title}")
             plt.xlabel("Generation")
             plt.ylabel(title)
@@ -314,9 +313,16 @@ class SearchEvaluator(BaseEvaluator):
         for metric_name, metric_data in line_metrics.items():
             plt.figure(figsize=(10, 6))
             for baseline, values in metric_data.items():
-                keys = list(values.keys())
+                keys = sorted(list(values.keys()), key=lambda k: int(k))
                 values_sorted = [values[k] for k in keys]
-                plt.plot(keys, values_sorted, marker="o", label=baseline)
+                plt.plot(keys, values_sorted, marker="o", label=baseline, linewidth=2)
+
+            # Only show a subset of x-ticks if there are too many
+            if len(keys) > 10:
+                step = max(1, len(keys) // 10)
+                plt.xticks(keys[::step], rotation=45)
+            else:
+                plt.xticks(keys, rotation=45)
 
             plt.title(f"Baseline evaluation Search Agent: {metric_name}")
             plt.xlabel("Generation")
@@ -442,7 +448,14 @@ class PlacementEvaluator(BaseEvaluator):
             for baseline, values in metric_data.items():
                 generations = sorted(values.keys())
                 metric_values = [values[gen] for gen in generations]
-                plt.plot(generations, metric_values, marker="o", label=baseline)
+                plt.plot(generations, metric_values, marker="o", label=baseline, linewidth=2)
+
+            # Only show a subset of x-ticks if there are too many
+            if len(generations) > 10:
+                step = max(1, len(generations) // 10)
+                plt.xticks(generations[::step], rotation=45)
+            else:
+                plt.xticks(generations, rotation=45)
 
             plt.title(f"Baseline evaluation Placement Agent: {metric_name}")
             plt.xlabel("Generation")

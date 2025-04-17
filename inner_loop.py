@@ -6,12 +6,17 @@ import numpy as np
 from RBUF import RBUF
 from ai.model import ANET
 from game_logic.game_manager import GameManager
+import os
 from game_logic.placement_agent import PlacementAgent
 from ai.mcts import MCTS
 from tqdm import tqdm
 
 from game_logic.search_agent import SearchAgent
 from gui import GUI
+from game_logic.game_manager import GameManager
+from RBUF import RBUF
+from ai.model import ANET
+from game_logic.search_agent import SearchAgent
 
 
 class InnerLoopManager:
@@ -84,12 +89,12 @@ class InnerLoopManager:
             move = best_child.move
 
             # Assume state_tensor returns (canonical_board, extra_features)
-            board_tensor, extra_features = current_node.state.state_tensor()
+            board_tensor = current_node.state.state_tensor()
 
             # Retrieve the raw action distribution (a NumPy array)
             action_distribution = current_node.action_distribution(board_size=self.game_manager.size)
             if action_distribution is not None:
-                rbuf.add_data_point(((board_tensor, extra_features), action_distribution))
+                rbuf.add_data_point(((board_tensor), action_distribution))
 
             current_state = self.game_manager.next_state(current_state, move)
             move_count += 1
@@ -97,12 +102,12 @@ class InnerLoopManager:
         return move_count
 
     def train_validate(self, rbuf, search_agent):
-        for _ in range(self.config["training"]["epochs"]):
-            training_batch = rbuf.get_training_set(self.config["training"]["batch_size"])
-            validation_set = rbuf.get_validation_set()
-            if len(training_batch) > 0 and len(validation_set) > 0:
+        for _ in tqdm(range(self.config["training"]["epochs"]), desc="Training epochs"):
+            training_batch = rbuf.get_training_batch(self.config["training"]["batch_size"])
+            validation_batch = rbuf.get_validation_set()
+            if len(training_batch) > 0 and len(validation_batch) > 0:
                 search_agent.strategy.train_model(training_batch)
-                search_agent.strategy.validate_model(validation_set)
+                search_agent.strategy.validate_model(validation_batch)
 
     def run(self, search_agent, rbuf, gen=0):
         move_counts = []
@@ -115,17 +120,25 @@ class InnerLoopManager:
 
         num_games = self.config["training"]["number_actual_games"]
 
-        for i in tqdm(range(num_games)):
-            if self.config["training"]["play_game"]:
+        if self.config["training"]["play_game"]:
+            for i in tqdm(range(num_games)):
                 move_counts.append(self.simulate_game(search_agent, rbuf, gui))
 
-            # Train after each game
-            if self.config["model"]["train"]:
-                self.train_validate(rbuf, search_agent)
+                # Train after each game
+                if self.config["model"]["train"]:
+                    self.train_validate(rbuf, search_agent)
+
+                if self.config["model"]["save"] and gen == -1 and (i + 1) % 10 == 0:
+                    model_path = f"{self.config['model']['save_path']}/rl/model_gen{i + 1}.pth"
+                    search_agent.strategy.save_model(model_path)
+
+        # Train only from buffer if not playing
+        elif self.config["model"]["train"]:
+            self.train_validate(rbuf, search_agent)
 
         # Save model only every 10 generations
         if self.config["model"]["save"] and (gen + 1) % 10 == 0:
-            model_path = f"{self.config['model']['save_path']}/model_gen{gen + 1}.pth"
+            model_path = f"{self.config['model']['save_path']}/erl/model_gen{gen + 1}.pth"
             search_agent.strategy.save_model(model_path)
 
         # Save the buffer if requested

@@ -42,7 +42,7 @@
     {
       "type": "Linear",
       "in_features": 128,
-      "out_features": 25,
+      "out_features": 49,
       "dynamic": false,
       "last": true
     }
