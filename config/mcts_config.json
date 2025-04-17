@@ -7,7 +7,7 @@
         "exploration_constant": 1.41
     },
     "training": {
-        "play_game": false,
+        "play_game": true,
         "number_actual_games": 1,
         "batch_size": 64,
         "save_interval": 10,
@@ -26,7 +26,7 @@
         "save_path": "models/5"
     },
     "visualization": {
-        "enable_graphics": false
+        "enable_graphics": true
     },
     "device": "cpu"
 } 

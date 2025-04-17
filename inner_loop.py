@@ -103,7 +103,7 @@ class InnerLoopManager:
 
     def train_validate(self, rbuf, search_agent):
         for _ in tqdm(range(self.config["training"]["epochs"]), desc="Training epochs"):
-            training_batch = rbuf.get_training_batch(self.config["training"]["batch_size"])
+            training_batch = rbuf.get_training_set(self.config["training"]["batch_size"])
             validation_batch = rbuf.get_validation_set()
             if len(training_batch) > 0 and len(validation_batch) > 0:
                 search_agent.strategy.train_model(training_batch)
