@@ -117,74 +117,77 @@ class NNSearch(nn.Module, Strategy):
 
     def train_model(self, training_data):
         self.net.train()
-        total_loss = 0
-        total_batches = len(training_data)
 
-        # Track unique moves for diversity monitoring
-        all_moves = []
-        all_predictions = []
+        # Prepare batch data
+        states = []
+        targets = []
 
-        for batch_idx, (state, target) in enumerate(training_data):
-            board_tensor = state
+        for state, target in training_data:
+            states.append(state)
+            targets.append(target)
 
-            board_tensor = self._reshape_board(board_tensor)
-            target_tensor = self._convert_target(target)
+        # Combine into single batch
+        batch_states = torch.stack(states)
+        batch_targets = torch.stack([self._convert_target(target).squeeze(0) for target in targets])
 
-            self.optimizer.zero_grad()
-            output = self.net(board_tensor)
-            output = self._apply_illegal_mask(output, board_tensor)
+        # Process entire batch at once
+        batch_states = self._reshape_board(batch_states)
 
-            # Track predictions and targets for diversity analysis
-            pred_moves = output.argmax(dim=1).cpu().numpy()
-            target_moves = target_tensor.argmax(dim=1).cpu().numpy()
-            all_moves.extend(target_moves)
-            all_predictions.extend(pred_moves)
+        self.optimizer.zero_grad()
+        outputs = self.net(batch_states)
 
-            loss = self.criterion(output, target_tensor.argmax(dim=1))
-            loss.backward()
+        # Apply illegal move mask for each sample in batch
+        for i in range(len(outputs)):
+            outputs[i] = self._apply_illegal_mask(outputs[i].unsqueeze(0), batch_states[i].unsqueeze(0)).squeeze(0)
 
-            torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=5.0)
-            self.optimizer.step()
-            total_loss += loss.item()
+        loss = self.criterion(outputs, batch_targets.argmax(dim=1))
+        loss.backward()
 
-            top1_acc, top3_acc = self.calculate_accuracy(output, target_tensor)
-            self.top1_accuracy_history.append(top1_acc.item())
-            self.top3_accuracy_history.append(top3_acc.item())
+        torch.nn.utils.clip_grad_norm_(self.net.parameters(), max_norm=5.0)
+        self.optimizer.step()
 
-        avg_loss = total_loss / total_batches
-        self.avg_error_history.append(avg_loss)
+        # Record metrics
+        self.avg_error_history.append(loss.item())
+
+        # Calculate accuracy
+        top1_acc, top3_acc = self.calculate_accuracy(outputs, batch_targets)
+        self.top1_accuracy_history.append(top1_acc.item())
+        self.top3_accuracy_history.append(top3_acc.item())
 
     def validate_model(self, validation_data):
         self.net.eval()  # Set model to evaluation mode
-        total_loss = 0
-        total_batches = len(validation_data)
+
+        # Prepare batch data
+        states = []
+        targets = []
+
+        for state, target in validation_data:
+            states.append(state)
+            targets.append(target)
+
+        # Combine into single batch
+        batch_states = torch.stack(states)
+        batch_targets = torch.stack([self._convert_target(target).squeeze(0) for target in targets])
+
+        # Process entire batch at once
+        batch_states = self._reshape_board(batch_states)
 
         with torch.no_grad():  # No need to track gradients for validation
-            for state, target in validation_data:
-                # Unpack state into board tensor and extra features
-                board_tensor = state
-                board_tensor = self._reshape_board(board_tensor)
-                target_tensor = self._convert_target(target)
+            outputs = self.net(batch_states)
 
-                # Forward pass
-                output = self.net(board_tensor)
+            # Apply illegal move mask for each sample in batch
+            for i in range(len(outputs)):
+                outputs[i] = self._apply_illegal_mask(outputs[i].unsqueeze(0), batch_states[i].unsqueeze(0)).squeeze(0)
 
-                # Apply illegal move masking
-                output = self._apply_illegal_mask(output, board_tensor)
+            loss = self.criterion(outputs, batch_targets.argmax(dim=1))
 
-                # Compute loss using CrossEntropyLoss
-                loss = self.criterion(output, target_tensor.argmax(dim=1))
+            # Calculate accuracies
+            top1_acc, top3_acc = self.calculate_accuracy(outputs, batch_targets)
+            self.val_top1_accuracy_history.append(top1_acc.item())
+            self.val_top3_accuracy_history.append(top3_acc.item())
 
-                total_loss += loss.item()
-
-                # Calculate accuracies
-                top1_acc, top3_acc = self.calculate_accuracy(output, target_tensor)
-                self.val_top1_accuracy_history.append(top1_acc.item())
-                self.val_top3_accuracy_history.append(top3_acc.item())
-
-        # Store average validation loss
-        avg_val_loss = total_loss / total_batches
-        self.avg_validation_history.append(avg_val_loss)
+        # Store validation loss
+        self.avg_validation_history.append(loss.item())
 
     def plot_metrics(self):
         # Convert loss tensors (or numbers) to NumPy arrays.
