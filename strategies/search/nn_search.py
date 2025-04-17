@@ -10,7 +10,8 @@ from strategies.search.strategy import Strategy
 
 class NNSearch(nn.Module, Strategy):
     def __init__(self, search_agent, net, optimizer="adam", lr=0.001):
-        super().__init__()
+        nn.Module.__init__(self)
+        Strategy.__init__(self, search_agent)
         self.name = "nn_search"
         self.search_agent = search_agent
         self.net = net
@@ -20,7 +21,6 @@ class NNSearch(nn.Module, Strategy):
 
         self.criterion = nn.CrossEntropyLoss()
 
-        # Check if net has parameters — if so, init optimizer now
         self.optimizer = self.get_optimizer()
 
         self.avg_error_history = []
@@ -48,7 +48,7 @@ class NNSearch(nn.Module, Strategy):
 
     def get_optimizer(self) -> torch.optim.Optimizer:
         if self.optimizer_name == "adam":
-            return optim.Adam(self.net.parameters(), lr=self.lr)
+            return optim.Adam(self.net.parameters(), lr=self.lr,  weight_decay=1e-4)
         elif self.optimizer_name == "sgd":
             return optim.SGD(self.net.parameters(), lr=self.lr)
         elif self.optimizer_name == "rmsprop":
@@ -73,6 +73,7 @@ class NNSearch(nn.Module, Strategy):
 
         # Reshape board tensor to (batch, 4, board_size, board_size)
         board_tensor = self._reshape_board(board_tensor)
+        extra_features = extra_features.to(self.device)
 
         # Forward pass to get raw output (logits)
         output = self.net(board_tensor, extra_features).view(1, -1)
@@ -139,11 +140,6 @@ class NNSearch(nn.Module, Strategy):
             all_moves.extend(target_moves)
             all_predictions.extend(pred_moves)
 
-            # Add some noise to prevent getting stuck
-            if self.training:
-                noise = torch.randn_like(output) * 0.01
-                output = output + noise
-
             loss = self.criterion(output, target_tensor.argmax(dim=1))
             loss.backward()
 
@@ -170,10 +166,7 @@ class NNSearch(nn.Module, Strategy):
                 board_tensor = self._reshape_board(board_tensor)
                 target_tensor = self._convert_target(target)
 
-                # Forward pass
                 output = self.net(board_tensor, extra_features)
-
-                # Apply illegal move masking
                 output = self._apply_illegal_mask(output, board_tensor)
 
                 # Compute loss using CrossEntropyLoss

@@ -6,7 +6,6 @@ from tqdm import tqdm
 
 from RBUF import RBUF
 from deap_system.placement_ga import PlacementGeneticAlgorithm
-from game_logic.placement_agent import PlacementAgent
 from metrics.competitive_evaluator import CompetitiveEvaluator
 from metrics.evaluator import Evaluator
 from game_logic.search_agent import SearchAgent
@@ -24,11 +23,11 @@ class OuterLoopManager:
 
     def __init__(self, mcts_config_path="config/mcts_config.json",
                  evolution_config_path="config/evolution_config.json",
-                 layer_config_path="ai/config.json"):
+                 layer_config_path="ai/config_simple.json"):
         # Load configurations
         self.mcts_config = self._load_config(mcts_config_path)
         self.evolution_config = self._load_config(evolution_config_path)
-        self.layer_config = self._load_config(layer_config_path)
+        self.layer_config_path = layer_config_path
 
         # Extract common parameters
         self.board_size = self.mcts_config["board_size"]
@@ -113,14 +112,14 @@ class OuterLoopManager:
         """Create a neural network-based search agent."""
 
         # Create a new network instance for each model
-        net = ANET(board_size=self.board_size, activation="relu", device="cpu", layer_config=self.layer_config)
+        net = ANET(board_size=self.board_size, activation="relu", device="cpu", layer_config=self.layer_config_path)
         search_agent = SearchAgent(
             board_size=self.board_size,
             strategy="nn_search",
             net=net,
             optimizer="adam",
             name=f"nn_{model_number}",
-            lr=0.001,
+            lr=0.0001,
         )
         return search_agent
 
@@ -249,6 +248,8 @@ class OuterLoopManager:
             step_end = time.perf_counter()
             timings['evolution'].append(step_end - step_start)
 
+        for i, search_agent in enumerate(self.search_agents):
+            search_agent.strategy.plot_metrics()
         # --- Step 6: Plot ---
         self._generate_visualizations(timings)
 
@@ -265,7 +266,6 @@ class OuterLoopManager:
         if self.run_ga:
             self.evaluator.plot_metrics_placement()
             self.placement_ga.plot_metrics()
-
 
     def plot_timings(self, timings):
         import matplotlib.pyplot as plt

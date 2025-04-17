@@ -2,9 +2,15 @@ import pygame
 import json
 import torch
 import numpy as np
+
+from RBUF import RBUF
+from ai.model import ANET
+from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from ai.mcts import MCTS
 from tqdm import tqdm
+
+from game_logic.search_agent import SearchAgent
 from gui import GUI
 
 
@@ -93,10 +99,10 @@ class InnerLoopManager:
     def train_validate(self, rbuf, search_agent):
         for _ in range(self.config["training"]["epochs"]):
             training_batch = rbuf.get_training_set(self.config["training"]["batch_size"])
-            validation_batch = rbuf.get_validation_set(self.config["training"]["batch_size"])
-            if len(training_batch) > 0 and len(validation_batch) > 0:
+            validation_set = rbuf.get_validation_set()
+            if len(training_batch) > 0 and len(validation_set) > 0:
                 search_agent.strategy.train_model(training_batch)
-                search_agent.strategy.validate_model(validation_batch)
+                search_agent.strategy.validate_model(validation_set)
 
     def run(self, search_agent, rbuf, gen=0):
         move_counts = []
@@ -109,17 +115,13 @@ class InnerLoopManager:
 
         num_games = self.config["training"]["number_actual_games"]
 
-        if self.config["training"]["play_game"]:
-            for i in tqdm(range(num_games)):
+        for i in tqdm(range(num_games)):
+            if self.config["training"]["play_game"]:
                 move_counts.append(self.simulate_game(search_agent, rbuf, gui))
 
-                # Train after each game
-                if self.config["model"]["train"]:
-                    self.train_validate(rbuf, search_agent)
-
-        # Train only from buffer if not playing
-        elif self.config["model"]["train"]:
-            self.train_validate(rbuf, search_agent)
+            # Train after each game
+            if self.config["model"]["train"]:
+                self.train_validate(rbuf, search_agent)
 
         # Save model only every 10 generations
         if self.config["model"]["save"] and (gen + 1) % 10 == 0:
@@ -131,39 +133,43 @@ class InnerLoopManager:
             rbuf.save_to_file(file_path=self.config["replay_buffer"]["file_path"])
 
 
-# def main():
-#     board_size = 5
-#
-#     game_manager = GameManager(board_size)
-#
-#     inner_loop_manager = InnerLoopManager(game_manager)
-#
-#     rbuf = RBUF(max_len=10000)
-#
-#     if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
-#         rbuf.init_from_file(file_path=inner_loop_manager.config["replay_buffer"]["file_path"])
-#
-#     search_agents = []
-#
-#     for i in range(1):
-#         net = ANET(
-#             board_size=board_size,
-#             activation="relu",
-#             device="cpu",
-#         )
-#
-#         search_agent = SearchAgent(
-#             board_size=board_size,
-#             strategy="nn_search",
-#             net=net,
-#             optimizer="adam",
-#             lr=0.0001,
-#         )
-#         search_agents.append(search_agent)
-#
-#     for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
-#         print(f"Training search agent {i + 1}")
-#         inner_loop_manager.run(search_agent, rbuf)
+def main():
+    board_size = 5
+
+    game_manager = GameManager(board_size)
+
+    inner_loop_manager = InnerLoopManager(game_manager)
+
+    rbuf = RBUF(max_len=10000)
+
+    if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
+        rbuf.init_from_file(file_path=inner_loop_manager.config["replay_buffer"]["file_path"])
+
+    search_agents = []
+
+    for i in range(1):
+        net = ANET(
+            board_size=board_size,
+            activation="relu",
+            device="cpu",
+            layer_config="ai/config_simple.json",
+        )
+
+        search_agent = SearchAgent(
+            board_size=board_size,
+            strategy="nn_search",
+            net=net,
+            optimizer="adam",
+            lr=0.0001,
+        )
+        search_agents.append(search_agent)
+
+    for gen in range(100):
+        for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
+            print(f"Training search agent {i + 1}")
+            inner_loop_manager.run(search_agent, rbuf, gen=gen)
+
+    search_agents[0].strategy.plot_metrics()
 
 
 if __name__ == "__main__":

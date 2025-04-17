@@ -1,19 +1,8 @@
+import json
+
 import torch
 import torch.nn as nn
 from neat_system.cnn_genome import CNNConvGene, CNNFCGene, CNNPoolGene
-
-
-def activation_function(activation: str):
-    if activation == "relu":
-        return nn.ReLU()
-    elif activation == "tanh":
-        return nn.Tanh()
-    elif activation == "sigmoid":
-        return nn.Sigmoid()
-    elif activation == "linear":
-        return nn.Identity()
-    else:
-        raise ValueError(f"Unsupported activation function: {activation}")
 
 
 class ANET(nn.Module):
@@ -41,19 +30,21 @@ class ANET(nn.Module):
             self.layers = list(self.logits.children())
             self.read_weights_biases_from_genome(genome)
 
-        elif layer_config is not None:
-            self.activation_func = activation_function(activation)
-            self._build_from_layer_config(layer_config)
+        elif layer_config:
+            print(f"Loading layer config from {layer_config}")
+            with open(layer_config, "r") as f:
+                cfg = json.load(f)
 
-        else:
-            self.activation_func = activation_function(activation)
-            self._build_default()
+            self.activation_func = self.get_activation_function(activation)
+            self._build_from_layer_config(cfg)
 
         self.to(device)
 
     def _build_from_layer_config(self, layer_config):
         self.layer_config = layer_config
         self.logits = nn.Sequential(*self.getLayers())
+        # Initialize all weights
+        self.logits.apply(self.init_weights)
 
     def _build_from_genome(self, genome):
         layer_list = []
@@ -80,7 +71,7 @@ class ANET(nn.Module):
                     padding=int(gene.padding)
                 )
                 layer_list.append(conv_layer)
-                layer_list.append(activation_function(gene.activation))
+                layer_list.append(self.get_activation_function(gene.activation))
                 out_h = (curr_h + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
                 out_w = (curr_w + 2 * gene.padding - gene.kernel_size) // gene.stride + 1
                 curr_h, curr_w = out_h, out_w
@@ -101,21 +92,10 @@ class ANET(nn.Module):
                 layer_list.append(fc_layer)
                 # Only append activation if this FC gene is not the last enabled FC gene.
                 if gene != last_fc_gene:
-                    layer_list.append(activation_function(gene.activation))
+                    layer_list.append(self.get_activation_function(gene.activation))
             else:
                 raise ValueError(f"Unknown gene type: {type(gene)}")
         return layer_list
-
-
-    def _build_default(self):
-        self.conv1 = nn.Conv2d(self.input_channels, 128, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(128, 128, kernel_size=3, padding=1)
-        self.flatten = nn.Flatten()
-        self.fc_board = nn.Linear(128 * self.board_size * self.board_size, 1024)
-        self.fc_policy = nn.Linear(1024, self.output_size)
-        self.fc_value = nn.Linear(1024, 1)
-        self.dropout = nn.Dropout(p=0.3)
-        self.apply(self.init_weights)
 
     def extra_features_to_board(self, extra_features):
         if not torch.is_tensor(extra_features):
@@ -130,19 +110,8 @@ class ANET(nn.Module):
         board_extra = self.extra_features_to_board(extra_features)
         board_extra = board_extra.unsqueeze(1).repeat(game_state.shape[0], 1, 1, 1).to(self.device)
         game_state = torch.cat([game_state, board_extra], dim=1)
-        if hasattr(self, "logits"):
-            return self.logits(game_state)
-        else:
-            x = self.conv1(game_state)
-            x = self.activation_func(x)
-            x = self.conv2(x)
-            x = self.activation_func(x)
-            x = self.flatten(x)
-            board_features = self.fc_board(x)
-            board_features = self.activation_func(board_features)
-            board_features = self.dropout(board_features)
-            policy = self.fc_policy(board_features)
-            return policy
+
+        return self.logits(game_state)
 
     def getLayer(self, layer):
         match layer["type"]:
@@ -194,6 +163,18 @@ class ANET(nn.Module):
         for layer in self.layer_config["layers"]:
             layers.append(self.getLayer(layer))
         return layers
+
+    def get_activation_function(self, activation: str):
+        if activation == "relu":
+            return nn.ReLU()
+        elif activation == "tanh":
+            return nn.Tanh()
+        elif activation == "sigmoid":
+            return nn.Sigmoid()
+        elif activation == "linear":
+            return nn.Identity()
+        else:
+            raise ValueError(f"Unsupported activation function: {activation}")
 
     @staticmethod
     def init_weights(m):
@@ -287,4 +268,3 @@ class ANET(nn.Module):
                 fc_index += 1
 
         return genome
-
