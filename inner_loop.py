@@ -177,7 +177,7 @@ def main():
         )
         search_agents.append(search_agent)
 
-    for gen in range(10000):
+    for gen in range(500):
         for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
             print(f"Training search agent {i + 1}")
             inner_loop_manager.run(search_agent, rbuf, gen=gen)
