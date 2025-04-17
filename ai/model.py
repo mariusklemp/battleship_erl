@@ -117,19 +117,8 @@ class ANET(nn.Module):
         self.dropout = nn.Dropout(p=0.3)
         self.apply(self.init_weights)
 
-    def extra_features_to_board(self, extra_features):
-        if not torch.is_tensor(extra_features):
-            extra_features = torch.tensor(extra_features, dtype=torch.float32)
-        if extra_features.shape[1:] != (self.board_size, self.board_size):
-            raise ValueError(
-                f"Expected shape (batch_size, {self.board_size}, {self.board_size}), got {extra_features.shape}")
-        return extra_features
-
-    def forward(self, game_state: torch.Tensor, extra_features):
+    def forward(self, game_state: torch.Tensor):
         game_state = game_state.to(self.device)
-        board_extra = self.extra_features_to_board(extra_features)
-        board_extra = board_extra.unsqueeze(1).repeat(game_state.shape[0], 1, 1, 1).to(self.device)
-        game_state = torch.cat([game_state, board_extra], dim=1)
         if hasattr(self, "logits"):
             return self.logits(game_state)
         else:

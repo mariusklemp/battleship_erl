@@ -34,7 +34,7 @@ class NNSearch(nn.Module, Strategy):
     def _reshape_board(self, board_tensor):
         """Reshape board_tensor to (batch, 4, board_size, board_size)."""
         board_size = int(board_tensor.shape[-1])
-        return board_tensor.view(-1, 4, board_size, board_size).to(self.device)
+        return board_tensor.view(-1, 5, board_size, board_size).to(self.device)
 
     def _convert_target(self, target):
         """
@@ -69,13 +69,13 @@ class NNSearch(nn.Module, Strategy):
 
     def find_move(self, state, topp=False):
         # Get both board tensor and extra features from state
-        board_tensor, extra_features = state.state_tensor()
+        board_tensor = state.state_tensor()
 
         # Reshape board tensor to (batch, 4, board_size, board_size)
         board_tensor = self._reshape_board(board_tensor)
 
         # Forward pass to get raw output (logits)
-        output = self.net(board_tensor, extra_features).view(1, -1)
+        output = self.net(board_tensor).view(1, -1)
         output = output.to(self.device)
 
         # Apply illegal move mask via helper function.
@@ -125,12 +125,13 @@ class NNSearch(nn.Module, Strategy):
         all_predictions = []
 
         for batch_idx, (state, target) in enumerate(training_data):
-            board_tensor, extra_features = state
+            board_tensor = state
+        
             board_tensor = self._reshape_board(board_tensor)
             target_tensor = self._convert_target(target)
 
             self.optimizer.zero_grad()
-            output = self.net(board_tensor, extra_features)
+            output = self.net(board_tensor)
             output = self._apply_illegal_mask(output, board_tensor)
 
             # Track predictions and targets for diversity analysis
@@ -166,12 +167,12 @@ class NNSearch(nn.Module, Strategy):
         with torch.no_grad():  # No need to track gradients for validation
             for state, target in validation_data:
                 # Unpack state into board tensor and extra features
-                board_tensor, extra_features = state
+                board_tensor = state
                 board_tensor = self._reshape_board(board_tensor)
                 target_tensor = self._convert_target(target)
 
                 # Forward pass
-                output = self.net(board_tensor, extra_features)
+                output = self.net(board_tensor)
 
                 # Apply illegal move masking
                 output = self._apply_illegal_mask(output, board_tensor)

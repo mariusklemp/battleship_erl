@@ -163,7 +163,7 @@ class OuterLoopManager:
             'evolution': [],
         }
         num_generations = self.evolution_config["evolution"]["num_generations"]
-        rbuf = RBUF(max_len=self.mcts_config["replay_buffer"]["max_size"])
+        rbuf = RBUF()
         if self.mcts_config["replay_buffer"]["load_from_file"]:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
 

@@ -2,7 +2,7 @@
     "run_neat": false,
     "run_ga": false,
     "placing_population": {
-        "size": 2,
+        "size": 1,
         "elite_size": 1,
         "tournament_size": 2,
         "mutation_probability": 0.2

@@ -20,17 +20,18 @@ class RBUF:
                 print("File size:", os.path.getsize(file_path))
                 data = pickle.load(f)
                 self.data = data[-self.max_len:] if len(data) > self.max_len else data
+                print("Data size:", len(self.data))
                 split = int(0.8 * len(self.data))
                 self.training_set = self.data[:split]
                 self.validation_set = self.data[split:]
         except FileNotFoundError:
             print("No file found")
 
-    def get_training_set(self, batch_size):
+    def get_training_batch(self, batch_size):
         return random.sample(self.training_set, min(batch_size, len(self.training_set)))
 
-    def get_validation_set(self, batch_size):
-        return random.sample(self.validation_set, min(batch_size, len(self.validation_set)))
+    def get_validation_set(self):
+        return self.validation_set
 
     def add_data_point(self, data_point):
         # Add to full data buffer
