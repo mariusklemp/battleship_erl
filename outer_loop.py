@@ -208,6 +208,8 @@ class OuterLoopManager:
                         # Transfer the trained network weights/biases + optimiser to the genome.
                         genome = search_agent.strategy.net.read_weights_biases_to_genome(genome)
                         self.search_agents_mapping[key] = (genome, search_agent)
+                        self.search_agents[key] = search_agent
+                        print(self.search_agents[key].strategy.avg_error_history)
 
             step_end = time.perf_counter()
             timings['inner_loop_training'].append(step_end - step_start)
@@ -250,6 +252,7 @@ class OuterLoopManager:
 
         for i, search_agent in enumerate(self.search_agents):
             search_agent.strategy.plot_metrics()
+
         # --- Step 6: Plot ---
         self._generate_visualizations(timings)
 
