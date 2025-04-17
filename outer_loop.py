@@ -139,7 +139,7 @@ class OuterLoopManager:
                 net=net,
                 optimizer="adam",
                 name=f"agent_{i}",
-                lr=0.001,
+                lr=0.0001,
             )
             self.search_agents_mapping[i] = (genome, agent)
 

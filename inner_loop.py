@@ -174,7 +174,10 @@ def main():
 
     for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
         print(f"Training search agent {i + 1}")
-        inner_loop_manager.run(search_agent, rbuf, gen=-1)
+        for j in range(100):
+            print(f"Training search agent {i + 1} generation {j + 1}")
+            inner_loop_manager.run(search_agent, rbuf, gen=-1)
+        search_agent.strategy.plot_metrics()
 
 
 if __name__ == "__main__":
