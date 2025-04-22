@@ -43,6 +43,7 @@ class Tournament:
 
     def set_nn_agent(self, i, layer_config):
         model_number = i * (self.num_games // self.num_players)
+        print(model_number)
         path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/7/erl", f"model_gen{model_number}.pth")
 
         net = ANET(
@@ -65,12 +66,10 @@ class Tournament:
 
     def init_players(self, time_limit):
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
-        layer_config = json.load(open(config_path))
-
         for i in range(self.num_players + 1):
             if i == 0:
                 continue
-            agent = self.set_nn_agent(i, layer_config)
+            agent = self.set_nn_agent(i, config_path)
             self.players[agent.name] = agent
 
     def run(self):

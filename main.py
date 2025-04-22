@@ -136,13 +136,12 @@ def get_human_ship_placements_via_gui(gui, ship_sizes):
 
 def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file_path, chromosome=None):
     """Initializes Search and Placement Agents."""
-    layer_config = json.load(open("ai/config.json"))
 
     net = ANET(
         board_size=board_size,
         activation="relu",
         device="cpu",
-        layer_config=layer_config,
+        layer_config="ai/config_simple.json",
     )
     search_agent = SearchAgent(
         board_size=board_size,
@@ -269,8 +268,8 @@ if __name__ == "__main__":
         board_size=7,
         sizes=[4, 3, 3, 2],
         human_player=True,
-        file_path_1="models/model_1000.pth",
-        file_path_2="models/model_1000.pth",
+        file_path_1="models/7/erl/model_gen100.pth",
+        file_path_2="models/7/erl/model_gen100.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",

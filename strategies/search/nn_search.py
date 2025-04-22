@@ -33,7 +33,7 @@ class NNSearch(nn.Module, Strategy):
 
     # ===== Helper Functions =====
     def _reshape_board(self, board_tensor):
-        """Reshape board_tensor to (batch, 4, board_size, board_size)."""
+        """Reshape board_tensor to (batch, 5, board_size, board_size)."""
         board_size = int(board_tensor.shape[-1])
         return board_tensor.view(-1, 5, board_size, board_size).to(self.device)
 
@@ -68,10 +68,13 @@ class NNSearch(nn.Module, Strategy):
 
 
     def find_move(self, state, topp=False):
+        # Set model to evaluation mode for inference
+        self.net.eval()
+        
         # Get both board tensor and extra features from state
         board_tensor = state.state_tensor()
 
-        # Reshape board tensor to (batch, 4, board_size, board_size)
+        # Reshape board tensor to (batch, 5, board_size, board_size)
         board_tensor = self._reshape_board(board_tensor)
 
         # Forward pass to get raw output (logits)
