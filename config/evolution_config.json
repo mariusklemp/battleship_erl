@@ -8,7 +8,7 @@
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 10
+        "size": 20
     },
     "evolution": {
         "num_generations": 1

@@ -108,6 +108,36 @@ class SearchEvaluator(BaseEvaluator):
         self.start_entropy[baseline_name][generation] = avg_start_entropy
         self.end_entropy[baseline_name][generation] = avg_end_entropy
 
+    def evaluate_final_agent(self, search_agent, num_games=100):
+        """
+        Evaluate a single trained search agent against all baselines and
+        generate a radar chart + print stats.
+        """
+        all_moves = []
+        all_accuracy = []
+        all_sink_efficiency = []
+        all_moves_between_hits = []
+
+        for baseline_name, placement_agent in self.baseline.items():
+            for _ in range(num_games):
+                placement_agent.new_placements()
+                result = self.simulate_game(self.game_manager, placement_agent, search_agent)
+                moves, acc, sink_eff, mbh, start_e, end_e = result
+
+                all_moves.append(moves)
+                all_accuracy.append(acc)
+                all_sink_efficiency.append(sink_eff)
+                all_moves_between_hits.append(mbh)
+
+        # Average metrics across all games
+        metrics = {
+            "Avg Moves to Win": np.mean(all_moves),
+            "Hit Accuracy": np.mean(all_accuracy),
+            "Moves Between Hits": np.mean(all_moves_between_hits),
+            "Sink Efficiency": np.mean(all_sink_efficiency),
+        }
+        return metrics
+
     def simulate_game(self, game_manager, placement_agent, search_agent):
         """Plays one game with the given search agent and returns game metrics."""
         current_state = game_manager.initial_state(placing=placement_agent)
@@ -125,11 +155,20 @@ class SearchEvaluator(BaseEvaluator):
 
         while not game_manager.is_terminal(current_state):
 
-            move, probabilities_np = search_agent.strategy.find_move(current_state, topp=True)
+            result = search_agent.strategy.find_move(current_state, topp=True)
 
+            # If the result is a tuple, assume it includes probabilities
+            if isinstance(result, tuple):
+                move, probabilities_np = result
+            else:
+                move = result
+                board_size = self.board_size
+                # Create a uniform distribution for entropy calculation
+                probabilities_np = np.ones(board_size ** 2) / (board_size ** 2)
             if total_moves <= 3:  # Track first 3 distributions for start entropy
                 start_distributions.append(probabilities_np)
-            elif total_moves >= current_state.move_count - 3:  # Track last 3 distributions for end entropy
+            elif total_moves > sum(self.ship_sizes):  # Track last 3 distributions for end entropy
+                # Track last 3 distributions for end entropy
                 end_distributions.append(probabilities_np)
 
             # Check if move will be a hit before applying it
@@ -294,14 +333,14 @@ class SearchEvaluator(BaseEvaluator):
 
             plt.figure(figsize=(10, 5))
             plt.plot(all_generations, values, 'o-', color=color, linewidth=2, label=title)
-            
+
             # Only show a subset of x-ticks if there are too many
             if len(all_generations) > 10:
                 step = max(1, len(all_generations) // 10)
                 plt.xticks(all_generations[::step], rotation=45)
             else:
                 plt.xticks(all_generations, rotation=45)
-                
+
             plt.title(f"Search Agent: {title}")
             plt.xlabel("Generation")
             plt.ylabel(title)
@@ -331,6 +370,71 @@ class SearchEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
+
+    def normalize(self, m):
+        # Dynamic bounds based on board and ship setup
+        best_case = sum(self.ship_sizes)  # Best possible: hit each tile once
+        worst_case = self.board_size ** 2  # Worst case: shoot every tile
+
+        def normalize_avg_moves(avg_moves):
+            norm = 1 - ((avg_moves - best_case) / (worst_case - best_case))
+            return max(0, min(1, norm))  # clip to [0, 1]
+
+        def normalize_sink_efficiency(value):
+            # Best: 1 move per ship. Worst: one move per tile.
+            best = sum(self.ship_sizes) / len(self.ship_sizes)
+            worst = worst_case * 0.7
+            norm = 1 - ((value - best) / (worst - best))
+            return max(0, min(1, norm))
+
+        def normalize_moves_between_hits(value):
+            # Best: hit every time. Worst: never hit.
+            best = 1.0
+            worst = worst_case / sum(self.ship_sizes)
+            norm = 1 - ((value - best) / (worst - best))
+            return max(0, min(1, norm))
+
+        normalized_metrics = {"Avg Moves": normalize_avg_moves(m["Avg Moves to Win"]),
+                              "Hit Accuracy": m["Hit Accuracy"],  # already in [0,1]
+                              "Moves Between Hits": normalize_moves_between_hits(m["Moves Between Hits"]),
+                              "Sink Efficiency": normalize_sink_efficiency(m["Sink Efficiency"]),
+                              }
+        return normalized_metrics
+
+    def plot_final_skill_radar_chart(self, labeled_metrics, title="Skill of Final Iteration"):
+        """
+        Plot a radar chart for multiple agents' final evaluation.
+
+        Args:
+            labeled_metrics (list of tuples): Each is (label, metrics_dict).
+            title (str): Chart title.
+        """
+        print("\n📊 Radar Chart Metrics:")
+        for label, metrics in labeled_metrics:
+            print(f"\n🔹 {label}:")
+            for k, v in metrics.items():
+                print(f"{k:<22}: {v:.3f}")
+
+        # Normalize all metrics by the first agent (assumed to be the main comparison)
+        all_labels = list(labeled_metrics[0][1].keys())
+        angles = np.linspace(0, 2 * np.pi, len(all_labels), endpoint=False).tolist()
+        angles += angles[:1]
+
+        fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
+        ax.set_xticks(angles[:-1])
+        ax.set_xticklabels(all_labels, fontsize=10)
+        ax.set_yticklabels([])
+
+        for label, metrics in labeled_metrics:
+            normalized = self.normalize(metrics)
+            values = list(normalized.values()) + [list(normalized.values())[0]]
+            ax.plot(angles, values, linewidth=2, label=label)
+            ax.fill(angles, values, alpha=0.15)
+
+        ax.set_title(title, size=14, pad=20)
+        ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1))
+        plt.tight_layout()
+        plt.show()
 
 
 class PlacementEvaluator(BaseEvaluator):

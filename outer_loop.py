@@ -269,6 +269,18 @@ class OuterLoopManager:
                     else:
                         print(f"Warning: Agent {key} does not have get_metrics method")
 
+            # --- Step 6: Save models ---
+            if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
+                model_dir = self.mcts_config["model"]["save_path"]
+
+                if self.run_neat and self.run_inner_loop:
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen)
+                elif self.run_neat:
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen)
+                elif self.run_inner_loop:
+                    model_path = f"{model_dir}/rl/model_gen{gen + 1}.pth"
+                    self.search_agents[0].strategy.save_model(model_path)
+
         if not self.run_neat and not self.run_inner_loop:
             for i, search_agent in enumerate(self.search_agents):
                 search_agent.strategy.plot_metrics()
@@ -281,7 +293,7 @@ class OuterLoopManager:
             else:
                 print("No metrics available to plot for search agents")
 
-        # --- Step 6: Plot ---
+        # --- Step 7: Plot ---
         self._generate_visualizations(timings)
 
     def _generate_visualizations(self, timings):
@@ -378,6 +390,21 @@ class OuterLoopManager:
         plt.tight_layout()
         plt.savefig("search_agent_metrics.png")
         plt.show()
+    def save_best_neat_agent(self, model_dir, subdir, gen):
+        model_path = f"{model_dir}/{subdir}/model_gen{gen + 1}.pth"
+        best_fitness = float("-inf")
+        best_key = None
+        best_agent = None
+
+        for key, (genome, agent) in self.search_agents_mapping.items():
+            if genome.fitness is not None and genome.fitness > best_fitness:
+                best_fitness = genome.fitness
+                best_key = key
+                best_agent = agent
+
+        if best_agent:
+            best_agent.strategy.save_model(model_path)
+
 
 # ---------------------------------------------------------------------
 # Main
