@@ -121,7 +121,7 @@ class InnerLoopManager:
         num_games = self.config["training"]["number_actual_games"]
 
         if gen == 0 and self.config["model"]["save"]:
-            model_path = f"{self.config['model']['save_path']}/erl/model_gen{gen}.pth"
+            model_path = f"{self.config['model']['save_path']}/model_gen{gen}.pth"
             search_agent.strategy.save_model(model_path)
 
         if self.config["training"]["play_game"]:
@@ -139,11 +139,6 @@ class InnerLoopManager:
         # Train only from buffer if not playing
         elif self.config["model"]["train"]:
             self.train_validate(rbuf, search_agent)
-
-        # Save model only every 10 generations
-        if self.config["model"]["save"] and (gen + 1) % 10 == 0:
-            model_path = f"{self.config['model']['save_path']}/erl/model_gen{gen + 1}.pth"
-            search_agent.strategy.save_model(model_path)
 
         # Save the buffer if requested
         if self.config["replay_buffer"]["save_to_file"]:

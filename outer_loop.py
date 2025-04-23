@@ -209,7 +209,6 @@ class OuterLoopManager:
                         genome = search_agent.strategy.net.read_weights_biases_to_genome(genome)
                         self.search_agents_mapping[key] = (genome, search_agent)
                         self.search_agents[key] = search_agent
-                        print(self.search_agents[key].strategy.avg_error_history)
 
             step_end = time.perf_counter()
             timings['inner_loop_training'].append(step_end - step_start)
@@ -250,8 +249,24 @@ class OuterLoopManager:
             step_end = time.perf_counter()
             timings['evolution'].append(step_end - step_start)
 
-        for i, search_agent in enumerate(self.search_agents):
-            search_agent.strategy.plot_metrics()
+            # --- Step 6: Save models ---
+            if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
+                model_dir = self.mcts_config["model"]["save_path"]
+
+                if self.run_neat and self.run_inner_loop:
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen)
+                elif self.run_neat:
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen)
+                elif self.run_inner_loop:
+                    model_path = f"{model_dir}/rl/model_gen{gen + 1}.pth"
+                    self.search_agents[0].strategy.save_model(model_path)
+
+        if self.run_inner_loop and not self.run_neat:
+            for i, search_agent in enumerate(self.search_agents):
+                search_agent.strategy.plot_metrics()
+        if self.run_neat and self.run_inner_loop:
+            # Plot the avg loss and accuracy per gen
+            pass
 
         # --- Step 6: Plot ---
         self._generate_visualizations(timings)
@@ -282,6 +297,21 @@ class OuterLoopManager:
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+    def save_best_neat_agent(self, model_dir, subdir, gen):
+        model_path = f"{model_dir}/{subdir}/model_gen{gen + 1}.pth"
+        best_fitness = float("-inf")
+        best_key = None
+        best_agent = None
+
+        for key, (genome, agent) in self.search_agents_mapping.items():
+            if genome.fitness is not None and genome.fitness > best_fitness:
+                best_fitness = genome.fitness
+                best_key = key
+                best_agent = agent
+
+        if best_agent:
+            best_agent.strategy.save_model(model_path)
 
 
 # ---------------------------------------------------------------------

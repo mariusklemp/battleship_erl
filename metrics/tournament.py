@@ -15,7 +15,6 @@ from ai.model import ANET
 from evaluator import Evaluator
 
 
-
 class Tournament:
     def __init__(
             self,
@@ -43,8 +42,10 @@ class Tournament:
 
     def set_nn_agent(self, i, layer_config):
         model_number = i * (self.num_games // self.num_players)
-        print(model_number)
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/7/erl", f"model_gen{model_number}.pth")
+        print(f"Setting up agent {model_number}")
+
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/5/rl",
+                            f"model_gen{model_number}.pth")
 
         net = ANET(
             board_size=self.board_size,
@@ -67,8 +68,6 @@ class Tournament:
     def init_players(self, time_limit):
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
         for i in range(self.num_players + 1):
-            if i == 0:
-                continue
             agent = self.set_nn_agent(i, config_path)
             self.players[agent.name] = agent
 
@@ -88,9 +87,43 @@ class Tournament:
 
         evaluator.plot_metrics_search()
 
+    def skill_final_agent(self, agent_index=0, baseline=True):
+        """
+        Evaluate one specific trained agent (best) and the worst one,
+        compare them against baselines, and plot as radar chart.
+        """
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
+        agent_best = self.set_nn_agent(agent_index, config_path)
+        agent_worst = self.set_nn_agent(0, config_path)
+
+        evaluator = Evaluator(
+            board_size=self.board_size,
+            ship_sizes=self.ship_sizes,
+            num_evaluation_games=self.num_games // 10,
+            game_manager=self.game_manager,
+        )
+
+        all_metrics = [
+            ("Best Agent", evaluator.search_evaluator.evaluate_final_agent(agent_best, num_games=100)),
+            ("Worst Agent", evaluator.search_evaluator.evaluate_final_agent(agent_worst, num_games=100)),
+        ]
+
+        if baseline:
+            for strategy in ["random", "hunt_down"]:
+                baseline_agent = SearchAgent(
+                    board_size=self.board_size,
+                    strategy=strategy,
+                    name=strategy,
+                )
+                metrics = evaluator.search_evaluator.evaluate_final_agent(baseline_agent, num_games=100)
+                all_metrics.append((f"{strategy.capitalize()} Agent", metrics))
+
+        evaluator.search_evaluator.plot_final_skill_radar_chart(all_metrics)
+
 
 def main():
-    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "mcts_config.json")
+    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config",
+                               "mcts_config.json")
     config = json.load(open(config_path))
     game_manager = GameManager(size=config["board_size"])
 
@@ -103,8 +136,9 @@ def main():
         num_players=10,
         game_manager=game_manager,
     )
-    tournament.init_players(time_limit=config["mcts"]["time_limit"])
-    tournament.run()
+    # tournament.init_players(time_limit=config["mcts"]["time_limit"])
+    tournament.skill_final_agent(agent_index=200, baseline=True)
+    # tournament.run()
 
 
 if __name__ == "__main__":

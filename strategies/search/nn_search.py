@@ -182,12 +182,8 @@ class NNSearch(nn.Module, Strategy):
                 outputs[i] = self._apply_illegal_mask(outputs[i].unsqueeze(0), batch_states[i].unsqueeze(0)).squeeze(0)
 
             # === SOFT CROSS‑ENTROPY LOSS ===
-            #print("outputs", outputs)
             log_probs = F.log_softmax(outputs, dim=1)
-            #print("Log probs", log_probs)
             loss = - (batch_targets * log_probs).sum(dim=1).mean()
-
-            #print("Loss", loss.item())
 
             # Store validation loss
             self.avg_validation_history.append(loss.item())
