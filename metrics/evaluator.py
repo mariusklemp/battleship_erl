@@ -117,8 +117,6 @@ class SearchEvaluator(BaseEvaluator):
         all_accuracy = []
         all_sink_efficiency = []
         all_moves_between_hits = []
-        all_start_entropy = []
-        all_end_entropy = []
 
         for baseline_name, placement_agent in self.baseline.items():
             for _ in range(num_games):
@@ -130,8 +128,6 @@ class SearchEvaluator(BaseEvaluator):
                 all_accuracy.append(acc)
                 all_sink_efficiency.append(sink_eff)
                 all_moves_between_hits.append(mbh)
-                all_start_entropy.append(start_e)
-                all_end_entropy.append(end_e)
 
         # Average metrics across all games
         metrics = {
@@ -139,8 +135,6 @@ class SearchEvaluator(BaseEvaluator):
             "Hit Accuracy": np.mean(all_accuracy),
             "Moves Between Hits": np.mean(all_moves_between_hits),
             "Sink Efficiency": np.mean(all_sink_efficiency),
-            "Start Entropy": np.mean(all_start_entropy),
-            "End Entropy": np.mean(all_end_entropy),
         }
         return metrics
 
@@ -173,7 +167,7 @@ class SearchEvaluator(BaseEvaluator):
                 probabilities_np = np.ones(board_size ** 2) / (board_size ** 2)
             if total_moves <= 3:  # Track first 3 distributions for start entropy
                 start_distributions.append(probabilities_np)
-            elif total_moves > 3:  # Track last 3 distributions for end entropy
+            elif total_moves > sum(self.ship_sizes):  # Track last 3 distributions for end entropy
                 # Track last 3 distributions for end entropy
                 end_distributions.append(probabilities_np)
 
@@ -388,8 +382,8 @@ class SearchEvaluator(BaseEvaluator):
 
         def normalize_sink_efficiency(value):
             # Best: 1 move per ship. Worst: one move per tile.
-            best = 1.0
-            worst = worst_case / len(self.ship_sizes)
+            best = sum(self.ship_sizes) / len(self.ship_sizes)
+            worst = worst_case * 0.7
             norm = 1 - ((value - best) / (worst - best))
             return max(0, min(1, norm))
 
@@ -404,8 +398,6 @@ class SearchEvaluator(BaseEvaluator):
                               "Hit Accuracy": m["Hit Accuracy"],  # already in [0,1]
                               "Moves Between Hits": normalize_moves_between_hits(m["Moves Between Hits"]),
                               "Sink Efficiency": normalize_sink_efficiency(m["Sink Efficiency"]),
-                              "Start Entropy": max(0, 1 - m["Start Entropy"]),
-                              "End Entropy": max(0, 1 - m["End Entropy"]),
                               }
         return normalized_metrics
 
@@ -428,7 +420,7 @@ class SearchEvaluator(BaseEvaluator):
         angles = np.linspace(0, 2 * np.pi, len(all_labels), endpoint=False).tolist()
         angles += angles[:1]
 
-        fig, ax = plt.subplots(figsize=(7, 7), subplot_kw=dict(polar=True))
+        fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
         ax.set_xticks(angles[:-1])
         ax.set_xticklabels(all_labels, fontsize=10)
         ax.set_yticklabels([])
