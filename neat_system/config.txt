@@ -40,7 +40,7 @@ weight_mutate_rate = 0.3
 weight_mutate_power = 0.3
 weight_replace_rate = 0.3
 mutate_architecture = True
-mutate_weights = False
+mutate_weights = True
 crossover_architecture = False
 crossover_weights = False
 

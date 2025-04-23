@@ -7,12 +7,12 @@
         "exploration_constant": 1.41
     },
     "training": {
-        "play_game": false,
+        "play_game": true,
         "number_actual_games": 10,
         "batch_size": 64,
         "save_interval": 10,
         "learning_rate": 0.0001,
-        "epochs": 10
+        "epochs": 1
     },
     "replay_buffer": {
         "max_size": 10000,
@@ -21,8 +21,8 @@
         "file_path": "rbuf/rbuf_5.pkl"
     },
     "model": {
-        "save": true,
-        "train": true,
+        "save": false,
+        "train": false,
         "save_path": "models/5"
     },
     "visualization": {

@@ -161,7 +161,13 @@ class OuterLoopManager:
             'competitive_evaluation': [],
             'evolution': [],
         }
+
+        search_agent_metrics = []
+        # Initialize the list to hold metrics for each generation
         num_generations = self.evolution_config["evolution"]["num_generations"]
+        for _ in range(num_generations):
+            search_agent_metrics.append([])
+        
         rbuf = RBUF()
         if self.mcts_config["replay_buffer"]["load_from_file"]:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
@@ -209,7 +215,6 @@ class OuterLoopManager:
                         genome = search_agent.strategy.net.read_weights_biases_to_genome(genome)
                         self.search_agents_mapping[key] = (genome, search_agent)
                         self.search_agents[key] = search_agent
-                        print(self.search_agents[key].strategy.avg_error_history)
 
             step_end = time.perf_counter()
             timings['inner_loop_training'].append(step_end - step_start)
@@ -250,8 +255,31 @@ class OuterLoopManager:
             step_end = time.perf_counter()
             timings['evolution'].append(step_end - step_start)
 
-        for i, search_agent in enumerate(self.search_agents):
-            search_agent.strategy.plot_metrics()
+            if not self.run_neat and not self.run_inner_loop:
+                for i, search_agent in enumerate(self.search_agents):
+                    if hasattr(search_agent.strategy, 'get_metrics'):
+                        search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
+                    else:
+                        print(f"Warning: Agent {i} does not have get_metrics method")
+            elif self.run_inner_loop and self.run_neat:
+                # Collect metrics from NEAT-based agents
+                for key, (_, search_agent) in self.search_agents_mapping.items():
+                    if hasattr(search_agent.strategy, 'get_metrics'):
+                        search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
+                    else:
+                        print(f"Warning: Agent {key} does not have get_metrics method")
+
+        if not self.run_neat and not self.run_inner_loop:
+            for i, search_agent in enumerate(self.search_agents):
+                search_agent.strategy.plot_metrics()
+        if self.run_inner_loop and self.run_neat:
+            # Plot the average error and validation error of the search agents for each generation
+            # Check if we have any metrics to plot
+            has_metrics = any(metrics for metrics in search_agent_metrics)
+            if has_metrics:
+                self.plot_search_agent_metrics(search_agent_metrics)
+            else:
+                print("No metrics available to plot for search agents")
 
         # --- Step 6: Plot ---
         self._generate_visualizations(timings)
@@ -283,6 +311,73 @@ class OuterLoopManager:
         plt.tight_layout()
         plt.show()
 
+    def plot_search_agent_metrics(self, search_agent_metrics):
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
+        # Setup figure with subplots
+        fig, axs = plt.subplots(2, 2, figsize=(15, 10))
+        
+        # Plot training metrics
+        axs[0, 0].set_title("Training Loss")
+        axs[0, 1].set_title("Validation Loss")
+        axs[1, 0].set_title("Training Accuracy")
+        axs[1, 1].set_title("Validation Accuracy")
+        
+        # Track metrics across generations
+        for gen, agents_metrics in enumerate(search_agent_metrics):
+            # Collect metrics from all agents in this generation
+            avg_losses = []
+            val_losses = []
+            top1_accs = []
+            top3_accs = []
+            val_top1_accs = []
+            val_top3_accs = []
+            
+            for metrics in agents_metrics:
+                avg_losses.append(metrics["avg_error_history"])
+                val_losses.append(metrics["avg_validation_history"])
+                top1_accs.append(metrics["top1_accuracy_history"])
+                top3_accs.append(metrics["top3_accuracy_history"])
+                val_top1_accs.append(metrics["val_top1_accuracy_history"])
+                val_top3_accs.append(metrics["val_top3_accuracy_history"])
+            
+            # Average metrics across all agents for this generation
+            if avg_losses:
+                # Plot training loss
+                avg_loss = np.mean(avg_losses, axis=0)
+                axs[0, 0].plot(avg_loss, label=f"Gen {gen}")
+                
+                # Plot validation loss
+                val_loss = np.mean(val_losses, axis=0)
+                axs[0, 1].plot(val_loss, label=f"Gen {gen}")
+                
+                # Plot training accuracy
+                top1_acc = np.mean(top1_accs, axis=0)
+                top3_acc = np.mean(top3_accs, axis=0)
+                axs[1, 0].plot(top1_acc, label=f"Gen {gen} (Top1)")
+                axs[1, 0].plot(top3_acc, linestyle='--', label=f"Gen {gen} (Top3)")
+                
+                # Plot validation accuracy
+                val_top1_acc = np.mean(val_top1_accs, axis=0)
+                val_top3_acc = np.mean(val_top3_accs, axis=0)
+                axs[1, 1].plot(val_top1_acc, label=f"Gen {gen} (Top1)")
+                axs[1, 1].plot(val_top3_acc, linestyle='--', label=f"Gen {gen} (Top3)")
+        
+        # Add labels and legends
+        for ax in axs.flat:
+            ax.set(xlabel='Training Iterations')
+            ax.grid(alpha=0.3)
+            ax.legend()
+        
+        axs[0, 0].set(ylabel='Loss')
+        axs[0, 1].set(ylabel='Loss')
+        axs[1, 0].set(ylabel='Accuracy')
+        axs[1, 1].set(ylabel='Accuracy')
+        
+        plt.tight_layout()
+        plt.savefig("search_agent_metrics.png")
+        plt.show()
 
 # ---------------------------------------------------------------------
 # Main

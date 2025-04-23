@@ -293,3 +293,14 @@ class NNSearch(nn.Module, Strategy):
         # Load new state
         self.net = torch.load(path)
         self.net.eval()
+
+
+    def get_metrics(self):
+        return {
+            "top1_accuracy_history": self.top1_accuracy_history,
+            "top3_accuracy_history": self.top3_accuracy_history,
+            "val_top1_accuracy_history": self.val_top1_accuracy_history,
+            "val_top3_accuracy_history": self.val_top3_accuracy_history,
+            "avg_error_history": self.avg_error_history,
+            "avg_validation_history": self.avg_validation_history,
+        }
