@@ -32,6 +32,9 @@ class CompetitiveEvaluator:
             placement_agents.append(
                 PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="random")
             )
+            placement_agents.append(
+                PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="uniform_spread")
+            )
         return placement_agents
 
     def evaluate(self, search_agents, placement_agents=None):
@@ -78,10 +81,12 @@ class CompetitiveEvaluator:
         # Assign search agent fitness if using NEAT (genomes available)
         if is_mapping:
             for key, (genome, search_agent) in search_agents.items():
+                avg_val = np.mean(search_agent.strategy.avg_validation_history)
+                avg_acc = np.mean(search_agent.strategy.val_top1_accuracy_history)
                 avg_fitness = search_fitness[search_agent] / num_placement_agents
                 genome.fitness = avg_fitness
 
-        # Compute correct overall averages from fitness values
+        # FOR PLOTTING: compute correct overall averages from fitness values
         overall_avg_placing = np.mean([
             agent.fitness.values[0] if self.run_ga else placing_fitness[agent] / num_search_agents
             for agent in placement_agents

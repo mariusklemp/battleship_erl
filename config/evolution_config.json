@@ -1,16 +1,16 @@
 {
     "run_neat": true,
-    "run_ga": false,
+    "run_ga": true,
     "placing_population": {
-        "size": 20,
+        "size": 50,
         "elite_size": 1,
         "tournament_size": 2,
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 20
+        "size": 50
     },
     "evolution": {
-        "num_generations": 10
+        "num_generations": 100
     }
 } 

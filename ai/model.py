@@ -257,3 +257,19 @@ class ANET(nn.Module):
                 fc_index += 1
 
         return genome
+
+    def weight_sum(self) -> float:
+        """
+        Returns the sum of absolute values of all weights and biases in the network.
+        """
+        total = 0.0
+        for p in self.parameters():
+            total += p.data.abs().sum().item()
+        return total
+
+    def print_weight_sum(self, label: str = ""):
+        """
+        Prints out the total weight sum, optionally prefixed by label.
+        """
+        ws = self.weight_sum()
+        print(f"{label}Net weight sum: {ws:.3e}")

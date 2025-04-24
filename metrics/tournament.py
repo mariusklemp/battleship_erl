@@ -40,11 +40,11 @@ class Tournament:
             for strat in placing_strategies
         }
 
-    def set_nn_agent(self, i, layer_config):
+    def set_nn_agent(self, i, layer_config, subdir):
         model_number = i * (self.num_games // self.num_players)
         print(f"Setting up agent {model_number}")
 
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "models/5/rl",
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), subdir,
                             f"model_gen{model_number}.pth")
 
         net = ANET(
@@ -68,7 +68,7 @@ class Tournament:
     def init_players(self, time_limit):
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
         for i in range(self.num_players + 1):
-            agent = self.set_nn_agent(i, config_path)
+            agent = self.set_nn_agent(i, config_path, "models/5/rl")
             self.players[agent.name] = agent
 
     def run(self):
@@ -87,14 +87,15 @@ class Tournament:
 
         evaluator.plot_metrics_search()
 
-    def skill_final_agent(self, agent_index=0, baseline=True):
+    def skill_final_agent(self, baseline=True):
         """
         Evaluate one specific trained agent (best) and the worst one,
         compare them against baselines, and plot as radar chart.
         """
+        subdir = "models/5/neat"
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
-        agent_best = self.set_nn_agent(agent_index, config_path)
-        agent_worst = self.set_nn_agent(0, config_path)
+        agent_best = self.set_nn_agent(10, config_path, subdir)
+        agent_worst = self.set_nn_agent(1, config_path, subdir)
 
         evaluator = Evaluator(
             board_size=self.board_size,
@@ -137,7 +138,7 @@ def main():
         game_manager=game_manager,
     )
     # tournament.init_players(time_limit=config["mcts"]["time_limit"])
-    tournament.skill_final_agent(agent_index=200, baseline=True)
+    tournament.skill_final_agent(baseline=True)
     # tournament.run()
 
 

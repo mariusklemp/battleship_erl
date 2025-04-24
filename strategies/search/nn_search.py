@@ -61,16 +61,15 @@ class NNSearch(nn.Module, Strategy):
 
     def _apply_illegal_mask(self, output, board_tensor):
         # board_tensor shape: [1, 5, B, B], we look at channel 0:
-        illegal = (board_tensor[0,0].reshape(-1) == 1)  # [C]
-        illegal = illegal.unsqueeze(0)                  # [1, C]
+        illegal = (board_tensor[0, 0].reshape(-1) == 1)  # [C]
+        illegal = illegal.unsqueeze(0)  # [1, C]
         # fill illegal logits with -1e9 (finite!):
         return output.masked_fill(illegal, -1e9)
-
 
     def find_move(self, state, topp=False):
         # Set model to evaluation mode for inference
         self.net.eval()
-        
+
         # Get both board tensor and extra features from state
         board_tensor = state.state_tensor()
 
@@ -144,7 +143,7 @@ class NNSearch(nn.Module, Strategy):
             outputs[i] = self._apply_illegal_mask(outputs[i].unsqueeze(0), batch_states[i].unsqueeze(0)).squeeze(0)
 
         # === SOFT CROSS‑ENTROPY LOSS ===
-        log_probs = F.log_softmax(outputs, dim=1)          # [B, C]
+        log_probs = F.log_softmax(outputs, dim=1)  # [B, C]
         loss = - (batch_targets * log_probs).sum(dim=1).mean()
         loss.backward()
         self.avg_error_history.append(loss.item())

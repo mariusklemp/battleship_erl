@@ -69,7 +69,7 @@ class OuterLoopManager:
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
             run_ga=self.run_ga,
-            default_num_placement=5
+            default_num_placement=self.evolution_config["placing_population"]["size"] / 2,
         )
 
     def _initialize_neat(self):
@@ -205,7 +205,7 @@ class OuterLoopManager:
 
                 if self.run_neat:
                     for key, (genome, search_agent) in self.search_agents_mapping.items():
-                        # Transfer the trained network weights/biases + optimiser to the genome.
+                        # Transfer the trained network weights/biases
                         genome = search_agent.strategy.net.read_weights_biases_to_genome(genome)
                         self.search_agents_mapping[key] = (genome, search_agent)
                         self.search_agents[key] = search_agent
@@ -223,6 +223,8 @@ class OuterLoopManager:
                 )
                 self.placement_ga.pop_placing_agents = updated_placement_agents
                 self.search_agents_mapping = updated_search_agents_mapping
+                for key, (genome, search_agent) in self.search_agents_mapping.items():
+                    print(f"Genome {key} updated with fitness {genome.fitness}")
             elif self.run_ga and not self.run_neat:
                 print("__Step 4: Evaluating GA competitively__")
                 (updated_search, updated_placement_agents) = (self.competitive_evaluator.evaluate(
@@ -268,7 +270,7 @@ class OuterLoopManager:
             # Plot the avg loss and accuracy per gen
             pass
 
-        # --- Step 6: Plot ---
+        # --- Step 7: Plot ---
         self._generate_visualizations(timings)
 
     def _generate_visualizations(self, timings):
@@ -277,7 +279,6 @@ class OuterLoopManager:
         self.plot_timings(timings)
         self.evaluator.plot_metrics_search()
         self.competitive_evaluator.plot()
-
         # Plot NEAT-specific visualizations if NEAT was used
         if self.run_neat:
             self.neat_manager.visualize_results()
@@ -299,19 +300,17 @@ class OuterLoopManager:
         plt.show()
 
     def save_best_neat_agent(self, model_dir, subdir, gen):
-        model_path = f"{model_dir}/{subdir}/model_gen{gen + 1}.pth"
         best_fitness = float("-inf")
-        best_key = None
+        model_path = None
         best_agent = None
 
         for key, (genome, agent) in self.search_agents_mapping.items():
             if genome.fitness is not None and genome.fitness > best_fitness:
                 best_fitness = genome.fitness
-                best_key = key
                 best_agent = agent
+                model_path = f"{model_dir}/{subdir}/model_gen{gen + 1}_fitness{best_fitness}.pth"
 
-        if best_agent:
-            best_agent.strategy.save_model(model_path)
+        best_agent.strategy.save_model(model_path)
 
 
 # ---------------------------------------------------------------------

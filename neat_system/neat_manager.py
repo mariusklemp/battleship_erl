@@ -146,7 +146,7 @@ class NeatManager:
         visualize.visualize_species(self.stats)
         visualize.plot_stats(
             statistics=self.stats,
-            best_possible=(self.board_size ** 2 - sum(self.ship_sizes)),
+            best_possible=0.8*(self.board_size ** 2 - sum(self.ship_sizes)),
             ylog=False,
             view=True,
         )
