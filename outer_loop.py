@@ -1,6 +1,7 @@
 import json
 import os
 import time
+from collections import defaultdict
 
 from tqdm import tqdm
 
@@ -161,7 +162,13 @@ class OuterLoopManager:
             'competitive_evaluation': [],
             'evolution': [],
         }
+
+        search_agent_metrics = []
+        # Initialize the list to hold metrics for each generation
         num_generations = self.evolution_config["evolution"]["num_generations"]
+        for _ in range(num_generations):
+            search_agent_metrics.append([])
+
         rbuf = RBUF()
         if self.mcts_config["replay_buffer"]["load_from_file"]:
             rbuf.init_from_file(file_path=self.mcts_config["replay_buffer"]["file_path"])
@@ -223,8 +230,6 @@ class OuterLoopManager:
                 )
                 self.placement_ga.pop_placing_agents = updated_placement_agents
                 self.search_agents_mapping = updated_search_agents_mapping
-                for key, (genome, search_agent) in self.search_agents_mapping.items():
-                    print(f"Genome {key} updated with fitness {genome.fitness}")
             elif self.run_ga and not self.run_neat:
                 print("__Step 4: Evaluating GA competitively__")
                 (updated_search, updated_placement_agents) = (self.competitive_evaluator.evaluate(
@@ -251,6 +256,20 @@ class OuterLoopManager:
             step_end = time.perf_counter()
             timings['evolution'].append(step_end - step_start)
 
+            if not self.run_neat and not self.run_inner_loop:
+                for i, search_agent in enumerate(self.search_agents):
+                    if hasattr(search_agent.strategy, 'get_metrics'):
+                        search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
+                    else:
+                        print(f"Warning: Agent {i} does not have get_metrics method")
+            elif self.run_inner_loop and self.run_neat:
+                # Collect metrics from NEAT-based agents
+                for key, (_, search_agent) in self.search_agents_mapping.items():
+                    if hasattr(search_agent.strategy, 'get_metrics'):
+                        search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
+                    else:
+                        print(f"Warning: Agent {key} does not have get_metrics method")
+
             # --- Step 6: Save models ---
             if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
                 model_dir = self.mcts_config["model"]["save_path"]
@@ -263,15 +282,22 @@ class OuterLoopManager:
                     model_path = f"{model_dir}/rl/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.save_model(model_path)
 
-        if self.run_inner_loop and not self.run_neat:
-            for i, search_agent in enumerate(self.search_agents):
-                search_agent.strategy.plot_metrics()
-        if self.run_neat and self.run_inner_loop:
-            # Plot the avg loss and accuracy per gen
-            pass
+
 
         # --- Step 7: Plot ---
+        if not self.run_neat and self.run_inner_loop:
+            for i, search_agent in enumerate(self.search_agents):
+                search_agent.strategy.plot_metrics()
+        if self.run_inner_loop and self.run_neat:
+            # Plot the average error and validation error of the search agents for each generation
+            # Check if we have any metrics to plot
+            has_metrics = any(metrics for metrics in search_agent_metrics)
+            if has_metrics:
+                self.plot_search_agent_metrics(search_agent_metrics)
+            else:
+                print("No metrics available to plot for search agents")
         self._generate_visualizations(timings)
+
 
     def _generate_visualizations(self, timings):
         """Generate all visualizations at the end of training."""
@@ -279,6 +305,7 @@ class OuterLoopManager:
         self.plot_timings(timings)
         self.evaluator.plot_metrics_search()
         self.competitive_evaluator.plot()
+
         # Plot NEAT-specific visualizations if NEAT was used
         if self.run_neat:
             self.neat_manager.visualize_results()
@@ -298,6 +325,210 @@ class OuterLoopManager:
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+    def plot_search_agent_metrics(self, search_agent_metrics):
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from collections import defaultdict
+
+        # Setup figure with 2 subplots (instead of 4)
+        fig, axs = plt.subplots(1, 2, figsize=(15, 6))
+
+        # Plot titles
+        axs[0].set_title("Average Loss")
+        axs[1].set_title("Average Accuracy")
+
+        # Process all generations
+        n_generations = len(search_agent_metrics)
+        if n_generations == 0:
+            print("No metrics data available to plot")
+            return
+
+        # Define metrics to track
+        metrics_by_generation = {
+            "train_loss": [],
+            "val_loss": [],
+            "train_top1_acc": [],
+            "train_top3_acc": [],
+            "val_top1_acc": [],
+            "val_top3_acc": []
+        }
+
+        # Calculate metrics for each generation
+        generation_indices = []
+        for gen, agents_metrics in enumerate(search_agent_metrics):
+            if not agents_metrics:
+                continue
+
+            generation_indices.append(gen)
+
+            # Collect metrics for this generation
+            gen_train_loss = []
+            gen_val_loss = []
+            gen_train_top1 = []
+            gen_train_top3 = []
+            gen_val_top1 = []
+            gen_val_top3 = []
+
+            for metrics in agents_metrics:
+                # Training loss
+                if "avg_error_history" in metrics and metrics["avg_error_history"]:
+                    values = metrics["avg_error_history"]
+                    gen_train_loss.append(values[-1] if isinstance(values, list) else values)
+
+                # Validation loss
+                if "avg_validation_history" in metrics and metrics["avg_validation_history"]:
+                    values = metrics["avg_validation_history"]
+                    gen_val_loss.append(values[-1] if isinstance(values, list) else values)
+
+                # Training top1 accuracy
+                if "top1_accuracy_history" in metrics and metrics["top1_accuracy_history"]:
+                    values = metrics["top1_accuracy_history"]
+                    gen_train_top1.append(values[-1] if isinstance(values, list) else values)
+
+                # Training top3 accuracy
+                if "top3_accuracy_history" in metrics and metrics["top3_accuracy_history"]:
+                    values = metrics["top3_accuracy_history"]
+                    gen_train_top3.append(values[-1] if isinstance(values, list) else values)
+
+                # Validation top1 accuracy
+                if "val_top1_accuracy_history" in metrics and metrics["val_top1_accuracy_history"]:
+                    values = metrics["val_top1_accuracy_history"]
+                    gen_val_top1.append(values[-1] if isinstance(values, list) else values)
+
+                # Validation top3 accuracy
+                if "val_top3_accuracy_history" in metrics and metrics["val_top3_accuracy_history"]:
+                    values = metrics["val_top3_accuracy_history"]
+                    gen_val_top3.append(values[-1] if isinstance(values, list) else values)
+
+            # Calculate averages for this generation (if data exists)
+            metrics_by_generation["train_loss"].append(np.mean(gen_train_loss) if gen_train_loss else None)
+            metrics_by_generation["val_loss"].append(np.mean(gen_val_loss) if gen_val_loss else None)
+            metrics_by_generation["train_top1_acc"].append(np.mean(gen_train_top1) if gen_train_top1 else None)
+            metrics_by_generation["train_top3_acc"].append(np.mean(gen_train_top3) if gen_train_top3 else None)
+            metrics_by_generation["val_top1_acc"].append(np.mean(gen_val_top1) if gen_val_top1 else None)
+            metrics_by_generation["val_top3_acc"].append(np.mean(gen_val_top3) if gen_val_top3 else None)
+
+        # Only plot generations that have data
+        if not generation_indices:
+            print("No valid generation metrics to plot")
+            return
+
+        # Plot metrics across generations
+
+        # Loss Plot (subplot 0) - Training and Validation together
+        self._plot_generation_metric(
+            axs[0],
+            generation_indices,
+            metrics_by_generation["train_loss"],
+            "Training Loss",
+            "blue"  # Blue for training
+        )
+
+        self._plot_generation_metric(
+            axs[0],
+            generation_indices,
+            metrics_by_generation["val_loss"],
+            "Validation Loss",
+            "red"   # Red for validation
+        )
+
+        # Accuracy Plot (subplot 1) - Training and Validation together
+        # Top-1 Training Accuracy
+        self._plot_generation_metric(
+            axs[1],
+            generation_indices,
+            metrics_by_generation["train_top1_acc"],
+            "Training Top-1",
+            "blue",  # Blue for training
+            "-"      # Solid line for top-1
+        )
+
+        # Top-3 Training Accuracy
+        self._plot_generation_metric(
+            axs[1],
+            generation_indices,
+            metrics_by_generation["train_top3_acc"],
+            "Training Top-3",
+            "blue",  # Blue for training
+            "--"     # Dashed line for top-3
+        )
+
+        # Top-1 Validation Accuracy
+        self._plot_generation_metric(
+            axs[1],
+            generation_indices,
+            metrics_by_generation["val_top1_acc"],
+            "Validation Top-1",
+            "red",   # Red for validation
+            "-"      # Solid line for top-1
+        )
+
+        # Top-3 Validation Accuracy
+        self._plot_generation_metric(
+            axs[1],
+            generation_indices,
+            metrics_by_generation["val_top3_acc"],
+            "Validation Top-3",
+            "red",   # Red for validation
+            "--"     # Dashed line for top-3
+        )
+
+        # Add labels and legends
+        for ax in axs:
+            ax.set(xlabel='Generation')
+            ax.grid(alpha=0.3)
+            if any(not all(x is None for x in ax.lines) for ax in axs):
+                ax.legend()
+
+            # Set integer ticks for generations on x-axis
+            if generation_indices:
+                min_gen = min(generation_indices)
+                max_gen = max(generation_indices)
+                ax.set_xticks(range(min_gen, max_gen + 1))
+                ax.set_xticklabels([str(i) for i in range(min_gen, max_gen + 1)])
+
+        axs[0].set(ylabel='Loss')
+        axs[1].set(ylabel='Accuracy')
+
+        # Add title
+        plt.suptitle("Performance Metrics Across Generations", fontsize=16)
+
+        # Adjust layout
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.9)  # Make room for the suptitle
+
+        # Save and show the figure
+        plt.savefig("generation_metrics.png", bbox_inches='tight')
+        plt.show()
+
+    def _plot_generation_metric(self, ax, generations, values, label, color, linestyle="-"):
+        """Helper method to plot a metric across generations."""
+        import numpy as np
+
+        # Filter out None values
+        valid_points = [(g, v) for g, v in zip(generations, values) if v is not None]
+
+        if not valid_points:
+            return
+
+        gen_indices, metric_values = zip(*valid_points)
+
+        # Plot the data
+        ax.plot(gen_indices, metric_values, label=label, color=color, linestyle=linestyle, marker='o')
+
+        # Add a trend line if we have enough points
+        if len(gen_indices) > 2:
+            try:
+                z = np.polyfit(gen_indices, metric_values, 1)
+                p = np.poly1d(z)
+
+                # Use integer x values for the trend line
+                trend_x = np.array(range(min(gen_indices), max(gen_indices) + 1))
+                ax.plot(trend_x, p(trend_x), linestyle=':', color=color, alpha=0.7)
+            except:
+                # Skip trend line if there's an error (e.g., singular matrix)
+                pass
 
     def save_best_neat_agent(self, model_dir, subdir, gen):
         best_fitness = float("-inf")

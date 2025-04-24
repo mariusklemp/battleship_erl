@@ -146,7 +146,7 @@ class InnerLoopManager:
 
 
 def main():
-    board_size = 7
+    board_size = 5
 
     game_manager = GameManager(board_size)
 
@@ -176,7 +176,7 @@ def main():
         )
         search_agents.append(search_agent)
 
-    for gen in range(1000):
+    for gen in range(10):
         for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
             print(f"Training search agent {i + 1}")
             inner_loop_manager.run(search_agent, rbuf, gen=gen)
