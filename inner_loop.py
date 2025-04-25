@@ -44,8 +44,8 @@ class InnerLoopManager:
         """Load configuration from a JSON file and set the device automatically if needed."""
         with open(config_path, "r") as f:
             config = json.load(f)
-        if config["device"] == "auto":
-            config["device"] = "cuda" if torch.cuda.is_available() else "cpu"
+        
+        config["device"] = "mps" if torch.backends.mps.is_available() else "cpu"
         return config
 
     @staticmethod
@@ -84,7 +84,7 @@ class InnerLoopManager:
             current_node = self.mcts.run(current_state, search_agent)
             explored_ratio = sum(current_state.board[0]) / (self.game_manager.size ** 2)
             dynamic_c = self.mcts.exploration_constant * (1 - explored_ratio)
-            best_child = current_node.best_child(c_param=dynamic_c)
+            best_child = current_node.best_child(c_param=0)
 
             move = best_child.move
 
@@ -146,7 +146,7 @@ class InnerLoopManager:
 
 
 def main():
-    board_size = 5
+    board_size = 7
 
     game_manager = GameManager(board_size)
 

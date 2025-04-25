@@ -138,6 +138,8 @@ class ANET(nn.Module):
                     stride=layer.get("stride", None),
                     padding=layer.get("padding", 0),
                 )
+            case "GlobalAvgPool2d":
+                return nn.AdaptiveAvgPool2d((1, 1))
             case "AvgPool2d":
                 return nn.AvgPool2d(
                     kernel_size=layer["kernel_size"],

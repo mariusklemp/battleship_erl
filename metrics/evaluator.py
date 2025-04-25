@@ -315,7 +315,7 @@ class SearchEvaluator(BaseEvaluator):
                 plt.xticks(all_generations, rotation=45)
 
             plt.title(f"Search Agent: {group_title}")
-            plt.xlabel("Generation or Model")
+            plt.xlabel("Generation")
             plt.ylabel(group_title)
             plt.legend()
             plt.tight_layout()
@@ -363,7 +363,7 @@ class SearchEvaluator(BaseEvaluator):
             else:
                 plt.xticks(keys, rotation=45)
 
-            plt.title(f"Baseline evaluation Search Agent: {metric_name}")
+            plt.title(f"Search Agent: {metric_name}")
             plt.xlabel("Generation")
             plt.ylabel(metric_name)
             plt.legend()
@@ -561,7 +561,7 @@ class PlacementEvaluator(BaseEvaluator):
             else:
                 plt.xticks(generations, rotation=45)
 
-            plt.title(f"Baseline evaluation Placement Agent: {metric_name}")
+            plt.title(f"Placement Agent: {metric_name}")
             plt.xlabel("Generation")
             plt.ylabel(metric_name)
             plt.legend()
