@@ -279,15 +279,6 @@ class NNSearch(nn.Module, Strategy):
         plt.tight_layout()
         plt.show()
 
-    def save_model(self, path):
-        # Save the model
-        torch.save(self.net, path)
-
-    def load_model(self, path):
-        print(f"Loading model from {path}")
-        # Load new state
-        self.net = torch.load(path)
-        self.net.eval()
 
     def get_metrics(self):
         return {

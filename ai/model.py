@@ -1,4 +1,5 @@
 import json
+import os
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,7 @@ class ANET(nn.Module):
         self.config = config
         self.board_size = board_size
         self.output_size = board_size * board_size
+        self.genome = genome
 
         if genome is not None and self.config is not None:
             self.board_size = config.genome_config.input_size
@@ -29,9 +31,7 @@ class ANET(nn.Module):
             self.logits = nn.Sequential(*layer_list)
             self.layers = list(self.logits.children())
             self.read_weights_biases_from_genome(genome)
-
         elif layer_config:
-            print(f"Loading layer config from {layer_config}")
             with open(layer_config, "r") as f:
                 cfg = json.load(f)
 
@@ -260,18 +260,38 @@ class ANET(nn.Module):
 
         return genome
 
-    def weight_sum(self) -> float:
+    def save_model(self, path: str):
         """
-        Returns the sum of absolute values of all weights and biases in the network.
+        Save just the state_dict of this network.
         """
-        total = 0.0
-        for p in self.parameters():
-            total += p.data.abs().sum().item()
-        return total
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        torch.save({'model_state_dict': self.state_dict()}, path)
+        print(f"[ANET] Saved state_dict to {path}")
 
-    def print_weight_sum(self, label: str = ""):
+    def load_model(self, path: str):
         """
-        Prints out the total weight sum, optionally prefixed by label.
+        Load into this network from a state_dict checkpoint.
         """
-        ws = self.weight_sum()
-        print(f"{label}Net weight sum: {ws:.3e}")
+        print(f"[ANET] Loading weights from {path}")
+        ckpt = torch.load(path, map_location=self.device)
+        # ckpt might be a plain state_dict or wrapped in a dict
+        state_dict = ckpt.get('model_state_dict', ckpt)
+        self.load_state_dict(state_dict)
+        self.eval()
+        print(f"[ANET] Loaded weights.")
+
+    def save_model_genome(self, path: str):
+        """
+        Save both the state_dict and the NEAT genome (and optionally the optimizer).
+        """
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        checkpoint = {
+            'model_state_dict': self.state_dict(),
+            'genome': self.genome,
+        }
+
+        torch.save(checkpoint, path)
+        print(f"[ANET] Saved NEAT checkpoint to {path}")
+
+
+

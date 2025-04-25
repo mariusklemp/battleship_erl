@@ -120,10 +120,6 @@ class InnerLoopManager:
 
         num_games = self.config["training"]["number_actual_games"]
 
-        if gen == 0 and self.config["model"]["save"]:
-            model_path = f"{self.config['model']['save_path']}/model_gen{gen}.pth"
-            search_agent.strategy.save_model(model_path)
-
         if self.config["training"]["play_game"]:
             for i in tqdm(range(num_games)):
                 move_counts.append(self.simulate_game(search_agent, rbuf, gui))
@@ -134,7 +130,7 @@ class InnerLoopManager:
 
                 if self.config["model"]["save"] and gen == -1 and (i + 1) % 10 == 0:
                     model_path = f"{self.config['model']['save_path']}/rl/model_gen{i + 1}.pth"
-                    search_agent.strategy.save_model(model_path)
+                    search_agent.strategy.net.save_model(model_path)
 
         # Train only from buffer if not playing
         elif self.config["model"]["train"]:

@@ -3,7 +3,10 @@ import json
 import sys
 import os
 
+import torch
+
 from ai.mcts import MCTS
+from neat_system.neat_manager import NeatManager
 
 # Add the parent directory to the path so we can import modules from there
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -42,33 +45,71 @@ class Tournament:
             for strat in placing_strategies
         }
 
-    def set_nn_agent(self, i, layer_config, subdir):
-        model_number = i * (self.num_games // self.num_players)
-        print(f"Setting up agent {model_number}")
+        with open("../config/evolution_config.json", "r") as f:
+            evolution_config = json.load(f)
 
-        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), subdir,
-                            f"model_gen{model_number}.pth")
-
-        net = ANET(
+        self.neat_manager = NeatManager(
+            neat_config_path="../neat_system/config.txt",
+            evolution_config=evolution_config,
             board_size=self.board_size,
-            activation="relu",
-            device="cpu",
-            layer_config=layer_config,
+            ship_sizes=self.ship_sizes
         )
+
+    def set_nn_agent(self, i, layer_config, subdir):
+        """
+        Load or construct an ANET‐based SearchAgent, based on whether
+        the checkpoint contains a genome (NEAT/ERL) or just a plain state_dict.
+        """
+        model_number = i * (self.num_games // self.num_players)
+        print(f"[OuterLoop] Setting up agent {model_number}")
+
+        # Build the filesystem path
+        base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.join(base, subdir, f"model_gen{model_number}.pth")
+        assert os.path.exists(path), f"Checkpoint not found: {path}"
+
+        # Decide if this is a NEAT checkpoint by peeking inside
+        print(f"Loading checkpoint from {path}")
+        ckpt = torch.load(path, map_location="cpu")
+        has_genome = isinstance(ckpt, dict) and 'genome' in ckpt
+
+        if has_genome:
+            print("IM HEEERE")
+            # --- NEAT/ERL checkpoint ---
+            genome = ckpt['genome']
+            net = ANET(
+                board_size=self.board_size,
+                device="cpu",
+                genome=genome,
+                config=self.neat_manager.config
+            )
+            # Load weights from the same checkpoint
+            net.load_state_dict(ckpt['model_state_dict'])
+            net.eval()
+        else:
+            # --- Plain state_dict checkpoint ---
+            net = ANET(
+                board_size=self.board_size,
+                activation="relu",
+                device="cpu",
+                layer_config=layer_config,
+            )
+            net.load_model(path)
 
         search_agent = SearchAgent(
             board_size=self.board_size,
             strategy="nn_search",
             net=net,
             optimizer="adam",
-            name=model_number,
+            name=f"nn_gen{model_number}",
             lr=0.001,
         )
-        search_agent.strategy.load_model(path)
+
         return search_agent
 
     def init_players(self, time_limit):
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config_simple.json")
+        print("config_path", config_path)
         for i in range(self.num_players + 1):
             agent = self.set_nn_agent(i, config_path, "models/5/rl")
             self.players[agent.name] = agent
@@ -86,8 +127,7 @@ class Tournament:
                 search_agents=[search_agent],
                 gen=name,
             )
-        print(evaluator.search_evaluator.start_entropy)
-        print(evaluator.search_evaluator.end_entropy)
+
         evaluator.plot_metrics_search()
 
     def skill_final_agent(self, baseline=True):
@@ -136,11 +176,11 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=2000,
+        num_games=20,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=100,
+        num_players=2,
         game_manager=game_manager,
     )
     tournament.init_players(time_limit=config["mcts"]["time_limit"])

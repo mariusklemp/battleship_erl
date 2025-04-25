@@ -1,3 +1,4 @@
+import re
 from abc import abstractmethod, ABC
 
 import numpy as np
@@ -277,7 +278,7 @@ class SearchEvaluator(BaseEvaluator):
                 combined[gen] /= count[gen]
             return combined
 
-        # === Convert Grouped Bar Charts to Line Charts ===
+        # === Grouped line metrics (start vs end entropy) ===
         for group_title, meta in grouped_line_metrics.items():
             metric1, metric2 = meta["metrics"]
             color1, color2 = meta["colors"]
@@ -288,72 +289,56 @@ class SearchEvaluator(BaseEvaluator):
             avg_data1 = average_across_baselines(data1)
             avg_data2 = average_across_baselines(data2)
 
-            all_generations = list(set(avg_data1.keys()) | set(avg_data2.keys()))
-            all_generations = sorted(all_generations, key=lambda k: int(k))
+            gens = sorted(set(avg_data1) | set(avg_data2), key=self.gen_key)
+            x_labels = [str(g) for g in gens]
 
-            values1 = [avg_data1.get(gen, 0) for gen in all_generations]
-            values2 = [avg_data2.get(gen, 0) for gen in all_generations]
+            values1 = [avg_data1.get(g, 0) for g in gens]
+            values2 = [avg_data2.get(g, 0) for g in gens]
 
             plt.figure(figsize=(12, 6))
-            plt.plot(all_generations, values1, 'o-', label=metric1, color=color1, linewidth=2)
-            plt.plot(all_generations, values2, 'o-', label=metric2, color=color2, linewidth=2)
+            plt.plot(x_labels, values1, 'o-', label=metric1, color=color1, linewidth=2)
+            plt.plot(x_labels, values2, 'o-', label=metric2, color=color2, linewidth=2)
 
-            # Only show a subset of x-ticks if there are too many
-            if len(all_generations) > 10:
-                step = max(1, len(all_generations) // 10)
-                plt.xticks(all_generations[::step], rotation=45)
-            else:
-                plt.xticks(all_generations, rotation=45)
-
+            plt.xticks(rotation=45)
             plt.title(f"Search Agent: {group_title}")
             plt.xlabel("Generation")
             plt.ylabel(group_title)
             plt.legend()
-            plt.tight_layout()
             plt.grid(alpha=0.3)
+            plt.tight_layout()
             plt.show()
 
-        # === Convert Individual Bar Charts to Line Charts ===
+        # === Single-line metrics (sink efficiency & moves between hits) ===
         for title, (attr_name, color) in single_line_metrics.items():
             data = getattr(self, attr_name)
             avg_data = average_across_baselines(data)
 
-            all_generations = sorted(avg_data.keys(),
-                                     key=lambda k: int(k.split("_")[1]) if isinstance(k, str) and "_" in k else int(k))
-            values = [avg_data.get(gen, 0) for gen in all_generations]
+            gens = sorted(avg_data.keys(), key=self.gen_key)
+            x_labels = [str(g) for g in gens]
+            values = [avg_data[g] for g in gens]
 
             plt.figure(figsize=(10, 5))
-            plt.plot(all_generations, values, 'o-', color=color, linewidth=2, label=title)
+            plt.plot(x_labels, values, 'o-', color=color, linewidth=2, label=title)
 
-            # Only show a subset of x-ticks if there are too many
-            if len(all_generations) > 10:
-                step = max(1, len(all_generations) // 10)
-                plt.xticks(all_generations[::step], rotation=45)
-            else:
-                plt.xticks(all_generations, rotation=45)
-
+            plt.xticks(rotation=45)
             plt.title(f"Search Agent: {title}")
             plt.xlabel("Generation")
             plt.ylabel(title)
-            plt.tight_layout()
+            plt.legend()
             plt.grid(alpha=0.3)
+            plt.tight_layout()
             plt.show()
 
-        # === Line Plots ===
+        # === Line plots for move count and hit accuracy ===
         for metric_name, metric_data in line_metrics.items():
             plt.figure(figsize=(10, 6))
             for baseline, values in metric_data.items():
-                keys = sorted(list(values.keys()), key=lambda k: int(k))
-                values_sorted = [values[k] for k in keys]
-                plt.plot(keys, values_sorted, marker="o", label=baseline, linewidth=2)
+                gens = sorted(values.keys(), key=self.gen_key)
+                x_labels = [str(g) for g in gens]
+                y_vals = [values[g] for g in gens]
+                plt.plot(x_labels, y_vals, marker="o", label=baseline, linewidth=2)
 
-            # Only show a subset of x-ticks if there are too many
-            if len(keys) > 10:
-                step = max(1, len(keys) // 10)
-                plt.xticks(keys[::step], rotation=45)
-            else:
-                plt.xticks(keys, rotation=45)
-
+            plt.xticks(rotation=45)
             plt.title(f"Search Agent: {metric_name}")
             plt.xlabel("Generation")
             plt.ylabel(metric_name)
@@ -361,6 +346,22 @@ class SearchEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
+
+    def gen_key(self, x):
+        """
+        Extract generation number as int from keys like:
+          - 'nn_gen20'
+          - 'random'   (no digits → fallback to 0 or just return x if you prefer)
+          - 5          (already an int)
+        """
+        if isinstance(x, str):
+            m = re.search(r'(\d+)$', x)
+            if m:
+                return int(m.group(1))
+            else:
+                # no trailing digits → put these first or last as you like
+                return -1
+        return int(x)
 
     def normalize(self, m):
         # Setup

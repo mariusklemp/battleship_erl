@@ -27,6 +27,8 @@ class NeatManager:
             board_size (int): Board dimensions for the game.
             ship_sizes (list): List of ship sizes to calculate fitness thresholds.
         """
+        print("[NeatManager] Initializing NEAT Manager")
+        print(neat_config_path)
         self.neat_config_path = neat_config_path
         self.evolution_config = evolution_config
         self.board_size = board_size
