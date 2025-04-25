@@ -2,6 +2,8 @@ from abc import abstractmethod, ABC
 
 import numpy as np
 import matplotlib.pyplot as plt
+
+import visualize
 from game_logic.search_agent import SearchAgent
 from game_logic.placement_agent import PlacementAgent
 
@@ -121,6 +123,8 @@ class SearchEvaluator(BaseEvaluator):
         for baseline_name, placement_agent in self.baseline.items():
             for _ in range(num_games):
                 placement_agent.new_placements()
+                if search_agent.name == "mcts":
+                    search_agent.strategy.mcts.root_node = None  # Reset between each game
                 result = self.simulate_game(self.game_manager, placement_agent, search_agent)
                 moves, acc, sink_eff, mbh, start_e, end_e = result
 
@@ -150,11 +154,9 @@ class SearchEvaluator(BaseEvaluator):
         moves_between_hits_list = []
         ship_hit_tracking = {}
         sink_moves = []
-        start_distributions = []
-        end_distributions = []
+        entropy_distributions = []
 
         while not game_manager.is_terminal(current_state):
-
             result = search_agent.strategy.find_move(current_state, topp=True)
 
             # If the result is a tuple, assume it includes probabilities
@@ -163,13 +165,13 @@ class SearchEvaluator(BaseEvaluator):
             else:
                 move = result
                 board_size = self.board_size
-                # Create a uniform distribution for entropy calculation
-                probabilities_np = np.ones(board_size ** 2) / (board_size ** 2)
-            if total_moves <= 3:  # Track first 3 distributions for start entropy
-                start_distributions.append(probabilities_np)
-            elif total_moves > sum(self.ship_sizes):  # Track last 3 distributions for end entropy
-                # Track last 3 distributions for end entropy
-                end_distributions.append(probabilities_np)
+                probabilities_np = np.ones(board_size ** 2) / (board_size ** 2)  # Uniform fallback
+
+            # Remove illegal moves from the distrubution
+            board_flat = np.array(current_state.board[0]).flatten()
+            legal_mask = (board_flat == 0)  # True where move is still allowed
+            legal_probs = probabilities_np[legal_mask]
+            entropy_distributions.append(legal_probs)
 
             # Check if move will be a hit before applying it
             is_hit = move in current_state.placing.indexes
@@ -180,8 +182,6 @@ class SearchEvaluator(BaseEvaluator):
             # Update hit/miss count
             if is_hit:
                 hits += 1
-
-                # Track moves between consecutive hits
                 if last_hit_move is not None:
                     moves_between = total_moves - last_hit_move
                     moves_between_hits_list.append(moves_between)
@@ -189,18 +189,11 @@ class SearchEvaluator(BaseEvaluator):
 
                 # Check if this move sunk a ship
                 sunk, ship_size, hit_ship = game_manager.check_ship_sunk(move, new_state.board, current_state.placing)
-
-                # Track ship hits and sinking for calculating sink efficiency
                 if hit_ship:
-                    ship_id = tuple(sorted(hit_ship))  # Use the ship's indexes as identifier
-
-                    # If this is the first hit on this ship, record the move number
+                    ship_id = tuple(sorted(hit_ship))
                     if ship_id not in ship_hit_tracking:
                         ship_hit_tracking[ship_id] = total_moves
-
-                    # If the ship was sunk with this move
                     if sunk:
-                        # Calculate moves between first hit and sink
                         moves_to_sink = total_moves - ship_hit_tracking[ship_id] + 1
                         sink_moves.append(moves_to_sink)
             else:
@@ -209,26 +202,24 @@ class SearchEvaluator(BaseEvaluator):
             current_state = new_state
             total_moves += 1
 
-        # Calculate hit accuracy
+        # === Metrics ===
         accuracy = hits / total_moves if total_moves > 0 else 0
-
-        # Calculate average moves between hit and sink
         avg_sink_efficiency = sum(sink_moves) / len(sink_moves) if sink_moves else 0
-
-        # Calculate average moves between consecutive hits
         avg_moves_between_hits = sum(moves_between_hits_list) / len(
             moves_between_hits_list) if moves_between_hits_list else 0
 
-        # Calculate entropy metrics for action distributions
-        # Average entropy of all distributions
-        end_entropies = [self.calculate_entropy(dist) for dist in end_distributions]
-        end_entropy = np.mean(end_entropies)
+        # === Entropy Calculation ===
+        entropies = [self.calculate_entropy(dist) for dist in entropy_distributions]
 
-        # Average entropy of starting distributions
-        start_entropies = [self.calculate_entropy(dist) for dist in start_distributions]
-        start_entropy = np.mean(start_entropies)
+        if len(entropies) >= 3:
+            start_entropy = np.mean(entropies[:3])
+            end_entropy = np.mean(entropies[-3:])
+        else:
+            # Fallback if fewer than 3 moves
+            start_entropy = np.mean(entropies)
+            end_entropy = np.mean(entropies)
 
-        return current_state.move_count, accuracy, avg_sink_efficiency, avg_moves_between_hits, start_entropy, end_entropy
+        return total_moves, accuracy, avg_sink_efficiency, avg_moves_between_hits, start_entropy, end_entropy
 
     def calculate_entropy(self, distribution):
         """
@@ -372,33 +363,40 @@ class SearchEvaluator(BaseEvaluator):
             plt.show()
 
     def normalize(self, m):
-        # Dynamic bounds based on board and ship setup
-        best_case = sum(self.ship_sizes)  # Best possible: hit each tile once
-        worst_case = self.board_size ** 2  # Worst case: shoot every tile
+        # Setup
+        best_case = sum(self.ship_sizes)  # Total ship tiles
+        worst_case = self.board_size ** 2
+        expected_best_moves = best_case * 1.5  # Rough estimate for very good play
+        best_hit_accuracy = best_case / expected_best_moves  # e.g., ~0.77
+        worst_hit_accuracy = best_case / worst_case  # e.g., ~0.1
+
+        def normalize_hit_accuracy(value):
+            # Normalize between worst and realistic best
+            norm = (value - worst_hit_accuracy) / (best_hit_accuracy - worst_hit_accuracy)
+            return max(0, min(1, norm))
 
         def normalize_avg_moves(avg_moves):
-            norm = 1 - ((avg_moves - best_case) / (worst_case - best_case))
-            return max(0, min(1, norm))  # clip to [0, 1]
+            norm = (avg_moves - best_case) / (worst_case - best_case)
+            return max(0, min(1, norm))
 
         def normalize_sink_efficiency(value):
-            # Best: 1 move per ship. Worst: one move per tile.
             best = sum(self.ship_sizes) / len(self.ship_sizes)
             worst = worst_case * 0.7
             norm = 1 - ((value - best) / (worst - best))
             return max(0, min(1, norm))
 
         def normalize_moves_between_hits(value):
-            # Best: hit every time. Worst: never hit.
             best = 1.0
             worst = worst_case / sum(self.ship_sizes)
-            norm = 1 - ((value - best) / (worst - best))
+            norm = (value - best) / (worst - best)
             return max(0, min(1, norm))
 
-        normalized_metrics = {"Avg Moves": normalize_avg_moves(m["Avg Moves to Win"]),
-                              "Hit Accuracy": m["Hit Accuracy"],  # already in [0,1]
-                              "Moves Between Hits": normalize_moves_between_hits(m["Moves Between Hits"]),
-                              "Sink Efficiency": normalize_sink_efficiency(m["Sink Efficiency"]),
-                              }
+        normalized_metrics = {
+            "Avg Moves": normalize_avg_moves(m["Avg Moves to Win"]),
+            "Hit Accuracy": normalize_hit_accuracy(m["Hit Accuracy"]),
+            "Moves Between Hits": normalize_moves_between_hits(m["Moves Between Hits"]),
+            "Sink Efficiency": normalize_sink_efficiency(m["Sink Efficiency"]),
+        }
         return normalized_metrics
 
     def plot_final_skill_radar_chart(self, labeled_metrics, title="Skill of Final Iteration"):
@@ -415,24 +413,34 @@ class SearchEvaluator(BaseEvaluator):
             for k, v in metrics.items():
                 print(f"{k:<22}: {v:.3f}")
 
-        # Normalize all metrics by the first agent (assumed to be the main comparison)
-        all_labels = list(labeled_metrics[0][1].keys())
+        # Define fixed metric order
+        all_labels = ["Avg Moves", "Hit Accuracy", "Moves Between Hits", "Sink Efficiency"]
         angles = np.linspace(0, 2 * np.pi, len(all_labels), endpoint=False).tolist()
         angles += angles[:1]
 
-        fig, ax = plt.subplots(figsize=(5, 5), subplot_kw=dict(polar=True))
+        # Create figure and axis
+        fig, ax = plt.subplots(figsize=(7, 6), subplot_kw=dict(polar=True))  # Wider figure
         ax.set_xticks(angles[:-1])
         ax.set_xticklabels(all_labels, fontsize=10)
         ax.set_yticklabels([])
 
         for label, metrics in labeled_metrics:
             normalized = self.normalize(metrics)
-            values = list(normalized.values()) + [list(normalized.values())[0]]
-            ax.plot(angles, values, linewidth=2, label=label)
-            ax.fill(angles, values, alpha=0.15)
+            values = [normalized[k] for k in all_labels] + [normalized[all_labels[0]]]
+
+            # Use dotted lines for baselines
+            is_baseline = any(x in label.lower() for x in ["random", "hunt", "mcts"])
+            linestyle = "dotted" if is_baseline else "solid"
+            alpha_fill = 0.08 if is_baseline else 0.15
+
+            ax.plot(angles, values, linewidth=2, label=label, linestyle=linestyle)
+            ax.fill(angles, values, alpha=alpha_fill)
 
         ax.set_title(title, size=14, pad=20)
-        ax.legend(loc='upper right', bbox_to_anchor=(1.25, 1.1))
+
+        # Move legend outside the plot area to the right
+        ax.legend(loc='upper right', bbox_to_anchor=(1.1, 0.5), fontsize=9, frameon=False)
+
         plt.tight_layout()
         plt.show()
 

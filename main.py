@@ -120,7 +120,8 @@ def get_human_ship_placements_via_gui(gui, ship_sizes):
                 col = (pos[0] - board_left) // gui.SQUARE_SIZE
                 row = (pos[1] - board_top) // gui.SQUARE_SIZE
 
-                if is_valid_ship_placement(placements, col, row, current_ship_size, current_orientation, gui.BOARD_SIZE, ship_sizes):
+                if is_valid_ship_placement(placements, col, row, current_ship_size, current_orientation, gui.BOARD_SIZE,
+                                           ship_sizes):
                     placements.append((col, row, current_orientation))
                     current_ship_index += 1
                 else:
@@ -131,7 +132,6 @@ def get_human_ship_placements_via_gui(gui, ship_sizes):
     # Switch to game layout after placement is complete
     gui.set_mode("game")
     return placements
-
 
 
 def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file_path, chromosome=None):
@@ -265,11 +265,11 @@ def initialize_game(
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
     initialize_game(
-        board_size=7,
-        sizes=[4, 3, 3, 2],
+        board_size=5,
+        sizes=[3, 3, 2],
         human_player=True,
-        file_path_1="models/7/erl/model_gen100.pth",
-        file_path_2="models/7/erl/model_gen100.pth",
+        file_path_1="models/5/rl/model_gen0.pth",
+        file_path_2="models/5/rl/model_gen2000.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",
