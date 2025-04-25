@@ -28,7 +28,7 @@ class ConvolutionalNeuralNetwork(nn.Module):
         self.input_shape = input_shape
         self.output_shape = output_shape
         self.layer_evals = layer_evals
-        self.device = "cpu"
+        self.device = "mps" if torch.backends.mps.is_available() else "cpu"
         self.to(self.device)
 
     @staticmethod

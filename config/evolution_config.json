@@ -11,6 +11,6 @@
         "size": 1
     },
     "evolution": {
-        "num_generations": 20
+        "num_generations": 100
     }
 } 

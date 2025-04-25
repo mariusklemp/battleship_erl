@@ -1,9 +1,9 @@
 {
     "run_inner_loop": true,
-    "board_size": 5,
-    "ship_sizes": [3, 3, 2],
+    "board_size": 7,
+    "ship_sizes": [4, 3, 3, 2],
     "mcts": {
-        "time_limit": 1.2,
+        "time_limit": 2,
         "exploration_constant": 1.41
     },
     "training": {
@@ -12,18 +12,18 @@
         "batch_size": 64,
         "save_interval": 10,
         "learning_rate": 0.0001,
-        "epochs": 1
+        "epochs": 1000
     },
     "replay_buffer": {
         "max_size": 10000,
         "load_from_file": false,
         "save_to_file": false,
-        "file_path": "rbuf/rbuf_5.pkl"
+        "file_path": "rbuf/rbuf_7.pkl"
     },
     "model": {
-        "save": true,
+        "save": false,
         "train": true,
-        "save_path": "models/5"
+        "save_path": "models/7"
     },
     "visualization": {
         "enable_graphics": true

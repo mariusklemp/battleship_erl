@@ -85,7 +85,7 @@ class NNSearch(nn.Module, Strategy):
 
         # Apply softmax to convert logits to a probability distribution
         probabilities = nn.functional.softmax(output, dim=-1).squeeze(0)
-        probabilities_np = probabilities.detach().numpy()
+        probabilities_np = probabilities.detach().cpu().numpy()
 
         # visualize.plot_action_distribution(probabilities_np, self.search_agent.board_size)
 
