@@ -197,14 +197,33 @@ class OuterLoopManager:
 
             # --- Step 0: Save models ---
             if self.mcts_config["model"]["save"] and gen == 0:
-                model_dir = self.mcts_config["model"]["save_path"]
+                model_dir_search = f"models/{str(self.board_size)}"
+                model_dir_placement = f"placement_population/{str(self.board_size)}"
                 experiment = self.evolution_config["experiment"]
+
                 if self.run_neat and self.run_inner_loop:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen - 1, experiment=experiment)
+                    self.save_best_neat_agent(model_dir=model_dir_search, subdir="erl", gen=gen - 1,
+                                              experiment=experiment)
+                    self.save_placement_population(
+                        chromosomes=self.placement_ga.population_chromosomes,
+                        model_dir=model_dir_placement,
+                        subdir="erl",
+                        gen=gen - 1,
+                        experiment=experiment,
+                    )
+
                 elif self.run_neat:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen - 1, experiment=experiment)
+                    self.save_best_neat_agent(model_dir=model_dir_search, subdir="neat", gen=gen - 1,
+                                              experiment=experiment)
+                    self.save_placement_population(
+                        chromosomes=self.placement_ga.population_chromosomes,
+                        model_dir=model_dir_placement,
+                        subdir="neat",
+                        gen=gen - 1,
+                        experiment=experiment,
+                    )
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir}/rl/{experiment}/model_gen{gen}.pth"
+                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
 
             # --- Step 2: Baseline Evaluation ---
@@ -287,15 +306,30 @@ class OuterLoopManager:
 
             # --- Step 6: Save models ---
             if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
-                model_dir = self.mcts_config["model"]["save_path"]
+                model_dir_search = f"models/{str(self.board_size)}"
+                model_dir_placement = f"placement_population/{str(self.board_size)}"
                 experiment = self.evolution_config["experiment"]
 
                 if self.run_neat and self.run_inner_loop:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen, experiment=experiment)
+                    self.save_best_neat_agent(model_dir=model_dir_search, subdir="erl", gen=gen, experiment=experiment)
+                    self.save_placement_population(
+                        chromosomes=self.placement_ga.population_chromosomes,
+                        model_dir=model_dir_placement,
+                        subdir="erl",
+                        gen=gen,
+                        experiment=experiment,
+                    )
                 elif self.run_neat:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen, experiment=experiment)
+                    self.save_best_neat_agent(model_dir=model_dir_search, subdir="neat", gen=gen, experiment=experiment)
+                    self.save_placement_population(
+                        chromosomes=self.placement_ga.population_chromosomes,
+                        model_dir=model_dir_placement,
+                        subdir="neat",
+                        gen=gen,
+                        experiment=experiment,
+                    )
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir}/rl/{experiment}/model_gen{gen + 1}.pth"
+                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
 
         # --- Step 7: Plot ---
@@ -558,6 +592,18 @@ class OuterLoopManager:
 
         if best_agent:
             best_agent.strategy.net.save_model_genome(model_path)
+
+    def save_placement_population(self, chromosomes, model_dir, subdir, gen, experiment):
+        """
+        Saves the list of placement chromosomes to a JSON file.
+        Each chromosome is a list of ship placements.
+        """
+        file_path = f"{model_dir}/{subdir}/{experiment}/population_gen{gen + 1}.json"
+
+        with open(file_path, "w") as f:
+            json.dump(chromosomes, f, indent=2)
+
+        print(f"✅ Saved placement chromosomes to {file_path}")
 
 
 # ---------------------------------------------------------------------

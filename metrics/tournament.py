@@ -31,6 +31,8 @@ class Tournament:
             num_players,
             num_variations,
             game_manager,
+            run_search=True,
+            run_placement=True,
     ):
         self.board_size = board_size
         self.num_games = num_games
@@ -40,12 +42,11 @@ class Tournament:
         self.search_strategies = search_strategies
         self.game_manager = game_manager
         self.num_variations = num_variations
+        self.run_search = run_search
+        self.run_placement = run_placement
 
-        self.players = {}
-        self.placement_agents = {
-            strat: PlacementAgent(board_size, ship_sizes, strategy=strat)
-            for strat in placing_strategies
-        }
+        self.search_players = {}
+        self.placement_populations = {}
 
         with open("../config/evolution_config.json", "r") as f:
             evolution_config = json.load(f)
@@ -108,13 +109,34 @@ class Tournament:
         return search_agent
 
     def init_players(self, experiment, variation):
-        self.players.clear()
+        self.search_players.clear()
 
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai",
                                    "config_simple.json")
         for i in range(self.num_players + 1):
-            agent = self.set_nn_agent(i, config_path, f"models/5/{experiment}/{variation}")
-            self.players[agent.name] = agent
+            agent = self.set_nn_agent(i, config_path, f"models/{self.board_size}/{experiment}/{variation}")
+            self.search_players[agent.name] = agent
+
+    def init_placement_agents(self, experiment, variation):
+        for i in range(self.num_players + 1):
+            model_number = i * (self.num_games // self.num_players)
+            file_path = f"../placement_population/{self.board_size}/{experiment}/{variation}/population_gen{model_number}.json"
+
+            with open(file_path, "r") as f:
+                chromosomes = json.load(f)
+
+            self.placement_populations[model_number] = {}
+            # Loop thorugh the chromosomes and create placement agents
+            for i, chromosome in enumerate(chromosomes):
+                # Create a new placement agent with the genome
+                print(chromosome)
+                placement_agent = PlacementAgent(
+                    board_size=self.board_size,
+                    ship_sizes=self.ship_sizes,
+                    chromosome=chromosome,
+                    strategy="chromosome",
+                )
+                self.placement_populations[model_number][f"placing_agent{i}"] = placement_agent
 
     def run(self):
         evaluator = Evaluator(
@@ -131,32 +153,46 @@ class Tournament:
 
         for experiment in experiments_evals.keys():
             print(f"\n=== {experiment.upper()} ===")
-            for i in range(1, self.num_variations+1):
+            for i in range(1, self.num_variations + 1):
                 print(f"\n=== Variation {i} ===")
-                self.init_players(experiment=experiment, variation=i)
-                for name, search_agent in tqdm(self.players.items()):
-                    evaluator.evaluate_search_agents(
-                        search_agents=[search_agent],
-                        gen=name,
-                    )
-                # Append the results
-                results = evaluator.search_evaluator.get_results()
-                experiments_evals[experiment].append(results)
-                evaluator.search_evaluator.reset()
 
-        # 1) Aggregate each experiment’s runs
-        all_stats = {
-            exp: evaluator.search_evaluator.aggregate_runs(runs)
-            for exp, runs in experiments_evals.items()
-        }
+                if self.run_search:
+                    self.init_players(experiment=experiment, variation=i)
+                    for gen, search_agent in tqdm(self.search_players.items()):
+                        evaluator.evaluate_search_agents(
+                            search_agents=[search_agent],
+                            gen=gen,
+                        )
 
-        # 2) Plot each experiment’s avg results
-        for exp, stats in all_stats.items():
-            print(f"\n=== {exp.upper()} ===")
-            evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
+                    results = evaluator.search_evaluator.get_results()
+                    experiments_evals[experiment].append(results)
+                    evaluator.search_evaluator.reset()
 
-        # Combined‐plot
-        evaluator.search_evaluator.plot_combined_all(all_stats)
+                if self.run_placement and experiment in {"neat", "erl"}:
+                    self.init_placement_agents(experiment=experiment, variation=i)
+                    for gen, placement_agents in tqdm(self.placement_populations.items()):
+                        evaluator.evaluate_placement_agents(
+                            placement_agents=list(placement_agents.values()),
+                            gen=gen,
+                        )
+
+                    evaluator.placement_evaluator.plot_metrics()
+
+        # If running search tournament → aggregate & plot
+        if self.run_search:
+            # 1) Aggregate each experiment’s runs
+            all_stats = {
+                exp: evaluator.search_evaluator.aggregate_runs(runs)
+                for exp, runs in experiments_evals.items()
+            }
+
+            # 2) Plot each experiment’s avg results
+            for exp, stats in all_stats.items():
+                print(f"\n=== {exp.upper()} ===")
+                evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
+
+            # Combined‐plot
+            evaluator.search_evaluator.plot_combined_all(all_stats)
 
     def skill_final_agent(self, baseline=True):
         """
@@ -211,6 +247,8 @@ def main():
         num_players=10,
         num_variations=2,
         game_manager=game_manager,
+        run_search=False,
+        run_placement=True,
     )
     # tournament.skill_final_agent(baseline=True)
     tournament.run()
