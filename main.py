@@ -268,7 +268,7 @@ if __name__ == "__main__":
         board_size=5,
         sizes=[3, 3, 2],
         human_player=True,
-        file_path_1="models/5/rl/model_gen0.pth",
+        file_path_1="models/5/rl/1/model_gen0.pth",
         file_path_2="models/5/rl/model_gen2000.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",

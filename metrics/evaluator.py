@@ -1,10 +1,10 @@
+import copy
 import re
 from abc import abstractmethod, ABC
 
 import numpy as np
 import matplotlib.pyplot as plt
 
-import visualize
 from game_logic.search_agent import SearchAgent
 from game_logic.placement_agent import PlacementAgent
 
@@ -60,6 +60,29 @@ class SearchEvaluator(BaseEvaluator):
             self.moves_between_hits[strategy] = {}
             self.start_entropy[strategy] = {}
             self.end_entropy[strategy] = {}
+
+    def get_results(self):
+        """
+        Return a deep copy of every per‐baseline, per‐generation metric,
+        plus the list of generations in order.
+        """
+        return {
+            "result": copy.deepcopy(self.result),
+            "hit_accuracy": copy.deepcopy(self.hit_accuracy),
+            "sink_efficiency": copy.deepcopy(self.sink_efficiency),
+            "moves_between_hits": copy.deepcopy(self.moves_between_hits),
+            "start_entropy": copy.deepcopy(self.start_entropy),
+            "end_entropy": copy.deepcopy(self.end_entropy),
+            "generations": list(self.generations),
+        }
+
+    def reset(self):
+        self.generations.clear()
+        for attr in ("result","hit_accuracy","sink_efficiency",
+                     "moves_between_hits","start_entropy","end_entropy"):
+            d = getattr(self, attr)
+            for bs in d:
+                d[bs].clear()
 
     def evaluate(self, search_agents, generation, baseline_name):
         """
@@ -347,6 +370,167 @@ class SearchEvaluator(BaseEvaluator):
             plt.tight_layout()
             plt.show()
 
+    def _collapse_baselines(self, metric_dict):
+        """
+        metric_dict: { baseline_name: { gen: value, … }, … }
+        → returns { gen: [values across baselines], … }
+        """
+        tmp = {}
+        for bs, gen_vals in metric_dict.items():
+            for g, v in gen_vals.items():
+                tmp.setdefault(g, []).append(v)
+        return tmp
+
+    def _collapse_variations(self, list_of_gen2vals):
+        """
+        list_of_gen2vals: [ {gen: val, …}, … ] for each variation
+        → sorted_gens, mean_array, std_array
+        """
+        all_gens = sorted({g for d in list_of_gen2vals for g in d}, key=self.gen_key)
+        A = np.array([[d.get(g, 0.0) for g in all_gens]
+                      for d in list_of_gen2vals])
+        return all_gens, A.mean(axis=0), A.std(axis=0)
+
+    def aggregate_runs(self, runs):
+        agg = {}
+        for key in ('start_entropy', 'end_entropy'):
+            # step 1: for each run, collapse baselines → gen→mean_across_baselines
+            per_run = []
+            for r in runs:
+                bs_collapsed = self._collapse_baselines(r[key])
+                # compute mean across baselines for each gen
+                per_run.append({g: np.mean(vs) for g, vs in bs_collapsed.items()})
+            # step 2: collapse across variations
+            gens, means, stds = self._collapse_variations(per_run)
+            agg[key] = {'gens': gens, 'mean': means, 'std': stds}
+
+        # For these preserve per-baseline curves:
+        for key in ('sink_efficiency', 'moves_between_hits',
+                    'result', 'hit_accuracy'):
+            agg[key] = {}
+            # runs is list of result-dicts; each r[key] is baseline→{gen→value}
+            for bs in runs[0][key].keys():
+                # extract for this baseline across all runs
+                per_run = [r[key][bs] for r in runs]
+                gens, mean, std = self._collapse_variations(per_run)
+                agg[key][bs] = {"gens":gens, "mean":mean, "std":std}
+        return agg
+
+    def plot_metrics_from_agg(self, stats, experiment: str):
+        """
+        stats: output of aggregate_runs()
+        experiment: name of the experiment (e.g. "neat", "rl") to include in titles
+        Plots the same six figures as plot_metrics(), but using precomputed mean±std.
+        """
+
+        # 1) Distribution Entropy
+        g, m1, s1 = stats['start_entropy'].values()
+        _, m2, s2 = stats['end_entropy'].values()
+        x = np.arange(len(g))
+        plt.figure(figsize=(12, 6))
+        plt.errorbar(x, m1, yerr=s1, fmt='o-', capsize=4,
+                     label="Start Entropy", color="lightblue", linewidth=2)
+        plt.errorbar(x, m2, yerr=s2, fmt='o-', capsize=4,
+                     label="End Entropy", color="steelblue", linewidth=2)
+        plt.xticks(x, [str(gen) for gen in g], rotation=45)
+        plt.title(f"{experiment} — Distribution Entropy (mean ± std)")
+        plt.xlabel("Generation")
+        plt.ylabel("Entropy")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+        # === The four per‐baseline metrics ===
+        metrics = [
+            ("Move Count",         "result"),
+            ("Hit Accuracy",       "hit_accuracy"),
+            ("Moves Between Hits", "moves_between_hits"),
+            ("Sink Efficiency",    "sink_efficiency"),
+        ]
+
+        for title, key in metrics:
+            plt.figure(figsize=(10,6))
+            for baseline, data in stats[key].items():
+                gens = data['gens']
+                means = data['mean']
+                stds  = data['std']
+                x = np.arange(len(gens))
+
+                plt.errorbar(
+                    x, means, yerr=stds,
+                    fmt='o-', capsize=4, linewidth=2,
+                    label=baseline
+                )
+
+            plt.xticks(x, [str(g) for g in gens], rotation=45)
+            plt.title(f"{experiment} — {title} (mean ± std over variations)")
+            plt.xlabel("Generation")
+            plt.ylabel(title)
+            plt.legend(title="Baseline")
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+    def plot_combined_all(self, all_stats):
+        """
+        Overlay multiple experiments’ aggregated stats in one plot per metric.
+        all_stats: {
+          experiment_label: {
+            metric_key: {'gens':…, 'mean':…, 'std':…}
+            OR metric_key: { baseline: {'gens':…, 'mean':…, 'std':…}, … }
+          },
+          …
+        }
+        """
+        title_map = {
+            'result': 'Move Count',
+            'hit_accuracy': 'Hit Accuracy',
+            'sink_efficiency': 'Sink Efficiency',
+            'moves_between_hits':'Moves Between Hits',
+            'start_entropy': 'Start Entropy',
+            'end_entropy':   'End Entropy',
+        }
+
+        metric_keys = list(title_map.keys())
+
+        for key in metric_keys:
+            plt.figure(figsize=(10, 6))
+
+            for exp_label, stats in all_stats.items():
+                sk = stats[key]
+                # case 1: already collapsed → single dict with gens/mean/std
+                if 'gens' in sk:
+                    gens, means, stds = sk['gens'], sk['mean'], sk['std']
+
+                # case 2: per-baseline dict → collapse across baselines here
+                else:
+                    # get gens from any one baseline
+                    first_bs = next(iter(sk))
+                    gens = sk[first_bs]['gens']
+                    # stack all baseline-means into array (B × G)
+                    all_means = np.vstack([sk[bs]['mean'] for bs in sk])
+                    means = all_means.mean(axis=0)
+                    stds  = all_means.std(axis=0)
+
+                x = np.arange(len(gens))
+                plt.errorbar(
+                    x, means, yerr=stds,
+                    fmt='o-', capsize=4,
+                    linewidth=2,
+                    label=exp_label
+                )
+
+            plt.xticks(x, [str(g) for g in gens], rotation=45)
+            plt.title(f"{title_map[key]} Across Experiments (mean ± std)")
+            plt.xlabel("Generation")
+            plt.ylabel(title_map[key])
+            plt.legend(title="Experiment")
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+
     def gen_key(self, x):
         """
         Extract generation number as int from keys like:
@@ -610,3 +794,4 @@ class Evaluator:
 
     def plot_metrics_placement(self):
         self.placement_evaluator.plot_metrics()
+

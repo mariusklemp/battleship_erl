@@ -29,6 +29,7 @@ class Tournament:
             placing_strategies,
             search_strategies,
             num_players,
+            num_variations,
             game_manager,
     ):
         self.board_size = board_size
@@ -38,6 +39,7 @@ class Tournament:
         self.placing_strategies = placing_strategies
         self.search_strategies = search_strategies
         self.game_manager = game_manager
+        self.num_variations = num_variations
 
         self.players = {}
         self.placement_agents = {
@@ -69,12 +71,10 @@ class Tournament:
         assert os.path.exists(path), f"Checkpoint not found: {path}"
 
         # Decide if this is a NEAT checkpoint by peeking inside
-        print(f"Loading checkpoint from {path}")
         ckpt = torch.load(path, map_location="cpu")
         has_genome = isinstance(ckpt, dict) and 'genome' in ckpt
 
         if has_genome:
-            print("IM HEEERE")
             # --- NEAT/ERL checkpoint ---
             genome = ckpt['genome']
             net = ANET(
@@ -107,11 +107,13 @@ class Tournament:
 
         return search_agent
 
-    def init_players(self, time_limit):
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config_simple.json")
-        print("config_path", config_path)
+    def init_players(self, experiment, variation):
+        self.players.clear()
+
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai",
+                                   "config_simple.json")
         for i in range(self.num_players + 1):
-            agent = self.set_nn_agent(i, config_path, "models/5/rl")
+            agent = self.set_nn_agent(i, config_path, f"models/5/{experiment}/{variation}")
             self.players[agent.name] = agent
 
     def run(self):
@@ -121,14 +123,40 @@ class Tournament:
             num_evaluation_games=100,
             game_manager=self.game_manager,
         )
+        experiments_evals = {
+            "rl": [],
+            "neat": [],
+            "erl": [],
+        }
 
-        for name, search_agent in tqdm(self.players.items()):
-            evaluator.evaluate_search_agents(
-                search_agents=[search_agent],
-                gen=name,
-            )
+        for experiment in experiments_evals.keys():
+            print(f"\n=== {experiment.upper()} ===")
+            for i in range(1, self.num_variations+1):
+                print(f"\n=== Variation {i} ===")
+                self.init_players(experiment=experiment, variation=i)
+                for name, search_agent in tqdm(self.players.items()):
+                    evaluator.evaluate_search_agents(
+                        search_agents=[search_agent],
+                        gen=name,
+                    )
+                # Append the results
+                results = evaluator.search_evaluator.get_results()
+                experiments_evals[experiment].append(results)
+                evaluator.search_evaluator.reset()
 
-        evaluator.plot_metrics_search()
+        # 1) Aggregate each experiment’s runs
+        all_stats = {
+            exp: evaluator.search_evaluator.aggregate_runs(runs)
+            for exp, runs in experiments_evals.items()
+        }
+
+        # 2) Plot each experiment’s avg results
+        for exp, stats in all_stats.items():
+            print(f"\n=== {exp.upper()} ===")
+            evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
+
+        # Combined‐plot
+        evaluator.search_evaluator.plot_combined_all(all_stats)
 
     def skill_final_agent(self, baseline=True):
         """
@@ -176,15 +204,15 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=20,
+        num_games=100,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=2,
+        num_players=10,
+        num_variations=2,
         game_manager=game_manager,
     )
-    tournament.init_players(time_limit=config["mcts"]["time_limit"])
-    #tournament.skill_final_agent(baseline=True)
+    # tournament.skill_final_agent(baseline=True)
     tournament.run()
 
 

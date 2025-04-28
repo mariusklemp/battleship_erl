@@ -198,13 +198,13 @@ class OuterLoopManager:
             # --- Step 0: Save models ---
             if self.mcts_config["model"]["save"] and gen == 0:
                 model_dir = self.mcts_config["model"]["save_path"]
-
+                experiment = self.evolution_config["experiment"]
                 if self.run_neat and self.run_inner_loop:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen - 1)
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen - 1, experiment=experiment)
                 elif self.run_neat:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen - 1)
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen - 1, experiment=experiment)
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir}/rl/model_gen{gen}.pth"
+                    model_path = f"{model_dir}/rl/{experiment}/model_gen{gen}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
 
             # --- Step 2: Baseline Evaluation ---
@@ -288,13 +288,14 @@ class OuterLoopManager:
             # --- Step 6: Save models ---
             if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
                 model_dir = self.mcts_config["model"]["save_path"]
+                experiment = self.evolution_config["experiment"]
 
                 if self.run_neat and self.run_inner_loop:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen)
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="erl", gen=gen, experiment=experiment)
                 elif self.run_neat:
-                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen)
+                    self.save_best_neat_agent(model_dir=model_dir, subdir="neat", gen=gen, experiment=experiment)
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir}/rl/model_gen{gen + 1}.pth"
+                    model_path = f"{model_dir}/rl/{experiment}/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
 
         # --- Step 7: Plot ---
@@ -341,7 +342,6 @@ class OuterLoopManager:
     def plot_search_agent_metrics(self, search_agent_metrics):
         import matplotlib.pyplot as plt
         import numpy as np
-        from collections import defaultdict
 
         # Setup figure with 2 subplots (instead of 4)
         fig, axs = plt.subplots(1, 2, figsize=(15, 6))
@@ -542,8 +542,8 @@ class OuterLoopManager:
                 # Skip trend line if there's an error (e.g., singular matrix)
                 pass
 
-    def save_best_neat_agent(self, model_dir, subdir, gen):
-        model_path = f"{model_dir}/{subdir}/model_gen{gen + 1}.pth"
+    def save_best_neat_agent(self, model_dir, subdir, gen, experiment):
+        model_path = f"{model_dir}/{subdir}/{experiment}/model_gen{gen + 1}.pth"
         best_fitness = float("-inf")
         best_agent = None
         if gen == -1:
