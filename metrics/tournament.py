@@ -89,6 +89,7 @@ class Tournament:
             net.eval()
         else:
             # --- Plain state_dict checkpoint ---
+            print("Loading plain state_dict checkpoint")
             net = ANET(
                 board_size=self.board_size,
                 activation="relu",
@@ -139,7 +140,7 @@ class Tournament:
                 )
                 self.placement_populations[model_number][f"placing_agent{i}"] = placement_agent
 
-    def run(self):
+    def skill_progression(self):
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
@@ -150,6 +151,9 @@ class Tournament:
             "rl": [],
             "neat": [],
             "erl": [],
+        }
+        experiment_placement = {
+            "erl": []
         }
 
         for experiment in experiments_evals.keys():
@@ -169,7 +173,7 @@ class Tournament:
                     experiments_evals[experiment].append(results)
                     evaluator.search_evaluator.reset()
 
-                if self.run_placement and experiment in {"neat", "erl"}:
+                if self.run_placement and experiment in {"erl"}:
                     self.init_placement_agents(experiment=experiment, variation=i)
                     for gen, placement_agents in tqdm(self.placement_populations.items()):
                         evaluator.evaluate_placement_agents(
@@ -177,7 +181,9 @@ class Tournament:
                             gen=gen,
                         )
 
-                    evaluator.placement_evaluator.plot_metrics()
+                    results = evaluator.placement_evaluator.get_results()
+                    experiment_placement[experiment].append(results)
+                    evaluator.placement_evaluator.reset()
 
         # If running search tournament → aggregate & plot
         if self.run_search:
@@ -195,16 +201,31 @@ class Tournament:
             # Combined‐plot
             evaluator.search_evaluator.plot_combined_all(all_stats)
 
+        if self.run_placement:
+            # 1) aggregate
+            all_place_stats = {
+                exp: evaluator.placement_evaluator.aggregate_runs(runs)
+                for exp, runs in experiment_placement.items()
+            }
+            # 2) per‐experiment avg plots
+            for exp, stats in all_place_stats.items():
+                print(f"\n=== PLACEMENT {exp.upper()} ===")
+                evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
+
     def skill_final_agent(self, baseline=True):
         """
-        Evaluate one specific trained agent (best) and the worst one,
-        compare them against baselines, and plot as radar chart.
+        Compare average initial vs. final RL agents (across variations) + baselines
+        in a single radar chart, including standard deviations.
         """
-        subdir = "models/5/rl"
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai", "config.json")
-        agent_best = self.set_nn_agent(200, config_path, subdir)
-        agent_worst = self.set_nn_agent(0, config_path, subdir)
+        import numpy as np
+        from game_logic.search_agent import SearchAgent
+        from ai.mcts import MCTS
 
+        # Path to your NN config
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "ai", "config_simple.json"
+        )
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
@@ -212,25 +233,57 @@ class Tournament:
             game_manager=self.game_manager,
         )
 
-        all_metrics = [
-            ("Best Agent", evaluator.search_evaluator.evaluate_final_agent(agent_best, num_games=100)),
-            ("Worst Agent", evaluator.search_evaluator.evaluate_final_agent(agent_worst, num_games=100)),
+        # 1) Gather per-variation metrics
+        init_metrics = []
+        fin_metrics  = []
+        experiment = "rl"
+        print(f"\n=== {experiment.upper()} ===")
+        for var in range(1, self.num_variations + 1):
+            print(f"\n=== Variation {var} ===")
+            subdir = f"models/{self.board_size}/{experiment}/{var}"
+            agent_init  = self.set_nn_agent(0,   config_path, subdir)
+            agent_final = self.set_nn_agent(10,  config_path, subdir)  # adjust final-gen index
+
+            init_metrics.append( evaluator.search_evaluator.evaluate_final_agent(agent_init,  num_games=100) )
+            fin_metrics.append(  evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100) )
+
+        # 2) Compute mean & std across variations
+        def mean_and_std(list_of_dicts):
+            keys = list_of_dicts[0].keys()
+            mean_d, std_d = {}, {}
+            for k in keys:
+                vals = [d[k] for d in list_of_dicts]
+                mean_d[k] = float(np.mean(vals))
+                std_d[k]  = float(np.std(vals))
+            return mean_d, std_d
+
+        avg_init, std_init = mean_and_std(init_metrics)
+        avg_fin,  std_fin  = mean_and_std(fin_metrics)
+
+        # 3) Build labeled_metrics triples
+        labeled_metrics = [
+            ("Avg Initial RL Agent", avg_init, std_init),
+            ("Avg Final   RL Agent",  avg_fin,  std_fin),
         ]
 
+        # 4) Append baselines (zero-std)
         if baseline:
-            for strategy in ["mcts", "random", "hunt_down"]:
-                baseline_agent = SearchAgent(
-                    board_size=self.board_size,
-                    strategy=strategy,
-                    name=strategy,
-                )
-                if strategy == "mcts":
-                    mcts = MCTS(self.game_manager, time_limit=1.2)
-                    baseline_agent.strategy.set_mcts(mcts)
-                metrics = evaluator.search_evaluator.evaluate_final_agent(baseline_agent, num_games=2)
-                all_metrics.append((f"{strategy.capitalize()} Agent", metrics))
+            for strat in ("mcts", "random", "hunt_down"):
+                print(f"\n=== {strat.upper()} ===")
+                base = SearchAgent(board_size=self.board_size, strategy=strat, name=strat)
+                if strat == "mcts":
+                    m = MCTS(self.game_manager, time_limit=1.2)
+                    base.strategy.set_mcts(m)
+                bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=1)
+                zero_std = {k: 0.0 for k in bm}
+                labeled_metrics.append((f"{strat.capitalize()} Agent", bm, zero_std))
 
-        evaluator.search_evaluator.plot_final_skill_radar_chart(all_metrics)
+        # 5) Plot
+        evaluator.search_evaluator.plot_final_skill_radar_chart(
+            labeled_metrics,
+            title="Skill of Final Iteration (avg ± std over variations)"
+        )
+
 
 
 def main():
@@ -251,8 +304,8 @@ def main():
         run_search=False,
         run_placement=True,
     )
-    # tournament.skill_final_agent(baseline=True)
-    tournament.run()
+    tournament.skill_final_agent(baseline=True)
+    # tournament.skill_progression()
 
 
 if __name__ == "__main__":
