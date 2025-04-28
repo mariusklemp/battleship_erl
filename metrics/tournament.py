@@ -127,9 +127,10 @@ class Tournament:
 
             self.placement_populations[model_number] = {}
             # Loop thorugh the chromosomes and create placement agents
+            print("Loading population for:", model_number)
             for i, chromosome in enumerate(chromosomes):
                 # Create a new placement agent with the genome
-                print(chromosome)
+                print(f"Ind. {i}: {chromosome}")
                 placement_agent = PlacementAgent(
                     board_size=self.board_size,
                     ship_sizes=self.ship_sizes,

@@ -107,12 +107,46 @@ class CompetitiveEvaluator:
 
         return search_agents, placement_agents
 
-    def plot(self):
-        """Plot the competitive evaluation metrics over generations."""
-        generations = range(len(self.placement_eval_history))
+    def create_board_from_chromosome(self, chromosome):
+        """
+            Create a board (numpy array) from a chromosome.
+            Cells covered by a ship are marked as 1.
+        """
+        board = [[0] * self.board_size for _ in range(self.board_size)]
+        for gene, size in zip(chromosome, self.ship_sizes):
+            self.mark_board(board, gene, size)
+        return np.array(board)
+
+    def mark_board(self, board, gene, size):
+        col, row, direction = gene
+        if direction == 0:  # horizontal
+            for j in range(size):
+                board[row][col + j] = 1
+        else:  # vertical
+            for j in range(size):
+                board[row + j][col] = 1
+
+    def plot(self, hof=None, hos=None):
+        """Plot the competitive evaluation metrics and optionally Hall of Fame and Hall of Shame boards."""
+        generations = np.arange(len(self.placement_eval_history))
+
+        # --- Combined Plot: Competitive Fitness Curves ---
         plt.figure(figsize=(10, 6))
-        plt.plot(generations, self.placement_eval_history, label="Placement Fitness")
-        plt.plot(generations, self.search_eval_history, label="Search Fitness")
+
+        # Placement Fitness
+        plt.plot(generations, self.placement_eval_history, marker="o", label="Placement Fitness", color="blue")
+        if len(self.placement_eval_history) > 1:
+            coeffs_place = np.polyfit(generations, self.placement_eval_history, 1)
+            poly_place = np.poly1d(coeffs_place)
+            plt.plot(generations, poly_place(generations), "b--", label="Placement Trend")
+
+        # Search Fitness
+        plt.plot(generations, self.search_eval_history, marker="o", label="Search Fitness", color="green")
+        if len(self.search_eval_history) > 1:
+            coeffs_search = np.polyfit(generations, self.search_eval_history, 1)
+            poly_search = np.poly1d(coeffs_search)
+            plt.plot(generations, poly_search(generations), "g--", label="Search Trend")
+
         plt.xlabel("Generation")
         plt.ylabel("Competitive Fitness")
         plt.title("Competitive Evaluation Metrics per Generation")
@@ -120,3 +154,66 @@ class CompetitiveEvaluator:
         plt.grid(alpha=0.3)
         plt.tight_layout()
         plt.show()
+
+        # --- NEW: Placement Fitness Only ---
+        plt.figure(figsize=(8, 5))
+        plt.plot(generations, self.placement_eval_history, marker="o", color="blue", label="Placement Fitness")
+        if len(self.placement_eval_history) > 1:
+            coeffs_place = np.polyfit(generations, self.placement_eval_history, 1)
+            poly_place = np.poly1d(coeffs_place)
+            plt.plot(generations, poly_place(generations), "b--", label="Placement Trend")
+        plt.xlabel("Generation")
+        plt.ylabel("Placement Fitness")
+        plt.title("Placement Fitness over Generations")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+        # --- NEW: Search Fitness Only ---
+        plt.figure(figsize=(8, 5))
+        plt.plot(generations, self.search_eval_history, marker="o", color="green", label="Search Fitness")
+        if len(self.search_eval_history) > 1:
+            coeffs_search = np.polyfit(generations, self.search_eval_history, 1)
+            poly_search = np.poly1d(coeffs_search)
+            plt.plot(generations, poly_search(generations), "g--", label="Search Trend")
+        plt.xlabel("Generation")
+        plt.ylabel("Search Fitness")
+        plt.title("Search Fitness over Generations")
+        plt.legend()
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.show()
+
+        # --- Plot Hall of Fame ---
+        if hof is not None and len(hof.items) > 0:
+            num_hof = len(hof.items)
+            fig, axs = plt.subplots(1, num_hof, figsize=(5 * num_hof, 5))
+            if num_hof == 1:
+                axs = [axs]
+            for i, chromosome in enumerate(hof.items):
+                board = self.create_board_from_chromosome(chromosome)
+                axs[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                axs[i].set_title(f"HOF {i}")
+                axs[i].set_xticks([])
+                axs[i].set_yticks([])
+            plt.suptitle("Hall of Fame Boards")
+            plt.tight_layout()
+            plt.show()
+
+        # --- Plot Hall of Shame ---
+        if hos is not None and len(hos.items) > 0:
+            num_hos = len(hos.items)
+            fig2, axs2 = plt.subplots(1, num_hos, figsize=(5 * num_hos, 5))
+            if num_hos == 1:
+                axs2 = [axs2]
+            for i, chromosome in enumerate(hos.items):
+                board = self.create_board_from_chromosome(chromosome)
+                axs2[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                axs2[i].set_title(f"HOS {i}")
+                axs2[i].set_xticks([])
+                axs2[i].set_yticks([])
+            plt.suptitle("Hall of Shame Boards")
+            plt.tight_layout()
+            plt.show()
+

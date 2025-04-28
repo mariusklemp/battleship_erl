@@ -78,8 +78,8 @@ class SearchEvaluator(BaseEvaluator):
 
     def reset(self):
         self.generations.clear()
-        for attr in ("result","hit_accuracy","sink_efficiency",
-                     "moves_between_hits","start_entropy","end_entropy"):
+        for attr in ("result", "hit_accuracy", "sink_efficiency",
+                     "moves_between_hits", "start_entropy", "end_entropy"):
             d = getattr(self, attr)
             for bs in d:
                 d[bs].clear()
@@ -413,7 +413,7 @@ class SearchEvaluator(BaseEvaluator):
                 # extract for this baseline across all runs
                 per_run = [r[key][bs] for r in runs]
                 gens, mean, std = self._collapse_variations(per_run)
-                agg[key][bs] = {"gens":gens, "mean":mean, "std":std}
+                agg[key][bs] = {"gens": gens, "mean": mean, "std": std}
         return agg
 
     def plot_metrics_from_agg(self, stats, experiment: str):
@@ -443,18 +443,18 @@ class SearchEvaluator(BaseEvaluator):
 
         # === The four per‐baseline metrics ===
         metrics = [
-            ("Move Count",         "result"),
-            ("Hit Accuracy",       "hit_accuracy"),
+            ("Move Count", "result"),
+            ("Hit Accuracy", "hit_accuracy"),
             ("Moves Between Hits", "moves_between_hits"),
-            ("Sink Efficiency",    "sink_efficiency"),
+            ("Sink Efficiency", "sink_efficiency"),
         ]
 
         for title, key in metrics:
-            plt.figure(figsize=(10,6))
+            plt.figure(figsize=(10, 6))
             for baseline, data in stats[key].items():
                 gens = data['gens']
                 means = data['mean']
-                stds  = data['std']
+                stds = data['std']
                 x = np.arange(len(gens))
 
                 plt.errorbar(
@@ -487,9 +487,9 @@ class SearchEvaluator(BaseEvaluator):
             'result': 'Move Count',
             'hit_accuracy': 'Hit Accuracy',
             'sink_efficiency': 'Sink Efficiency',
-            'moves_between_hits':'Moves Between Hits',
+            'moves_between_hits': 'Moves Between Hits',
             'start_entropy': 'Start Entropy',
-            'end_entropy':   'End Entropy',
+            'end_entropy': 'End Entropy',
         }
 
         metric_keys = list(title_map.keys())
@@ -511,7 +511,7 @@ class SearchEvaluator(BaseEvaluator):
                     # stack all baseline-means into array (B × G)
                     all_means = np.vstack([sk[bs]['mean'] for bs in sk])
                     means = all_means.mean(axis=0)
-                    stds  = all_means.std(axis=0)
+                    stds = all_means.std(axis=0)
 
                 x = np.arange(len(gens))
                 plt.errorbar(
@@ -529,7 +529,6 @@ class SearchEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
-
 
     def gen_key(self, x):
         """
@@ -653,11 +652,16 @@ class PlacementEvaluator(BaseEvaluator):
             self.sparsity[strategy] = {}
             self.hit_to_sunk_ratio[strategy] = {}
 
+        self.sparsity = {}
+        self.diversity = {}
+        self.orientation = {}
+        self.boards_over_generations = {}
+
     def evaluate(self, placement_agents, generation, baseline_name):
         """
-        Evaluate placement agents against baseline search agents.
-        Runs multiple games and averages the results for more reliable metrics.
-        """
+            Evaluate placement agents against baseline search agents.
+            Runs multiple games and averages the results for more reliable metrics.
+            """
         self.generations.append(generation)
 
         # Evaluate against baseline search multiple times
@@ -682,6 +686,30 @@ class PlacementEvaluator(BaseEvaluator):
         # Store the average performance
         self.move_count[baseline_name][generation] = avg_moves
         self.hit_to_sunk_ratio[baseline_name][generation] = avg_hit_ratio
+
+        # --- Compute structure-based metrics  ---
+        avg_board = self.record_generation_board(placement_agents)
+        self.boards_over_generations[generation] = avg_board
+
+        diversity = self.compute_average_pairwise_distance(placement_agents)
+        self.diversity[generation] = diversity
+
+        sparsities = [self.compute_individual_sparsity(agent.strategy.chromosome) for agent in placement_agents]
+        avg_sparsity = np.mean(sparsities)
+        self.sparsity[generation] = avg_sparsity
+
+        # Compute and record orientation percentage (vertical).
+        total_ships = 0
+        vertical_count = 0
+        for agent in placement_agents:
+            for gene in agent.strategy.chromosome:
+                total_ships += 1
+                if gene[2] == 1:  # 1 indicates vertical.
+                    vertical_count += 1
+        percent_vertical = (
+            (vertical_count / total_ships * 100) if total_ships > 0 else 0
+        )
+        self.orientation[generation] = percent_vertical
 
     def simulate_game(self, game_manager, placing_agent, search_agent):
         """
@@ -734,7 +762,9 @@ class PlacementEvaluator(BaseEvaluator):
         return total_moves, avg_moves_per_ship
 
     def plot_metrics(self):
-        """Plot placement agent metrics (one figure per metric, one line per baseline)."""
+        """Plot placement agent metrics over generations, including board heatmaps."""
+
+        # === 1. Move Count and Hit-to-Sunk Ratio (baseline dependent) ===
         metrics = {
             "Move Count": self.move_count,
             "Hit-to-Sunk Ratio": self.hit_to_sunk_ratio,
@@ -747,12 +777,12 @@ class PlacementEvaluator(BaseEvaluator):
                 metric_values = [values[gen] for gen in generations]
                 plt.plot(generations, metric_values, marker="o", label=baseline, linewidth=2)
 
-            # Only show a subset of x-ticks if there are too many
-            if len(generations) > 10:
-                step = max(1, len(generations) // 10)
-                plt.xticks(generations[::step], rotation=45)
-            else:
-                plt.xticks(generations, rotation=45)
+            if generations:
+                if len(generations) > 10:
+                    step = max(1, len(generations) // 10)
+                    plt.xticks(generations[::step], rotation=45)
+                else:
+                    plt.xticks(generations, rotation=45)
 
             plt.title(f"Placement Agent: {metric_name}")
             plt.xlabel("Generation")
@@ -761,6 +791,184 @@ class PlacementEvaluator(BaseEvaluator):
             plt.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
+
+        # === 2. Sparsity Over Generations (baseline independent) ===
+        if self.sparsity:
+            gens_sparse = sorted(self.sparsity.keys())
+            sparsity_vals = [self.sparsity[g] for g in gens_sparse]
+
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ax.plot(gens_sparse, sparsity_vals, marker="o")
+            ax.set_title("Average Sparsity Over Generations")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel("Sparsity (avg ship distance)")
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+        # === 3. Diversity Over Generations ===
+        if self.diversity:
+            gens_div = sorted(self.diversity.keys())
+            diversity_vals = [self.diversity[g] for g in gens_div]
+
+            fig2, ax2 = plt.subplots(figsize=(6, 5))
+            ax2.plot(gens_div, diversity_vals, marker="o")
+            ax2.set_title("Population Diversity Over Generations")
+            ax2.set_xlabel("Generation")
+            ax2.set_ylabel("Average Pairwise Chromosome Distance")
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+        # === 4. Orientation Percentage Over Generations ===
+        if self.orientation:
+            gens_orient = sorted(self.orientation.keys())
+            orientation_vals = [self.orientation[g] for g in gens_orient]
+
+            fig3, ax3 = plt.subplots(figsize=(6, 5))
+            ax3.plot(gens_orient, orientation_vals, marker="o", color="blue", label="Vertical Orientation %")
+            ax3.axhline(50, color="red", linestyle="--", label="50% Threshold")
+            ax3.fill_between(
+                gens_orient, orientation_vals, 50,
+                where=(np.array(orientation_vals) >= 50),
+                color="blue", alpha=0.2, interpolate=True, label="Vertical Superior"
+            )
+            ax3.fill_between(
+                gens_orient, orientation_vals, 50,
+                where=(np.array(orientation_vals) < 50),
+                color="green", alpha=0.2, interpolate=True, label="Horizontal Superior"
+            )
+            ax3.set_title("Ship Orientation Over Generations\n(Above 50%: Vertical; Below 50%: Horizontal)")
+            ax3.set_xlabel("Generation")
+            ax3.set_ylabel("Vertical Orientation (%)")
+            ax3.set_ylim(0, 100)
+            ax3.legend()
+            plt.grid(alpha=0.3)
+            plt.tight_layout()
+            plt.show()
+
+        # === 5. Board Occupancy Heatmaps ===
+        if self.boards_over_generations:
+            generations = sorted(self.boards_over_generations.keys())
+            boards = [self.boards_over_generations[g] for g in generations]
+
+            # Only show a subset if too many
+            if len(boards) > 20:
+                step = len(boards) // 20
+                boards = boards[::step]
+                generations = generations[::step]
+
+            num_boards = len(boards)
+            cols = 5
+            rows = (num_boards + cols - 1) // cols  # ceil
+
+            fig4, axs = plt.subplots(rows, cols, figsize=(15, 3 * rows))
+            axs = axs.flatten()
+
+            for idx, (board, gen) in enumerate(zip(boards, generations)):
+                im = axs[idx].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                axs[idx].set_title(f"Gen {gen}")
+                axs[idx].set_xticks([])
+                axs[idx].set_yticks([])
+
+            # Hide empty subplots
+            for j in range(idx + 1, len(axs)):
+                axs[j].axis("off")
+
+            fig4.suptitle("Ship Placement Frequency Over Generations")
+            plt.tight_layout()
+            plt.show()
+
+    # ------------------- Helper to Create Board from Chromosome -------------------
+    def create_board_from_chromosome(self, chromosome):
+        """
+        Create a board (numpy array) from a chromosome.
+        Cells covered by a ship are marked as 1.
+        """
+        board = [[0] * self.board_size for _ in range(self.board_size)]
+        for gene, size in zip(chromosome, self.ship_sizes):
+            self.mark_board(board, gene, size)
+        return np.array(board)
+
+    def mark_board(self, board, gene, size):
+        col, row, direction = gene
+        if direction == 0:  # horizontal
+            for j in range(size):
+                board[row][col + j] = 1
+        else:  # vertical
+            for j in range(size):
+                board[row + j][col] = 1
+
+    def record_generation_board(self, population):
+        """
+        For a given population, create an average board overlay.
+        Each cell's value is the fraction of individuals that cover that cell.
+        """
+        board_accum = np.zeros((self.board_size, self.board_size))
+        for agent in population:
+            board = self.create_board_from_chromosome(agent.strategy.chromosome)
+            board_accum += board
+        avg_board = board_accum / len(population)
+        return avg_board
+
+    # ------------------- Helper: Compute Individual Sparsity -------------------
+    def compute_individual_sparsity(self, chromosome):
+        """
+        Compute sparsity for an individual as the average pairwise Manhattan distance
+        between the centers of each ship (ignoring orientation).
+        """
+        positions = [(gene[0], gene[1]) for gene in chromosome]
+        if len(positions) < 2:
+            return 0
+        dists = []
+        for i in range(len(positions)):
+            for j in range(i + 1, len(positions)):
+                d = abs(positions[i][0] - positions[j][0]) + abs(
+                    positions[i][1] - positions[j][1]
+                )
+                dists.append(d)
+        return np.mean(dists)
+
+    # ------------------- Helper: Compute Orientation Percentages -------------------
+    def compute_orientation(self, population):
+        """
+        Compute overall vertical/horizontal percentages in the population.
+        Assumes gene[2]==1 indicates vertical and 0 indicates horizontal.
+        """
+        total_ships = 0
+        vertical_count = 0
+        for agent in population:
+            for gene in agent.strategy.chromosome:
+                total_ships += 1
+                if gene[2] == 1:
+                    vertical_count += 1
+        if total_ships == 0:
+            return 0, 0
+        percent_vertical = vertical_count / total_ships * 100
+        percent_horizontal = 100 - percent_vertical
+        return percent_vertical, percent_horizontal
+
+    # ------------------- Additional Helper for Diversity -------------------
+    def compute_average_pairwise_distance(self, population):
+        distances = []
+        for i in range(len(population)):
+            for j in range(i + 1, len(population)):
+                d = self.chromosome_distance(
+                    population[i].strategy.chromosome, population[j].strategy.chromosome
+                )
+                distances.append(d)
+        return np.mean(distances) if distances else 0
+
+    def chromosome_distance(self, chrom1, chrom2):
+        """
+        Compute a distance between two chromosomes.
+        """
+        distance = 0
+        for gene1, gene2 in zip(chrom1, chrom2):
+            distance += abs(gene1[0] - gene2[0]) + abs(gene1[1] - gene2[1])
+            if gene1[2] != gene2[2]:
+                distance += 1
+        return distance
 
 
 class Evaluator:
@@ -794,4 +1002,3 @@ class Evaluator:
 
     def plot_metrics_placement(self):
         self.placement_evaluator.plot_metrics()
-

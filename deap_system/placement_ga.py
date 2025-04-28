@@ -11,8 +11,6 @@ from game_logic.search_agent import SearchAgent
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from deap import base, creator
-import matplotlib.pyplot as plt
-import numpy as np
 import copy
 from deap import tools
 
@@ -104,66 +102,6 @@ class PlacementGeneticAlgorithm:
         )
         toolbox.register("select", tools.selTournament, tournsize=TOURNAMENT_SIZE)
 
-    # ------------------- Helper to Create Board from Chromosome -------------------
-    def create_board_from_chromosome(self, chromosome):
-        """
-        Create a board (numpy array) from a chromosome.
-        Cells covered by a ship are marked as 1.
-        """
-        board = [[0] * self.board_size for _ in range(self.board_size)]
-        for gene, size in zip(chromosome, self.ship_sizes):
-            mark_board(board, gene, size)
-        return np.array(board)
-
-    def record_generation_board(self, population):
-        """
-        For a given population, create an average board overlay.
-        Each cell's value is the fraction of individuals that cover that cell.
-        """
-        board_accum = np.zeros((self.board_size, self.board_size))
-        for agent in population:
-            board = self.create_board_from_chromosome(agent.strategy.chromosome)
-            board_accum += board
-        avg_board = board_accum / len(population)
-        return avg_board
-
-    # ------------------- Helper: Compute Individual Sparsity -------------------
-    def compute_individual_sparsity(self, chromosome):
-        """
-        Compute sparsity for an individual as the average pairwise Manhattan distance
-        between the centers of each ship (ignoring orientation).
-        """
-        positions = [(gene[0], gene[1]) for gene in chromosome]
-        if len(positions) < 2:
-            return 0
-        dists = []
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                d = abs(positions[i][0] - positions[j][0]) + abs(
-                    positions[i][1] - positions[j][1]
-                )
-                dists.append(d)
-        return np.mean(dists)
-
-    # ------------------- Helper: Compute Orientation Percentages -------------------
-    def compute_population_orientation(self, population):
-        """
-        Compute overall vertical/horizontal percentages in the population.
-        Assumes gene[2]==1 indicates vertical and 0 indicates horizontal.
-        """
-        total_ships = 0
-        vertical_count = 0
-        for agent in population:
-            for gene in agent.strategy.chromosome:
-                total_ships += 1
-                if gene[2] == 1:
-                    vertical_count += 1
-        if total_ships == 0:
-            return 0, 0
-        percent_vertical = vertical_count / total_ships * 100
-        percent_horizontal = 100 - percent_vertical
-        return percent_vertical, percent_horizontal
-
     # ------------------- Game Simulation and Evaluation -------------------
     def simulate_game(self, game_manager, placing_agent, search_agent):
         """Simulate a Battleship game and return the move count, hits, and misses."""
@@ -179,7 +117,6 @@ class PlacementGeneticAlgorithm:
         misses = sum(square == 1 for square in current_state.board[2])
 
         return current_state.move_count, hits, misses
-
 
     def evaluate_population(
             self, population_placing, game_manager, search_agents
@@ -211,170 +148,6 @@ class PlacementGeneticAlgorithm:
             self.population_chromosomes.append(copy.deepcopy(placing_agent.strategy.chromosome))
         self.pop_placing_agents = population
 
-    # ------------------- Additional Helper for Diversity -------------------
-    def compute_average_pairwise_distance(self, population):
-        distances = []
-        for i in range(len(population)):
-            for j in range(i + 1, len(population)):
-                d = self.chromosome_distance(
-                    population[i].strategy.chromosome, population[j].strategy.chromosome
-                )
-                distances.append(d)
-        return np.mean(distances) if distances else 0
-
-    def chromosome_distance(self, chrom1, chrom2):
-        """
-        Compute a distance between two chromosomes.
-        """
-        distance = 0
-        for gene1, gene2 in zip(chrom1, chrom2):
-            distance += abs(gene1[0] - gene2[0]) + abs(gene1[1] - gene2[1])
-            if gene1[2] != gene2[2]:
-                distance += 1
-        return distance
-
-    # ------------------- Plotting Metrics -------------------
-    def plot_metrics(self):
-        generations = np.arange(len(self.avg_moves_over_gens))
-
-        # Figure 1: Average Fitness with Regression Line.
-        fig, ax = plt.subplots(figsize=(6, 5))
-        ax.plot(
-            generations, self.avg_moves_over_gens, marker="o", label="Average Fitness"
-        )
-        if len(self.avg_moves_over_gens) > 1:
-            coeffs = np.polyfit(generations, self.avg_moves_over_gens, 1)
-            poly_eqn = np.poly1d(coeffs)
-            ax.plot(generations, poly_eqn(generations), "r--", label="Regression Line")
-        ax.set_title("Average Fitness per Generation (Placement)")
-        ax.set_xlabel("Generation")
-        ax.set_ylabel("Average Move Count")
-        ax.legend()
-        plt.show()
-
-        # Figure 2: Population Diversity Over Generations.
-        fig2, ax2 = plt.subplots(figsize=(6, 5))
-        gens_div = np.arange(len(self.diversity_over_gens))
-        ax2.plot(gens_div, self.diversity_over_gens, marker="o")
-        ax2.set_title("Population Diversity Over Generations (Placement)")
-        ax2.set_xlabel("Generation")
-        ax2.set_ylabel("Average Pairwise Distance")
-        plt.show()
-
-        # Figure 3: Board Occupancy Heatmap.
-        if len(self.boards_over_generations) > 20:
-            step = len(self.boards_over_generations) // 20
-            boards_to_plot = self.boards_over_generations[::step]
-            gen_labels = np.arange(0, len(self.boards_over_generations), step)
-        else:
-            boards_to_plot = self.boards_over_generations
-            gen_labels = np.arange(len(self.boards_over_generations))
-        num_boards = len(boards_to_plot)
-        cols = 5
-        rows = (num_boards // cols) + (num_boards % cols > 0)
-        fig3, axs = plt.subplots(rows, cols, figsize=(15, 3 * rows))
-        axs = axs.flatten()
-        for i, board in enumerate(boards_to_plot):
-            im = axs[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-            axs[i].set_title(f"Gen {gen_labels[i]}")
-            axs[i].set_xticks(range(self.board_size))
-            axs[i].set_yticks(range(self.board_size))
-        for j in range(i + 1, len(axs)):
-            axs[j].axis("off")
-        fig3.suptitle("Ship Placement Frequency per Generation")
-        plt.tight_layout()
-        plt.show()
-
-        # Figure 4: Hall of Fame Boards.
-        if len(self.hof.items) > 0:
-            num_hof = len(self.hof.items)
-            fig5, axs5 = plt.subplots(1, num_hof, figsize=(5 * num_hof, 5))
-            if num_hof == 1:
-                axs5 = [axs5]
-            for i, chromosome in enumerate(self.hof.items):
-                board = self.create_board_from_chromosome(chromosome)
-                axs5[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs5[i].set_title(f"HOF {i}")
-                axs5[i].set_xticks(range(self.board_size))
-                axs5[i].set_yticks(range(self.board_size))
-            plt.suptitle("Hall of Fame Boards")
-            plt.show()
-
-        # Figure 5: Worst Boards (Hall of Shame).
-        if len(self.hos.items) > 0:
-            num_worst = len(self.hos.items)
-            fig6, axs6 = plt.subplots(1, num_worst, figsize=(5 * num_worst, 5))
-            if num_worst == 1:
-                axs6 = [axs6]
-            for i, chromosome in enumerate(self.hos.items):
-                board = self.create_board_from_chromosome(chromosome)
-                axs6[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs6[i].set_title(f"HOS {i}")
-                axs6[i].set_xticks(range(self.board_size))
-                axs6[i].set_yticks(range(self.board_size))
-            plt.suptitle("Hall of Shame Boards")
-            plt.show()
-
-        # Figure 6: Sparsity Over Generations.
-        if len(self.sparsity_over_gens) > 0:
-            fig7, ax7 = plt.subplots(figsize=(6, 5))
-            gens_sparse = np.arange(len(self.sparsity_over_gens))
-            ax7.plot(gens_sparse, self.sparsity_over_gens, marker="o")
-            ax7.set_title("Average Board Sparsity per Generation (Placement)")
-            ax7.set_xlabel("Generation")
-            ax7.set_ylabel("Average Intra-individual Ship Distance")
-            plt.show()
-
-        # Figure 7: Orientation Percentages Over Generations.
-        if len(self.percent_vertical_over_gens) > 0:
-            fig8, ax8 = plt.subplots(figsize=(6, 5))
-            gens_orient = np.arange(len(self.percent_vertical_over_gens))
-            verticals = np.array(self.percent_vertical_over_gens)  # vertical % stored
-
-            # Plot the vertical percentage line.
-            ax8.plot(
-                gens_orient,
-                verticals,
-                marker="o",
-                color="blue",
-                label="Orientation (%)",
-            )
-
-            # Draw a horizontal threshold line at 50%.
-            ax8.axhline(50, color="red", linestyle="--", label="50% Threshold")
-
-            # Optionally, fill areas with different colors to visually indicate superiority.
-            # When vertical % is above 50, vertical placements are superior.
-            ax8.fill_between(
-                gens_orient,
-                verticals,
-                50,
-                where=(verticals >= 50),
-                color="blue",
-                alpha=0.2,
-                interpolate=True,
-                label="Vertical Superior",
-            )
-            # When vertical % is below 50, horizontal placements are superior.
-            ax8.fill_between(
-                gens_orient,
-                verticals,
-                50,
-                where=(verticals < 50),
-                color="green",
-                alpha=0.2,
-                interpolate=True,
-                label="Horizontal Superior",
-            )
-
-            ax8.set_title(
-                "Ship Orientation Over Generations\n(Above 50%: Vertical; Below 50%: Horizontal)"
-            )
-            ax8.set_xlabel("Generation")
-            ax8.set_ylabel("Orientation Percentage (%)")
-            ax8.set_ylim(0, 100)
-            ax8.legend()
-            plt.show()
 
     # ------------------- Evolutionary Process -------------------
     def trigger_evaluate_population(self, search_agents):
@@ -382,41 +155,6 @@ class PlacementGeneticAlgorithm:
         toolbox.evaluate_population(self.pop_placing_agents, self.game_manager, search_agents)
 
     def evolve(self):
-        # Record average fitness.
-        avg_moves = sum(
-            agent.fitness.values[0] for agent in self.pop_placing_agents
-        ) / len(self.pop_placing_agents)
-        self.avg_moves_over_gens.append(avg_moves)
-
-        # Record board overlay for this generation.
-        avg_board = self.record_generation_board(self.pop_placing_agents)
-        self.boards_over_generations.append(avg_board)
-
-        # Compute and record population diversity.
-        diversity = self.compute_average_pairwise_distance(self.pop_placing_agents)
-        self.diversity_over_gens.append(diversity)
-
-        # Compute and record sparsity.
-        sparsity_list = [
-            self.compute_individual_sparsity(agent.strategy.chromosome)
-            for agent in self.pop_placing_agents
-        ]
-        avg_sparsity = np.mean(sparsity_list)
-        self.sparsity_over_gens.append(avg_sparsity)
-
-        # Compute and record orientation percentage (vertical).
-        total_ships = 0
-        vertical_count = 0
-        for agent in self.pop_placing_agents:
-            for gene in agent.strategy.chromosome:
-                total_ships += 1
-                if gene[2] == 1:  # 1 indicates vertical.
-                    vertical_count += 1
-        percent_vertical = (
-            (vertical_count / total_ships * 100) if total_ships > 0 else 0
-        )
-        self.percent_vertical_over_gens.append(percent_vertical)
-
         # Update Hall of Fame and Hall of Shame.
         self.hof.update(self.pop_placing_agents)
         self.hos.update(self.pop_placing_agents)
@@ -579,4 +317,3 @@ if __name__ == "__main__":
         # Run evolution with metrics tracking
         environment.evolve()
 
-    environment.plot_metrics()

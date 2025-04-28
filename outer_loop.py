@@ -351,14 +351,16 @@ class OuterLoopManager:
         # Plot general metrics
         self.plot_timings(timings)
         self.evaluator.plot_metrics_search()
-        self.competitive_evaluator.plot()
+        if not self.run_neat:
+            self.competitive_evaluator.plot()
 
         # Plot NEAT-specific visualizations if NEAT was used
         if self.run_neat:
             self.neat_manager.visualize_results()
+
         if self.run_ga:
             self.evaluator.plot_metrics_placement()
-            self.placement_ga.plot_metrics()
+            self.competitive_evaluator.plot(hof=self.placement_ga.hof, hos=self.placement_ga.hos)
 
     def plot_timings(self, timings):
         import matplotlib.pyplot as plt
