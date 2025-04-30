@@ -23,7 +23,6 @@ def _crossover_by_key(config, genes1, genes2, fitness1, fitness2):
             chosen_gene = copy.deepcopy(gene1)
             # Use helper to combine weights and biases.
             if config.crossover_weights:
-                print("crossover_weights")
                 new_weights, new_biases = crossover_gene_parameters(gene1, gene2)
                 if new_weights is not None:
                     chosen_gene.weights = new_weights
@@ -106,52 +105,56 @@ def crossover_gene_parameters(gene1, gene2):
 def compute_gene_type_distance(self_genes, other_genes, gene_distance_func, config,
                                excess_coeff, disjoint_coeff, weight_coeff):
     """
-    Computes the distance for a given gene type between two genomes,
-    distinguishing excess and disjoint genes.
+    Computes the NEAT-style distance for one gene type between two genomes.
+    - self_genes / other_genes: dicts mapping innovation key → gene
+    - gene_distance_func(g1, g2, config) must return (struct_diff, weight_diff)
+    - Excess genes: those with key > max innovation of the other genome
+    - Disjoint genes: non-matching keys within the overlapping innovation range
     """
-    # If both sets are empty, distance is zero.
+    # If neither genome has this gene type, distance is zero.
     if not self_genes and not other_genes:
         return 0.0
 
-    # Maximum innovation numbers in each genome.
-    max_self_innov = max(self_genes.keys()) if self_genes else 0
-    max_other_innov = max(other_genes.keys()) if other_genes else 0
+    # Gather all innovation keys
+    all_keys = set(self_genes) | set(other_genes)
+    max_self  = max(self_genes, default=0)
+    max_other = max(other_genes, default=0)
 
-    matching_distance_sum = 0.0
-    matching_count = 0
+    # Counters
     excess = 0
     disjoint = 0
+    matching_weight_sum = 0.0
+    matching_count = 0
 
-    # Consider all gene keys present in either genome.
-    all_keys = set(self_genes.keys()).union(other_genes.keys())
     for key in all_keys:
-        gene_self = self_genes.get(key)
-        gene_other = other_genes.get(key)
-        if gene_self is not None and gene_other is not None:
-            # Matching (homologous) genes.
-            matching_distance_sum += gene_distance_func(gene_self, gene_other, config)
+        g1 = self_genes.get(key)
+        g2 = other_genes.get(key)
+
+        if g1 is not None and g2 is not None:
+            # Matching gene: unpack and accumulate only the weight diff
+            _, w_diff = gene_distance_func(g1, g2, config)
+            matching_weight_sum += w_diff
             matching_count += 1
         else:
-            # Gene present in only one genome.
-            if gene_self is None:
-                # Gene missing in self.
-                if key > max_self_innov:
-                    excess += 1
-                else:
-                    disjoint += 1
+            # Non-matching: decide excess vs disjoint
+            if (g1 is None and key > max_self) \
+                    or (g2 is None and key > max_other):
+                excess += 1
             else:
-                # Gene missing in other.
-                if key > max_other_innov:
-                    excess += 1
-                else:
-                    disjoint += 1
+                disjoint += 1
 
-    avg_weight_diff = matching_distance_sum / matching_count if matching_count > 0 else 0.0
-    # Normalize by the number of genes (use 1 if genomes are very small).
+    # Average weight difference over matching genes
+    avg_weight_diff = (matching_weight_sum / matching_count) if matching_count > 0 else 0.0
+
+    # Normalization factor N (use 1 for small genomes)
     N = max(len(self_genes), len(other_genes))
-    N = N if N >= 20 else 1
+    if N < getattr(config, "compatibility_threshold_N", 20):
+        N = 1
 
-    return (excess_coeff * excess) / N + (disjoint_coeff * disjoint) / N + (weight_coeff * avg_weight_diff)
+    # NEAT compatibility distance
+    return (excess_coeff * excess) / N \
+        + (disjoint_coeff * disjoint) / N \
+        + (weight_coeff * avg_weight_diff)
 
 
 # ============================================================================
@@ -304,38 +307,50 @@ def weight_distribution_distance(weights1, weights2,
       - Absolute difference in kurtosis
       - L2 distance between selected quantiles
 
-    Each metric is normalized by a given factor so that they contribute on similar scales.
-
-    Returns:
-      Individual contributions and the combined weighted sum.
+    Each metric is normalized by the provided factor.  If either array is
+    constant, we skip skew/kurtosis (set them to zero) to avoid NaNs.
     """
     w1 = weights1.flatten()
     w2 = weights2.flatten()
 
-    # Wasserstein distance
+    # Check for constant arrays
+    const1 = np.allclose(w1, w1[0])
+    const2 = np.allclose(w2, w2[0])
+
+    # 1) Wasserstein
     wd = wasserstein_distance(w1, w2)
-    # Skewness difference
-    skew_diff = np.abs(skew(w1) - skew(w2))
-    # Kurtosis difference
-    kurt_diff = np.abs(kurtosis(w1) - kurtosis(w2))
-    # Quantile difference: compute specified quantiles and take the L2 norm
+
+    # 2) Quantiles
     q1 = np.quantile(w1, quantiles)
     q2 = np.quantile(w2, quantiles)
     quant_diff = np.linalg.norm(q1 - q2)
 
-    # Normalize each component
-    wd_norm = wd / norm_wd if norm_wd else 0
-    skew_norm = skew_diff / norm_skew if norm_skew else 0
-    kurt_norm = kurt_diff / norm_kurt if norm_kurt else 0
-    quant_norm = quant_diff / norm_quant if norm_quant else 0
+    if const1 or const2:
+        # No skew/kurt for constant distributions
+        skew_diff = 0.0
+        kurt_diff = 0.0
+    else:
+        # Safely compute skew/kurtosis, omitting NaNs
+        skew1 = skew(w1, nan_policy='omit')
+        skew2 = skew(w2, nan_policy='omit')
+        skew_diff = abs(skew1 - skew2)
 
-    # Compute contributions
-    wd_contrib = alpha * wd_norm
-    skew_contrib = beta * skew_norm
-    kurt_contrib = gamma * kurt_norm
+        kurt1 = kurtosis(w1, nan_policy='omit', fisher=False)
+        kurt2 = kurtosis(w2, nan_policy='omit', fisher=False)
+        kurt_diff = abs(kurt1 - kurt2)
+
+    # Normalize components
+    wd_norm    = wd    / norm_wd    if norm_wd    else 0.0
+    skew_norm  = skew_diff / norm_skew  if norm_skew  else 0.0
+    kurt_norm  = kurt_diff / norm_kurt  if norm_kurt  else 0.0
+    quant_norm = quant_diff / norm_quant if norm_quant else 0.0
+
+    # Weighted contributions
+    wd_contrib    = alpha * wd_norm
+    skew_contrib  = beta  * skew_norm
+    kurt_contrib  = gamma * kurt_norm
     quant_contrib = delta * quant_norm
 
-    # Compute total combined distance
     combined_distance = wd_contrib + skew_contrib + kurt_contrib + quant_contrib
 
     return wd_contrib, skew_contrib, kurt_contrib, quant_contrib, combined_distance
@@ -343,28 +358,19 @@ def weight_distribution_distance(weights1, weights2,
 
 def connection_distance(g1, g2, alpha=1.5, beta=0.3, gamma=0.05, delta=1.5):
     """
-    Compute a connection distance between two networks based on weight distributions.
-    Prints the contribution percentages of Wasserstein, skewness, kurtosis, and quantiles.
+    Compute a connection distance between two genes’ weights and biases,
+    summing the hybrid distance on each.
     """
-
-    total_wd, total_skew, total_kurt, total_quant, total_distance = 0, 0, 0, 0, 0
-
-    wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
+    # Weights
+    wd_w, sk_w, ku_w, qu_w, c_w = weight_distribution_distance(
         g1.weights, g2.weights, alpha, beta, gamma, delta
     )
-    total_wd += wd
-    total_skew += skew_c
-    total_kurt += kurt_c
-    total_quant += quant_c
-    total_distance += combined
 
-    wd, skew_c, kurt_c, quant_c, combined = weight_distribution_distance(
+    # Biases
+    wd_b, sk_b, ku_b, qu_b, c_b = weight_distribution_distance(
         g1.biases, g2.biases, alpha, beta, gamma, delta
     )
-    total_wd += wd
-    total_skew += skew_c
-    total_kurt += kurt_c
-    total_quant += quant_c
-    total_distance += combined
+
+    total_distance = c_w + c_b
 
     return total_distance

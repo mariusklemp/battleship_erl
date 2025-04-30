@@ -534,6 +534,7 @@ class CNNGenome(object):
         The NEAT formula is applied:
           δ = (c1 * E) / N + (c2 * D) / N + c3 * (average weight difference)
         """
+
         # -- Convolution Genes --
         conv_self = {g.key: g for g in self.layer_config if isinstance(g, CNNConvGene)}
         conv_other = {g.key: g for g in other.layer_config if isinstance(g, CNNConvGene)}

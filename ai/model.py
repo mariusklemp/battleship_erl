@@ -97,6 +97,7 @@ class ANET(nn.Module):
                 raise ValueError(f"Unknown gene type: {type(gene)}")
         return layer_list
 
+
     def forward(self, game_state: torch.Tensor):
         game_state = game_state.to(self.device)
         if hasattr(self, "logits"):

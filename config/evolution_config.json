@@ -1,5 +1,5 @@
 {
-    "experiment": 1,
+    "experiment": 4,
     "run_neat": true,
     "run_ga": true,
     "placing_population": {
@@ -9,9 +9,9 @@
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 2
+        "size": 20
     },
     "evolution": {
-        "num_generations": 100
+        "num_generations": 2
     }
 } 

@@ -46,6 +46,7 @@ class CompetitiveEvaluator:
           search_agents    : Either a dict {key: (genome, agent)} or a list of search agent instances.
           placement_agents : A list of placement agent instances. If None, defaults are created.
         """
+        print("Evaluating agents...")
         # Create default placement agents if not provided
         if placement_agents is None:
             placement_agents = self.init_placement_agents()
@@ -104,6 +105,8 @@ class CompetitiveEvaluator:
         # Record fitness history
         self.placement_eval_history.append(overall_avg_placing)
         self.search_eval_history.append(overall_avg_search)
+
+        print(f"Placement pop Fitness: {overall_avg_placing:.2f}, Search pop Fitness: {overall_avg_search:.2f}")
 
         return search_agents, placement_agents
 

@@ -192,11 +192,13 @@ class OuterLoopManager:
             print(f"\n\n--- Generation {gen}/{num_generations} ---")
             # --- Step 1: Create/Update Search Agents (NEAT or NN) ---
             if self.run_neat:
+                print("__Step 1: Creating NEAT search agents__")
                 self.neat_manager.population.reporters.start_generation(self.neat_manager.population.generation)
                 self.update_search_agent_genomes()
 
             # --- Step 0: Save models ---
             if self.mcts_config["model"]["save"] and gen == 0:
+                print("Saving initial models...")
                 model_dir_search = f"models/{str(self.board_size)}"
                 model_dir_placement = f"placement_population/{str(self.board_size)}"
                 experiment = self.evolution_config["experiment"]
@@ -218,7 +220,7 @@ class OuterLoopManager:
                     self.save_placement_population(
                         chromosomes=self.placement_ga.population_chromosomes,
                         model_dir=model_dir_placement,
-                        subdir="neat",
+                        subdir="erl",
                         gen=gen - 1,
                         experiment=experiment,
                     )
@@ -227,6 +229,7 @@ class OuterLoopManager:
                     self.search_agents[0].strategy.net.save_model(model_path)
 
             # --- Step 2: Baseline Evaluation ---
+            print("__Step 2: Evaluating against baseline opponents__")
             step_start = time.perf_counter()
             if self.run_ga:
                 self.evaluate_agents_baselines(self.search_agents, self.placement_ga.pop_placing_agents, gen)
@@ -274,6 +277,7 @@ class OuterLoopManager:
                 (updated_search_agents_mapping, updated_placement_agents) = self.competitive_evaluator.evaluate(
                     search_agents=self.search_agents_mapping,
                 )
+                print("Updated search agents mapping")
                 self.search_agents_mapping = updated_search_agents_mapping
 
             step_end = time.perf_counter()
@@ -324,13 +328,43 @@ class OuterLoopManager:
                     self.save_placement_population(
                         chromosomes=self.placement_ga.population_chromosomes,
                         model_dir=model_dir_placement,
-                        subdir="neat",
+                        subdir="erl",
                         gen=gen,
                         experiment=experiment,
                     )
                 elif self.run_inner_loop:
                     model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
+
+        # Save the best NEAT agent at the end of training
+        if self.run_neat and self.run_inner_loop:
+            best_genome = self.neat_manager.population.best_genome
+            net = ANET(board_size=self.board_size, device=self.device, config=self.neat_manager.config,
+                       genome=best_genome)
+            best_agent = SearchAgent(
+                board_size=self.board_size,
+                strategy="nn_search",
+                net=net,
+                optimizer="adam",
+                name=f"best_agent",
+                lr=0.0001,
+            )
+            model_path = f"models/{str(self.board_size)}/erl/{self.evolution_config['experiment']}/best_agent.pth"
+            best_agent.strategy.net.save_model_genome(model_path)
+        elif self.run_neat:
+            best_genome = self.neat_manager.population.best_genome
+            net = ANET(board_size=self.board_size, device=self.device, config=self.neat_manager.config,
+                       genome=best_genome)
+            best_agent = SearchAgent(
+                board_size=self.board_size,
+                strategy="nn_search",
+                net=net,
+                optimizer="adam",
+                name=f"best_agent",
+                lr=0.0001,
+            )
+            model_path = f"models/{str(self.board_size)}/neat/{self.evolution_config['experiment']}/best_agent.pth"
+            best_agent.strategy.net.save_model_genome(model_path)
 
         # --- Step 7: Plot ---
         if not self.run_neat and self.run_inner_loop:

@@ -58,7 +58,7 @@ class Tournament:
             ship_sizes=self.ship_sizes
         )
 
-    def set_nn_agent(self, i, layer_config, subdir):
+    def set_nn_agent(self, i, layer_config, subdir, best_agent=False):
         """
         Load or construct an ANET‐based SearchAgent, based on whether
         the checkpoint contains a genome (NEAT/ERL) or just a plain state_dict.
@@ -68,7 +68,10 @@ class Tournament:
 
         # Build the filesystem path
         base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        path = os.path.join(base, subdir, f"model_gen{model_number}.pth")
+        if best_agent:
+            path = os.path.join(base, subdir, f"best_agent.pth")
+        else:
+            path = os.path.join(base, subdir, f"model_gen{model_number}.pth")
         assert os.path.exists(path), f"Checkpoint not found: {path}"
 
         # Decide if this is a NEAT checkpoint by peeking inside
@@ -212,7 +215,7 @@ class Tournament:
                 print(f"\n=== PLACEMENT {exp.upper()} ===")
                 evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
 
-    def skill_final_agent(self, baseline=True):
+    def skill_final_agent(self, baseline=True, variation=None):
         """
         Compare average initial vs. final RL agents (across variations) + baselines
         in a single radar chart, including standard deviations.
@@ -236,16 +239,24 @@ class Tournament:
         # 1) Gather per-variation metrics
         init_metrics = []
         fin_metrics  = []
-        experiment = "rl"
+        experiment = "neat"
         print(f"\n=== {experiment.upper()} ===")
-        for var in range(1, self.num_variations + 1):
-            print(f"\n=== Variation {var} ===")
-            subdir = f"models/{self.board_size}/{experiment}/{var}"
+        if variation:
+            print(f"\n=== Variation {variation} ===")
+            subdir = f"models/{self.board_size}/{experiment}/{variation}"
             agent_init  = self.set_nn_agent(0,   config_path, subdir)
-            agent_final = self.set_nn_agent(10,  config_path, subdir)  # adjust final-gen index
-
+            agent_final = self.set_nn_agent(10,  config_path, subdir, best_agent=True)
             init_metrics.append( evaluator.search_evaluator.evaluate_final_agent(agent_init,  num_games=100) )
             fin_metrics.append(  evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100) )
+        else:
+            for var in range(1, self.num_variations + 1):
+                print(f"\n=== Variation {var} ===")
+                subdir = f"models/{self.board_size}/{experiment}/{var}"
+                agent_init  = self.set_nn_agent(0,   config_path, subdir)
+                agent_final = self.set_nn_agent(10,  config_path, subdir)  # adjust final-gen index
+
+                init_metrics.append( evaluator.search_evaluator.evaluate_final_agent(agent_init,  num_games=100) )
+                fin_metrics.append(  evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100) )
 
         # 2) Compute mean & std across variations
         def mean_and_std(list_of_dicts):
@@ -262,8 +273,8 @@ class Tournament:
 
         # 3) Build labeled_metrics triples
         labeled_metrics = [
-            ("Avg Initial RL Agent", avg_init, std_init),
-            ("Avg Final   RL Agent",  avg_fin,  std_fin),
+            (f"Avg Initial {experiment.upper()} Agent", avg_init, std_init),
+            (f"Avg Final {experiment.upper()} Agent",  avg_fin,  std_fin),
         ]
 
         # 4) Append baselines (zero-std)
@@ -281,7 +292,7 @@ class Tournament:
         # 5) Plot
         evaluator.search_evaluator.plot_final_skill_radar_chart(
             labeled_metrics,
-            title="Skill of Final Iteration (avg ± std over variations)"
+            title="Skill of Final Iteration"
         )
 
 
@@ -304,7 +315,7 @@ def main():
         run_search=False,
         run_placement=True,
     )
-    tournament.skill_final_agent(baseline=True)
+    tournament.skill_final_agent(baseline=True, variation=4)
     # tournament.skill_progression()
 
 
