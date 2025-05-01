@@ -221,12 +221,7 @@ class MCTS:
             ship_ratio = (initial_ships - total_ships) / initial_ships
 
             # Combine all factors with adjusted weights
-            fitness = (
-                0.5
-                * move_ratio  # Increased weight for move efficiency, using linear ratio
-                + 0.3 * hit_ratio  # Slightly reduced weight for accuracy
-                + 0.2 * ship_ratio  # Same weight for ships sunk
-            )
+            fitness = move_ratio
 
             node.fitness += fitness
             node = node.parent
@@ -258,7 +253,6 @@ class MCTS:
         while time.time() - start_time < self.time_limit:
             current_state = copy.deepcopy(self.current_node.state)
             new_placing = copy.deepcopy(current_state.placing)
-
             # After adjusting placements, get the new ship sizes
             new_placing.adjust_ship_placements(current_state.board)
 
@@ -319,6 +313,7 @@ class MCTS:
             self.root_node.parent = None
             current_node.parent = None
 
+        current_node.state.placing = current_state.placing
         return current_node
 
     def find_last_move(self, parent_node, current_state):
@@ -369,6 +364,11 @@ class MCTS:
         moves_after_pruning = [
             move for move in legal_moves if self.is_possible_ship_location(state, move)
         ]
+
+        impossible_cells = state.placing.get_impossible_ship_cells(state.board)
+
+        # Remove moves that are in impossible_cells
+        moves_after_pruning = [move for move in moves_after_pruning if move not in impossible_cells]
 
         return moves_after_pruning
 

@@ -5,11 +5,10 @@ import os
 
 import torch
 
-from ai.mcts import MCTS
-from neat_system.neat_manager import NeatManager
-
 # Add the parent directory to the path so we can import modules from there
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from neat_system.neat_manager import NeatManager
 
 from tqdm import tqdm
 
@@ -48,11 +47,13 @@ class Tournament:
         self.search_players = {}
         self.placement_populations = {}
 
-        with open("../config/evolution_config.json", "r") as f:
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "evolution_config.json")
+        with open(config_path, "r") as f:
             evolution_config = json.load(f)
 
+        neat_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "neat_system", "config.txt")
         self.neat_manager = NeatManager(
-            neat_config_path="../neat_system/config.txt",
+            neat_config_path=neat_config_path,
             evolution_config=evolution_config,
             board_size=self.board_size,
             ship_sizes=self.ship_sizes
@@ -190,13 +191,13 @@ class Tournament:
 
         # If running search tournament → aggregate & plot
         if self.run_search:
-            # 1) Aggregate each experiment’s runs
+            # 1) Aggregate each experiment's runs
             all_stats = {
                 exp: evaluator.search_evaluator.aggregate_runs(runs)
                 for exp, runs in experiments_evals.items()
             }
 
-            # 2) Plot each experiment’s avg results
+            # 2) Plot each experiment's avg results
             for exp, stats in all_stats.items():
                 print(f"\n=== {exp.upper()} ===")
                 evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
@@ -298,9 +299,12 @@ class Tournament:
 
 
 def main():
-    config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config",
-                               "mcts_config.json")
-    config = json.load(open(config_path))
+    base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    config_path = os.path.join(base_path, "config", "mcts_config.json")
+    
+    with open(config_path, "r") as f:
+        config = json.load(f)
+        
     game_manager = GameManager(size=config["board_size"])
 
     tournament = Tournament(
@@ -315,7 +319,8 @@ def main():
         run_search=False,
         run_placement=True,
     )
-    tournament.skill_final_agent(baseline=True, variation=4)
+    # Use variation 1 instead of 4 since we have only 2 variations
+    tournament.skill_final_agent(baseline=True, variation=1)
     # tournament.skill_progression()
 
 

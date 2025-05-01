@@ -750,27 +750,19 @@ def print_rbuf(rbuf, num_samples, board_size):
     indices = np.random.choice(len(rbuf), min(num_samples, len(rbuf)), replace=False)
 
     for idx in indices:
-        (board_tensor, extra_features), action_distribution = rbuf[idx]
+        board_tensor, action_distribution = rbuf[idx]
 
         # Convert board tensor to numpy and reshape to the correct format
         # From (1, 4, board_size, board_size) to (4, board_size * board_size)
         board_array = board_tensor.squeeze(0).numpy()  # Remove batch dimension
         board_array = board_array.reshape(
-            4, -1
+            5, -1
         )  # Reshape to (4, board_size * board_size)
 
         print(f"\nSample {idx + 1}:")
         print("Board Shape:", board_tensor.shape)
         show_board(board_array, board_size)
 
-        print(
-            "Extra Features:",
-            (
-                extra_features.numpy()
-                if isinstance(extra_features, torch.Tensor)
-                else extra_features
-            ),
-        )
         print("Action Distribution Shape:", action_distribution.shape)
         plot_action_distribution(action_distribution, board_size)
         print("-" * 40)
