@@ -1,7 +1,7 @@
 {
-    "experiment": 4,
-    "run_neat": true,
-    "run_ga": true,
+    "experiment": 5,
+    "run_neat": false,
+    "run_ga": false,
     "placing_population": {
         "size": 20,
         "elite_size": 1,
@@ -9,9 +9,9 @@
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 20
+        "size": 2
     },
     "evolution": {
-        "num_generations": 2
+        "num_generations": 1000
     }
 } 

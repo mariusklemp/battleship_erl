@@ -143,7 +143,7 @@ class Tournament:
                 )
                 self.placement_populations[model_number][f"placing_agent{i}"] = placement_agent
 
-    def skill_progression(self):
+    def skill_progression(self, variation=None):
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
@@ -152,8 +152,8 @@ class Tournament:
         )
         experiments_evals = {
             "rl": [],
-            "neat": [],
-            "erl": [],
+            #"neat": [],
+            #"erl": [],
         }
         experiment_placement = {
             "erl": []
@@ -161,32 +161,45 @@ class Tournament:
 
         for experiment in experiments_evals.keys():
             print(f"\n=== {experiment.upper()} ===")
-            for i in range(1, self.num_variations + 1):
-                print(f"\n=== Variation {i} ===")
+            if variation:
+                print(f"\n=== Variation {variation} ===")
+                self.init_players(experiment=experiment, variation=variation)
+                for gen, search_agent in tqdm(self.search_players.items()):
+                    evaluator.evaluate_search_agents(
+                        search_agents=[search_agent],
+                        gen=gen,
+                    )
 
-                if self.run_search:
-                    self.init_players(experiment=experiment, variation=i)
-                    for gen, search_agent in tqdm(self.search_players.items()):
-                        evaluator.evaluate_search_agents(
-                            search_agents=[search_agent],
-                            gen=gen,
-                        )
+                results = evaluator.search_evaluator.get_results()
+                experiments_evals[experiment].append(results)
+                evaluator.search_evaluator.reset()
+            else:
+                for i in range(1, self.num_variations + 1):
+                    print(f"\n=== Variation {i} ===")
 
-                    results = evaluator.search_evaluator.get_results()
-                    experiments_evals[experiment].append(results)
-                    evaluator.search_evaluator.reset()
+                    if self.run_search:
+                        self.init_players(experiment=experiment, variation=i)
+                        for gen, search_agent in tqdm(self.search_players.items()):
+                            evaluator.evaluate_search_agents(
+                                search_agents=[search_agent],
+                                gen=gen,
+                            )
 
-                if self.run_placement and experiment in {"erl"}:
-                    self.init_placement_agents(experiment=experiment, variation=i)
-                    for gen, placement_agents in tqdm(self.placement_populations.items()):
-                        evaluator.evaluate_placement_agents(
-                            placement_agents=list(placement_agents.values()),
-                            gen=gen,
-                        )
+                        results = evaluator.search_evaluator.get_results()
+                        experiments_evals[experiment].append(results)
+                        evaluator.search_evaluator.reset()
 
-                    results = evaluator.placement_evaluator.get_results()
-                    experiment_placement[experiment].append(results)
-                    evaluator.placement_evaluator.reset()
+                    if self.run_placement and experiment in {"erl"}:
+                        self.init_placement_agents(experiment=experiment, variation=i)
+                        for gen, placement_agents in tqdm(self.placement_populations.items()):
+                            evaluator.evaluate_placement_agents(
+                                placement_agents=list(placement_agents.values()),
+                                gen=gen,
+                            )
+
+                        results = evaluator.placement_evaluator.get_results()
+                        experiment_placement[experiment].append(results)
+                        evaluator.placement_evaluator.reset()
 
         # If running search tournament → aggregate & plot
         if self.run_search:
@@ -215,7 +228,7 @@ class Tournament:
                 print(f"\n=== PLACEMENT {exp.upper()} ===")
                 evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
 
-    def skill_final_agent(self, baseline=True, variation=None):
+    def skill_final_agent(self, baseline=True, variation=None, experiment="rl"):
         """
         Compare average initial vs. final RL agents (across variations) + baselines
         in a single radar chart, including standard deviations.
@@ -238,25 +251,24 @@ class Tournament:
 
         # 1) Gather per-variation metrics
         init_metrics = []
-        fin_metrics  = []
-        experiment = "neat"
+        fin_metrics = []
         print(f"\n=== {experiment.upper()} ===")
         if variation:
             print(f"\n=== Variation {variation} ===")
             subdir = f"models/{self.board_size}/{experiment}/{variation}"
-            agent_init  = self.set_nn_agent(0,   config_path, subdir)
-            agent_final = self.set_nn_agent(10,  config_path, subdir, best_agent=True)
-            init_metrics.append( evaluator.search_evaluator.evaluate_final_agent(agent_init,  num_games=100) )
-            fin_metrics.append(  evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100) )
+            agent_init = self.set_nn_agent(0, config_path, subdir)
+            agent_final = self.set_nn_agent(100, config_path, subdir)
+            init_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_init, num_games=100))
+            fin_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100))
         else:
             for var in range(1, self.num_variations + 1):
                 print(f"\n=== Variation {var} ===")
                 subdir = f"models/{self.board_size}/{experiment}/{var}"
-                agent_init  = self.set_nn_agent(0,   config_path, subdir)
-                agent_final = self.set_nn_agent(10,  config_path, subdir)  # adjust final-gen index
+                agent_init = self.set_nn_agent(0, config_path, subdir)
+                agent_final = self.set_nn_agent(10, config_path, subdir)  # adjust final-gen index
 
-                init_metrics.append( evaluator.search_evaluator.evaluate_final_agent(agent_init,  num_games=100) )
-                fin_metrics.append(  evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100) )
+                init_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_init, num_games=100))
+                fin_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100))
 
         # 2) Compute mean & std across variations
         def mean_and_std(list_of_dicts):
@@ -265,16 +277,16 @@ class Tournament:
             for k in keys:
                 vals = [d[k] for d in list_of_dicts]
                 mean_d[k] = float(np.mean(vals))
-                std_d[k]  = float(np.std(vals))
+                std_d[k] = float(np.std(vals))
             return mean_d, std_d
 
         avg_init, std_init = mean_and_std(init_metrics)
-        avg_fin,  std_fin  = mean_and_std(fin_metrics)
+        avg_fin, std_fin = mean_and_std(fin_metrics)
 
         # 3) Build labeled_metrics triples
         labeled_metrics = [
             (f"Avg Initial {experiment.upper()} Agent", avg_init, std_init),
-            (f"Avg Final {experiment.upper()} Agent",  avg_fin,  std_fin),
+            (f"Avg Final {experiment.upper()} Agent", avg_fin, std_fin),
         ]
 
         # 4) Append baselines (zero-std)
@@ -296,7 +308,6 @@ class Tournament:
         )
 
 
-
 def main():
     config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config",
                                "mcts_config.json")
@@ -305,18 +316,18 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=100,
+        num_games=1000,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
         num_players=10,
-        num_variations=2,
+        num_variations=3,
         game_manager=game_manager,
-        run_search=False,
-        run_placement=True,
+        run_search=True,
+        run_placement=False,
     )
-    tournament.skill_final_agent(baseline=True, variation=4)
-    # tournament.skill_progression()
+    #tournament.skill_final_agent(baseline=True, variation=5, experiment="rl")
+    tournament.skill_progression(variation=5)
 
 
 if __name__ == "__main__":

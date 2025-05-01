@@ -643,92 +643,94 @@ def plot_fitness(move_count, board_size):
     plt.tight_layout()
     plt.show()
 
-
 def plot_action_distribution(action_distribution, board_size):
     """
-    Prints the action distribution in a readable grid format with 3 decimal precision and dynamic colors.
-    This version uses additional thresholds for a more detailed "heatmap" effect.
-
-    :param action_distribution: 1D NumPy array containing the probability of each action.
-    :param board_size: The size of the Battleship board (assumed to be square).
+    Prints the action distribution as float percentages (one decimal place)
+    in a color‐coded grid with 1‐char gutters and minimal fixed column width.
+    Uses absolute thresholds to avoid misleading emphasis when all probabilities are low.
     """
-    # Reshape the distribution into a grid.
-    action_grid = np.array(action_distribution).reshape((board_size, board_size))
+    import numpy as np
 
-    # Compute the maximum probability value.
-    max_val = np.max(action_grid)
+    grid = np.array(action_distribution).reshape((board_size, board_size))
 
-    # Define dynamic thresholds as fractions of the maximum value.
-    # You can adjust these fractions to change the color boundaries.
-    threshold_very_high = 0.9 * max_val
-    threshold_high = 0.75 * max_val
-    threshold_med_high = 0.6 * max_val
-    threshold_med = 0.45 * max_val
-    threshold_med_low = 0.3 * max_val
-    threshold_low = 0.15 * max_val
+    # Absolute probability thresholds
+    t_vhigh = 0.50
+    t_high  = 0.35
+    t_mh    = 0.20
+    t_med   = 0.10
+    t_ml    = 0.05
+    t_low   = 0.01
 
-    def get_colored_value(value):
-        if value >= threshold_very_high:
-            return f"\033[95m{value:.3f}\033[0m"  # Magenta for very high values
-        elif value >= threshold_high:
-            return f"\033[91m{value:.3f}\033[0m"  # Red for high values
-        elif value >= threshold_med_high:
-            return f"\033[93m{value:.3f}\033[0m"  # Yellow for medium-high values
-        elif value >= threshold_med:
-            return f"\033[92m{value:.3f}\033[0m"  # Green for medium values
-        elif value >= threshold_med_low:
-            return f"\033[96m{value:.3f}\033[0m"  # Cyan for medium-low values
-        elif value >= threshold_low:
-            return f"\033[94m{value:.3f}\033[0m"  # Blue for low values
-        else:
-            return f"\033[90m{value:.3f}\033[0m"  # Grey for very low values
+    fmt = lambda v: f"{v*100:.1f}%"
+
+    # figure out how wide our percentages need to be
+    pct_strings = [fmt(v) for v in grid.flatten()]
+    col_width = max(1, max(len(s) for s in pct_strings))
+
+    sep = "-" * (board_size * col_width + (board_size - 1) * 1)
+
+    def color(s, v):
+        s = s.center(col_width)
+        if   v >= t_vhigh: return f"\033[91m{s}\033[0m"  # Red: Very high
+        elif v >= t_high:  return f"\033[38;5;208m{s}\033[0m"  # Orange: High
+        elif v >= t_mh:    return f"\033[93m{s}\033[0m"  # Yellow: Medium-high
+        elif v >= t_med:   return f"\033[92m{s}\033[0m"  # Green: Medium
+        elif v >= t_ml:    return f"\033[96m{s}\033[0m"  # Cyan: Low-medium
+        elif v >= t_low:   return f"\033[94m{s}\033[0m"  # Blue: Low
+        else:              return f"\033[90m{s}\033[0m"  # Gray: Very low
 
     print("\nMCTS Action Distribution:")
-    print("-" * (board_size * 7))  # Separator line
-
-    for row in range(board_size):
-        row_values = [
-            get_colored_value(action_grid[row, col]) for col in range(board_size)
-        ]
-        print(" | ".join(row_values))
-
-    print("-" * (board_size * 7))  # Separator line
+    print(sep)
+    for row in grid:
+        line = " ".join(color(fmt(val), val) for val in row)
+        print(line)
+    print(sep)
 
 
 def show_board(board, board_size):
     """
-    Prints the Battleship board with colors for better visualization.
-
-    :param state: The game state containing the board layers.
-    :param board_size: The size of the board (assumed square).
+    Prints the Battleship board with colors, using the same spacing rules
+    as plot_action_distribution so that each cell is square-ish.
     """
-    # ANSI Color Codes
     COLORS = {
-        "empty": "\033[90m- \033[0m",  # Grey for unexplored
-        "hit": "\033[93mX \033[0m",  # Yellow for hits
-        "miss": "\033[94mO \033[0m",  # Blue for misses
-        "sunk": "\033[91mS \033[0m",  # Red for sunken ships
+        "empty": "\033[90m-\033[0m",
+        "hit":   "\033[93mX\033[0m",
+        "miss":  "\033[94mO\033[0m",
+        "sunk":  "\033[91mS\033[0m",
     }
 
+    # We want the same col_width and sep as above.
+    # Board symbols are single chars, so width is at least 1.
+    # But to match any percentage width, we could pass in col_width from above;
+    # here we'll assume percentages are at most "XX.X%" (4 chars).
+    col_width = 4
+    sep = "-" * (board_size * col_width + (board_size - 1) * 1)
+
     print("\nCurrent Board State:")
-    print("-" * (board_size * 2))  # Formatting line
-
+    print(sep)
     for i in range(board_size):
-        row = ""
+        cells = []
         for j in range(board_size):
-            index = i * board_size + j
-            if board[3][index] == 1:  # Sunken ship
-                row += COLORS["sunk"]
-            elif board[1][index] == 1:  # Hit
-                row += COLORS["hit"]
-            elif board[2][index] == 1:  # Miss
-                row += COLORS["miss"]
-            else:  # Unexplored
-                row += COLORS["empty"]
+            idx = i * board_size + j
+            if   board[3][idx] == 1:
+                sym = COLORS["sunk"]
+            elif board[1][idx] == 1:
+                sym = COLORS["hit"]
+            elif board[2][idx] == 1:
+                sym = COLORS["miss"]
+            else:
+                sym = COLORS["empty"]
 
-        print(row)
+            # strip ANSI, center, re-wrap
+            char = sym.strip("\033[90m\033[91m\033[92m\033[93m\033[94m\033[96m\033[0m")
+            pad  = char.center(col_width)
+            color_code = sym[: sym.find(char)]
+            cells.append(f"{color_code}{pad}\033[0m")
 
-    print("-" * (board_size * 2))  # Formatting line
+        print(" ".join(cells))
+    print(sep)
+
+
 
 
 def print_rbuf(rbuf, num_samples, board_size):
