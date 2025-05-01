@@ -154,7 +154,6 @@ def initialize_agents(board_size, sizes, search_strategy, placing_strategy, file
     if file_path:
         search_agent.strategy.net.load_model(file_path)
 
-    # search_agent.strategy.load_model("models/model_100.pth")
     placement_agent = PlacementAgent(
         board_size=board_size,
         ship_sizes=sizes,
