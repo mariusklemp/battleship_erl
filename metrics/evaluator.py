@@ -434,7 +434,7 @@ class SearchEvaluator(BaseEvaluator):
         # --- 1) Distribution Entropy ---
         gens = stats['start_entropy']['gens']
         start_m, start_s = stats['start_entropy']['mean'], stats['start_entropy']['std']
-        end_m,   end_s   = stats['end_entropy']['mean'],   stats['end_entropy']['std']
+        end_m, end_s = stats['end_entropy']['mean'], stats['end_entropy']['std']
         x = np.arange(len(gens))
         fig, ax = plt.subplots(figsize=(12, 6))
         # Start
@@ -449,7 +449,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+        ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
         plt.tight_layout()
         plt.show()
 
@@ -463,7 +463,9 @@ class SearchEvaluator(BaseEvaluator):
         for title, key in metrics:
             fig, ax = plt.subplots(figsize=(12, 6))
             for baseline, data in stats[key].items():
-                gens = data['gens']; m = data['mean']; s = data['std']
+                gens = data['gens'];
+                m = data['mean'];
+                s = data['std']
                 x = np.arange(len(gens))
                 ax.plot(x, m, 'o-', linewidth=3, markersize=6, label=baseline)
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
@@ -473,7 +475,7 @@ class SearchEvaluator(BaseEvaluator):
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
-            ax.legend(title="Baseline", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+            ax.legend(title="Baseline", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
@@ -505,7 +507,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
         plt.tight_layout()
         plt.show()
 
@@ -537,25 +539,25 @@ class SearchEvaluator(BaseEvaluator):
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
-            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
     def gen_key(self, x):
-            """
+        """
             Extract generation number as int from keys like:
               - 'nn_gen20'
               - 'random'   (no digits → fallback to 0 or just return x if you prefer)
               - 5          (already an int)
             """
-            if isinstance(x, str):
-                m = re.search(r'(\d+)$', x)
-                if m:
-                    return int(m.group(1))
-                else:
-                    # no trailing digits → put these first or last as you like
-                    return -1
-            return int(x)
+        if isinstance(x, str):
+            m = re.search(r'(\d+)$', x)
+            if m:
+                return int(m.group(1))
+            else:
+                # no trailing digits → put these first or last as you like
+                return -1
+        return int(x)
 
     def normalize(self, m):
         # Setup
@@ -617,7 +619,7 @@ class SearchEvaluator(BaseEvaluator):
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
         ax.set_xticks(angles[:-1])
         ax.set_xticklabels(categories, fontsize=12)
-        ax.set_yticklabels([])        # hide radial labels
+        ax.set_yticklabels([])  # hide radial labels
         ax.grid(alpha=0.3)
 
         # Plot each agent
@@ -1010,11 +1012,11 @@ class PlacementEvaluator(BaseEvaluator):
             gens = stats[key][next(iter(stats[key]))]['gens']
             x = np.arange(len(gens))
 
-            fig, ax = plt.subplots(figsize=(12,6))
+            fig, ax = plt.subplots(figsize=(12, 6))
             for baseline, data in stats[key].items():
                 m, s = data['mean'], data['std']
                 ax.plot(x, m, "o-", linewidth=3, markersize=6, label=baseline)
-                ax.fill_between(x, m-s, m+s, alpha=0.2)
+                ax.fill_between(x, m - s, m + s, alpha=0.2)
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
@@ -1023,7 +1025,7 @@ class PlacementEvaluator(BaseEvaluator):
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
             ax.legend(title="Search Baseline", loc="upper left",
-                      bbox_to_anchor=(1.02,1), fontsize=10)
+                      bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
@@ -1032,12 +1034,12 @@ class PlacementEvaluator(BaseEvaluator):
                            ("Diversity", "diversity"),
                            ("Orientation % Vertical", "orientation")]:
             gens = stats[key]['gens']
-            m, s  = stats[key]['mean'], stats[key]['std']
+            m, s = stats[key]['mean'], stats[key]['std']
             x = np.arange(len(gens))
 
-            fig, ax = plt.subplots(figsize=(12,6))
+            fig, ax = plt.subplots(figsize=(12, 6))
             ax.plot(x, m, "o-", linewidth=3, markersize=6)
-            ax.fill_between(x, m-s, m+s, alpha=0.2)
+            ax.fill_between(x, m - s, m + s, alpha=0.2)
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
@@ -1047,6 +1049,71 @@ class PlacementEvaluator(BaseEvaluator):
             ax.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
+
+    def plot_combined_all(self, all_stats):
+        """
+        all_stats: dict mapping experiment_name -> aggregated_stats
+                   (output of PlacementEvaluator.aggregate_runs)
+        This will:
+          - For move_count & hit_to_sunk_ratio: plot one mean±std curve PER EXPERIMENT PER BASELINE.
+          - For sparsity, diversity, orientation: plot one mean±std curve PER EXPERIMENT.
+        """
+
+        # --- 1) Baseline‐dependent metrics ---
+        bd_metrics = [
+            ("Move Count", "move_count"),
+            ("Hit-to-Sunk Ratio", "hit_to_sunk_ratio"),
+        ]
+        for title, key in bd_metrics:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            for exp_label, stats in all_stats.items():
+                sk = stats[key]  # dict: baseline -> {gens, mean, std}
+                for baseline_name, data in sk.items():
+                    gens = data["gens"]
+                    m    = data["mean"]
+                    s    = data["std"]
+                    x = np.arange(len(gens))
+                    label = f"{exp_label} − {baseline_name}"
+                    ax.plot(x, m, 'o-', linewidth=2, label=label)
+                    ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels([str(g) for g in gens], rotation=45)
+            ax.set_title(f"Placement: {title} (mean ± std)")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(title)
+            ax.legend(title="Experiment − Baseline", bbox_to_anchor=(1.02, 1), loc="upper left")
+            ax.grid(alpha=0.3)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            plt.show()
+
+        # --- 2) Baseline‐independent metrics ---
+        bi_metrics = [
+            ("Sparsity", "sparsity"),
+            ("Diversity", "diversity"),
+            ("Orientation % Vertical", "orientation"),
+        ]
+        for title, key in bi_metrics:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            for exp_label, stats in all_stats.items():
+                sk = stats[key]  # { 'gens':…, 'mean':…, 'std':… }
+                gens = sk["gens"]
+                m    = sk["mean"]
+                s    = sk["std"]
+                x = np.arange(len(gens))
+                ax.plot(x, m, 'o-', linewidth=2, label=exp_label)
+                ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels([str(g) for g in gens], rotation=45)
+            ax.set_title(f"Placement: {title} (mean ± std)")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(title)
+            ax.legend(title="Experiment", bbox_to_anchor=(1.02, 1), loc="upper left")
+            ax.grid(alpha=0.3)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            plt.show()
+
 
     # ------------------- Helper to Create Board from Chromosome -------------------
     def create_board_from_chromosome(self, chromosome):

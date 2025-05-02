@@ -1,4 +1,6 @@
 # metrics/competitive_evaluator.py
+import math
+
 import numpy as np
 import matplotlib.pyplot as plt
 from game_logic.placement_agent import PlacementAgent
@@ -129,42 +131,48 @@ class CompetitiveEvaluator:
             for j in range(size):
                 board[row + j][col] = 1
 
-    def plot(self, hof=None, hos=None):
+    def plot(self):
         """Plot the competitive evaluation metrics and optionally Hall of Fame and Hall of Shame boards."""
-        generations = np.arange(len(self.placement_eval_history))
+        gens = np.arange(len(self.placement_eval_history))
 
-        # --- Combined Plot: Competitive Fitness Curves ---
-        plt.figure(figsize=(10, 6))
+        # --- Combined Plot: Dual Y-Axis Competitive Fitness ---
+        fig, ax1 = plt.subplots(figsize=(10, 6))
 
-        # Placement Fitness
-        plt.plot(generations, self.placement_eval_history, marker="o", label="Placement Fitness", color="blue")
+        # Left axis: Placement
+        ax1.plot(gens, self.placement_eval_history, 'o-', color='tab:blue', label='Placement Fitness')
         if len(self.placement_eval_history) > 1:
-            coeffs_place = np.polyfit(generations, self.placement_eval_history, 1)
-            poly_place = np.poly1d(coeffs_place)
-            plt.plot(generations, poly_place(generations), "b--", label="Placement Trend")
+            p_coef = np.polyfit(gens, self.placement_eval_history, 1)
+            p_line = np.poly1d(p_coef)(gens)
+            ax1.plot(gens, p_line, '--', color='tab:blue', alpha=0.7, label='Placement Trend')
+        ax1.set_xlabel("Generation")
+        ax1.set_ylabel("Placement Fitness", color='tab:blue')
+        ax1.tick_params(axis='y', labelcolor='tab:blue')
 
-        # Search Fitness
-        plt.plot(generations, self.search_eval_history, marker="o", label="Search Fitness", color="green")
+        # Right axis: Search
+        ax2 = ax1.twinx()
+        ax2.plot(gens, self.search_eval_history, 'o-', color='tab:green', label='Search Fitness')
         if len(self.search_eval_history) > 1:
-            coeffs_search = np.polyfit(generations, self.search_eval_history, 1)
-            poly_search = np.poly1d(coeffs_search)
-            plt.plot(generations, poly_search(generations), "g--", label="Search Trend")
+            s_coef = np.polyfit(gens, self.search_eval_history, 1)
+            s_line = np.poly1d(s_coef)(gens)
+            ax2.plot(gens, s_line, '--', color='tab:green', alpha=0.7, label='Search Trend')
+        ax2.set_ylabel("Search Fitness", color='tab:green')
+        ax2.tick_params(axis='y', labelcolor='tab:green')
 
-        plt.xlabel("Generation")
-        plt.ylabel("Competitive Fitness")
+        # Combine legends
+        lines1, labels1 = ax1.get_legend_handles_labels()
+        lines2, labels2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
+
         plt.title("Competitive Evaluation Metrics per Generation")
-        plt.legend()
-        plt.grid(alpha=0.3)
-        plt.tight_layout()
+        ax1.grid(alpha=0.3)
+        fig.tight_layout()
         plt.show()
 
-        # --- NEW: Placement Fitness Only ---
+        # --- Placement Fitness Only ---
         plt.figure(figsize=(8, 5))
-        plt.plot(generations, self.placement_eval_history, marker="o", color="blue", label="Placement Fitness")
+        plt.plot(gens, self.placement_eval_history, 'o-', color='tab:blue', label='Placement Fitness')
         if len(self.placement_eval_history) > 1:
-            coeffs_place = np.polyfit(generations, self.placement_eval_history, 1)
-            poly_place = np.poly1d(coeffs_place)
-            plt.plot(generations, poly_place(generations), "b--", label="Placement Trend")
+            plt.plot(gens, p_line, '--', color='tab:blue', alpha=0.7, label='Placement Trend')
         plt.xlabel("Generation")
         plt.ylabel("Placement Fitness")
         plt.title("Placement Fitness over Generations")
@@ -173,13 +181,11 @@ class CompetitiveEvaluator:
         plt.tight_layout()
         plt.show()
 
-        # --- NEW: Search Fitness Only ---
+        # --- Search Fitness Only ---
         plt.figure(figsize=(8, 5))
-        plt.plot(generations, self.search_eval_history, marker="o", color="green", label="Search Fitness")
+        plt.plot(gens, self.search_eval_history, 'o-', color='tab:green', label='Search Fitness')
         if len(self.search_eval_history) > 1:
-            coeffs_search = np.polyfit(generations, self.search_eval_history, 1)
-            poly_search = np.poly1d(coeffs_search)
-            plt.plot(generations, poly_search(generations), "g--", label="Search Trend")
+            plt.plot(gens, s_line, '--', color='tab:green', alpha=0.7, label='Search Trend')
         plt.xlabel("Generation")
         plt.ylabel("Search Fitness")
         plt.title("Search Fitness over Generations")
@@ -188,35 +194,106 @@ class CompetitiveEvaluator:
         plt.tight_layout()
         plt.show()
 
-        # --- Plot Hall of Fame ---
-        if hof is not None and len(hof.items) > 0:
-            num_hof = len(hof.items)
-            fig, axs = plt.subplots(1, num_hof, figsize=(5 * num_hof, 5))
-            if num_hof == 1:
-                axs = [axs]
-            for i, chromosome in enumerate(hof.items):
-                board = self.create_board_from_chromosome(chromosome)
-                axs[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs[i].set_title(f"HOF {i}")
-                axs[i].set_xticks([])
-                axs[i].set_yticks([])
-            plt.suptitle("Hall of Fame Boards")
-            plt.tight_layout()
+    def plot_hall_frequencies(self,
+                              hof_per_generation,
+                              hos_per_generation,
+                              board_size):
+        # initialize accumulators
+        hof_acc = np.zeros((board_size, board_size), dtype=float)
+        hos_acc = np.zeros_like(hof_acc)
+        gens = len(hof_per_generation)
+        hof_size = len(hof_per_generation[0])
+        hos_size = len(hos_per_generation[0])
+
+        # sum up all HOF boards
+        for gen_hof in hof_per_generation:
+            for chrom in gen_hof:
+                hof_acc += self.create_board_from_chromosome(chrom)
+
+        # sum up all HOS boards
+        for gen_hos in hos_per_generation:
+            for chrom in gen_hos:
+                hos_acc += self.create_board_from_chromosome(chrom)
+
+        # normalize to [0,1]
+        hof_freq = hof_acc / (gens * hof_size)
+        hos_freq = hos_acc / (gens * hos_size)
+
+        # plot them side by side
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 6))
+        im1 = ax1.imshow(hof_freq, vmin=0, vmax=1, cmap='viridis')
+        ax1.set_title("HOF Occupancy Frequency")
+        ax1.axis('off')
+        fig.colorbar(im1, ax=ax1, fraction=0.046)
+
+        im2 = ax2.imshow(hos_freq, vmin=0, vmax=1, cmap='viridis')
+        ax2.set_title("HOS Occupancy Frequency")
+        ax2.axis('off')
+        fig.colorbar(im2, ax=ax2, fraction=0.046)
+
+        plt.suptitle("Across All Generations")
+        plt.tight_layout()
+        plt.show()
+
+    def plot_halls_wrapped(self,
+                           hof_per_generation,
+                           hos_per_generation,
+                           board_size,
+                           max_per_row=10,
+                           max_total=20):
+        """
+        Two figures with wrapping and a hard cap on total boards shown:
+          - All HOF boards, up to `max_per_row` per row, with at most `max_total` boards total.
+          - All HOS boards likewise.
+        """
+
+        def flatten_and_label(hall_list, hall_name):
+            boards, labels = [], []
+            for g, gen_hall in enumerate(hall_list, start=1):
+                for i, chrom in enumerate(gen_hall, start=1):
+                    boards.append(self.create_board_from_chromosome(chrom))
+                    labels.append(f"G{g}-{hall_name}{i}")
+            return boards, labels
+
+        def plot_wrapped(boards, labels, title):
+            # --- subsample if over max_total ---
+            n = len(boards)
+            if n > max_total:
+                step = math.ceil(n / max_total)
+                boards = boards[::step]
+                labels = labels[::step]
+                n = len(boards)
+
+            if n == 0:
+                print(f"No boards to show for {title}")
+                return
+
+            rows = math.ceil(n / max_per_row)
+            cols = max_per_row
+            fig, axes = plt.subplots(rows, cols,
+                                     figsize=(2 * cols, 2 * rows),
+                                     squeeze=False)
+
+            for idx, (bd, lbl) in enumerate(zip(boards, labels)):
+                r, c = divmod(idx, max_per_row)
+                ax = axes[r][c]
+                ax.imshow(bd, cmap="viridis", vmin=0, vmax=1)
+                ax.set_title(lbl, fontsize=8)
+                ax.axis("off")
+
+            # hide any leftover subplots
+            for idx in range(n, rows * cols):
+                r, c = divmod(idx, max_per_row)
+                axes[r][c].axis("off")
+
+            plt.suptitle(title, fontsize=14)
+            plt.tight_layout(rect=[0, 0, 1, 0.93])
             plt.show()
 
-        # --- Plot Hall of Shame ---
-        if hos is not None and len(hos.items) > 0:
-            num_hos = len(hos.items)
-            fig2, axs2 = plt.subplots(1, num_hos, figsize=(5 * num_hos, 5))
-            if num_hos == 1:
-                axs2 = [axs2]
-            for i, chromosome in enumerate(hos.items):
-                board = self.create_board_from_chromosome(chromosome)
-                axs2[i].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs2[i].set_title(f"HOS {i}")
-                axs2[i].set_xticks([])
-                axs2[i].set_yticks([])
-            plt.suptitle("Hall of Shame Boards")
-            plt.tight_layout()
-            plt.show()
+        # Hall of Fame
+        hof_boards, hof_labels = flatten_and_label(hof_per_generation, "HOF#")
+        plot_wrapped(hof_boards, hof_labels, "All Generations: Hall of Fame")
 
+        # Hall of Shame
+        hos_boards, hos_labels = flatten_and_label(hos_per_generation, "HOS#")
+        plot_wrapped(hos_boards, hos_labels, "All Generations: Hall of Shame")

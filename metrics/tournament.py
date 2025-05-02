@@ -5,7 +5,6 @@ import os
 
 import torch
 
-from ai.mcts import MCTS
 from neat_system.neat_manager import NeatManager
 
 # Add the parent directory to the path so we can import modules from there
@@ -143,90 +142,90 @@ class Tournament:
                 )
                 self.placement_populations[model_number][f"placing_agent{i}"] = placement_agent
 
-    def skill_progression(self, variation=None):
+    def skill_progression_search(self, variation=None):
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
             num_evaluation_games=100,
             game_manager=self.game_manager,
         )
-        experiments_evals = {
-            "rl": [],
-            #"neat": [],
-            #"erl": [],
-        }
-        experiment_placement = {
-            "erl": []
-        }
+        experiments_evals = {"rl": [], "neat": [], "erl": []}
 
-        for experiment in experiments_evals.keys():
-            print(f"\n=== {experiment.upper()} ===")
-            if variation:
-                print(f"\n=== Variation {variation} ===")
-                self.init_players(experiment=experiment, variation=variation)
-                for gen, search_agent in tqdm(self.search_players.items()):
-                    evaluator.evaluate_search_agents(
-                        search_agents=[search_agent],
-                        gen=gen,
-                    )
-
+        for experiment in experiments_evals:
+            print(f"\n=== SEARCH: {experiment.upper()} ===")
+            if variation is not None:
+                self.init_players(experiment, variation)
+                for gen, agent in tqdm(self.search_players.items()):
+                    evaluator.evaluate_search_agents([agent], gen)
                 results = evaluator.search_evaluator.get_results()
                 experiments_evals[experiment].append(results)
                 evaluator.search_evaluator.reset()
             else:
-                for i in range(1, self.num_variations + 1):
-                    print(f"\n=== Variation {i} ===")
+                for var in range(1, self.num_variations + 1):
+                    print(f"\n--- Variation {var} ---")
+                    self.init_players(experiment, var)
+                    for gen, agent in tqdm(self.search_players.items()):
+                        evaluator.evaluate_search_agents([agent], gen)
+                    results = evaluator.search_evaluator.get_results()
+                    experiments_evals[experiment].append(results)
+                    evaluator.search_evaluator.reset()
 
-                    if self.run_search:
-                        self.init_players(experiment=experiment, variation=i)
-                        for gen, search_agent in tqdm(self.search_players.items()):
-                            evaluator.evaluate_search_agents(
-                                search_agents=[search_agent],
-                                gen=gen,
-                            )
+        # aggregate & plot
+        all_stats = {
+            exp: evaluator.search_evaluator.aggregate_runs(runs)
+            for exp, runs in experiments_evals.items()
+        }
+        for exp, stats in all_stats.items():
+            print(f"\n>>> SEARCH PLOTTING {exp.upper()}")
+            evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
+        evaluator.search_evaluator.plot_combined_all(all_stats)
 
-                        results = evaluator.search_evaluator.get_results()
-                        experiments_evals[experiment].append(results)
-                        evaluator.search_evaluator.reset()
 
-                    if self.run_placement and experiment in {"erl"}:
-                        self.init_placement_agents(experiment=experiment, variation=i)
-                        for gen, placement_agents in tqdm(self.placement_populations.items()):
-                            evaluator.evaluate_placement_agents(
-                                placement_agents=list(placement_agents.values()),
-                                gen=gen,
-                            )
+    def skill_progression_placement(self, variation=None):
+        evaluator = Evaluator(
+            board_size=self.board_size,
+            ship_sizes=self.ship_sizes,
+            num_evaluation_games=100,
+            game_manager=self.game_manager,
+        )
+        experiment_placement = {"rl": [], "neat": [], "erl": [], "hunt_down": []}
 
-                        results = evaluator.placement_evaluator.get_results()
-                        experiment_placement[experiment].append(results)
-                        evaluator.placement_evaluator.reset()
+        for experiment in experiment_placement:
+            print(f"\n=== PLACEMENT: {experiment.upper()} ===")
+            if variation is not None:
+                self.init_placement_agents(experiment, variation)
+                for gen, pop in tqdm(self.placement_populations.items()):
+                    evaluator.evaluate_placement_agents(list(pop.values()), gen)
+                results = evaluator.placement_evaluator.get_results()
+                experiment_placement[experiment].append(results)
+                evaluator.placement_evaluator.reset()
+            else:
+                for var in range(1, self.num_variations + 1):
+                    print(f"\n--- Variation {var} ---")
+                    self.init_placement_agents(experiment, var)
+                    for gen, pop in tqdm(self.placement_populations.items()):
+                        evaluator.evaluate_placement_agents(list(pop.values()), gen)
+                    results = evaluator.placement_evaluator.get_results()
+                    experiment_placement[experiment].append(results)
+                    evaluator.placement_evaluator.reset()
 
-        # If running search tournament → aggregate & plot
+        # aggregate & plot
+        all_place_stats = {
+            exp: evaluator.placement_evaluator.aggregate_runs(runs)
+            for exp, runs in experiment_placement.items()
+        }
+        for exp, stats in all_place_stats.items():
+            print(f"\n>>> PLACEMENT PLOTTING {exp.upper()}")
+            evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
+        evaluator.placement_evaluator.plot_combined_all(all_place_stats)
+
+
+    def skill_progression(self, variation=None):
+        """Legacy entry point that runs both."""
         if self.run_search:
-            # 1) Aggregate each experiment’s runs
-            all_stats = {
-                exp: evaluator.search_evaluator.aggregate_runs(runs)
-                for exp, runs in experiments_evals.items()
-            }
-
-            # 2) Plot each experiment’s avg results
-            for exp, stats in all_stats.items():
-                print(f"\n=== {exp.upper()} ===")
-                evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
-
-            # Combined‐plot
-            evaluator.search_evaluator.plot_combined_all(all_stats)
-
+            self.skill_progression_search(variation)
         if self.run_placement:
-            # 1) aggregate
-            all_place_stats = {
-                exp: evaluator.placement_evaluator.aggregate_runs(runs)
-                for exp, runs in experiment_placement.items()
-            }
-            # 2) per‐experiment avg plots
-            for exp, stats in all_place_stats.items():
-                print(f"\n=== PLACEMENT {exp.upper()} ===")
-                evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
+            self.skill_progression_placement(variation)
 
     def skill_final_agent(self, baseline=True, variation=None, experiment="rl"):
         """
@@ -257,7 +256,7 @@ class Tournament:
             print(f"\n=== Variation {variation} ===")
             subdir = f"models/{self.board_size}/{experiment}/{variation}"
             agent_init = self.set_nn_agent(0, config_path, subdir)
-            agent_final = self.set_nn_agent(100, config_path, subdir)
+            agent_final = self.set_nn_agent(10, config_path, subdir, best_agent=True)
             init_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_init, num_games=100))
             fin_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100))
         else:
@@ -316,18 +315,18 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=1000,
+        num_games=100,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
         num_players=10,
-        num_variations=3,
+        num_variations=1,
         game_manager=game_manager,
-        run_search=True,
-        run_placement=False,
+        run_search=False,
+        run_placement=True,
     )
-    #tournament.skill_final_agent(baseline=True, variation=5, experiment="rl")
-    tournament.skill_progression(variation=5)
+    #tournament.skill_final_agent(baseline=True, experiment="rl")
+    tournament.skill_progression()
 
 
 if __name__ == "__main__":

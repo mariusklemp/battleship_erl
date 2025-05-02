@@ -1,12 +1,10 @@
+import matplotlib.pyplot as plt
 from functools import lru_cache
+
+from matplotlib import rcParams
 
 
 def generate_bitmask_placements(size, N):
-    """
-    Return a list of *unique* bitmasks for all ways to place
-    a ship of given length on an N×N board, horizontal or vertical.
-    Bits are laid out row-major: bit (r*N + c).
-    """
     masks = set()
 
     # Horizontal placements
@@ -29,13 +27,8 @@ def generate_bitmask_placements(size, N):
 
 
 def count_configurations(N, ship_sizes):
-    """
-    Count non‐overlapping ways to place ships of lengths in ship_sizes
-    on an N×N board, treating equal‐length ships as identical.
-    """
-    # sort descending so bigger ships place first (pruning faster)
+    print(f"Calculating configurations for board size {N} with ships {ship_sizes}")
     ships = tuple(sorted(ship_sizes, reverse=True))
-    # pre‐compute placement lists for each distinct length
     placement_lists = {
         s: generate_bitmask_placements(s, N)
         for s in set(ships)
@@ -43,12 +36,6 @@ def count_configurations(N, ship_sizes):
 
     @lru_cache(None)
     def backtrack(idx, occupied, last_choice):
-        """
-        idx: which ship we’re placing (0..len(ships))
-        occupied: bitmask of already‐used cells
-        last_choice: index in placement_list[ships[idx]] used by the _previous_
-                     ship of the *same* length, or -1 if none
-        """
         if idx == len(ships):
             return 1
 
@@ -56,7 +43,6 @@ def count_configurations(N, ship_sizes):
         placements = placement_lists[length]
         total = 0
 
-        # Determine where to start so identical ships don't reorder:
         start = 0
         if idx > 0 and ships[idx] == ships[idx - 1]:
             start = last_choice + 1
@@ -64,12 +50,10 @@ def count_configurations(N, ship_sizes):
         for choice in range(start, len(placements)):
             mask = placements[choice]
             if (mask & occupied) == 0:
-                # pass new last_choice for this ship if it matches next
-                next_last = choice
                 total += backtrack(
                     idx + 1,
                     occupied | mask,
-                    next_last
+                    choice
                 )
 
         return total
@@ -77,12 +61,61 @@ def count_configurations(N, ship_sizes):
     return backtrack(0, 0, -1)
 
 
-# Examples:
-print(count_configurations(5, [3, 3, 2]))  # → 8000
-print(count_configurations(6, [3, 3, 2]))  # → 40324
-print(count_configurations(7, [3, 2, 2]))  # → 182 938
-print(count_configurations(7, [4, 3, 2, 2]))  # → 6 078 844
-print(count_configurations(3, [2, 2]))  # → 44
-print(count_configurations(3, [3, 2]))  # → 36
-print(count_configurations(3, [3, 3]))  # → 6
-print(count_configurations(3, [1]))  # → 9
+# Example usage
+# print result from max board size 10 and full ships [5,4,3,2,2]
+# print(count_configurations(10, [5, 4, 3, 3, 2]))
+# print(count_configurations(7, [3, 3, 2]))
+# print(count_configurations(5, [3, 3, 2]))
+
+# Plot 1: Effect of board size (fixed ship sizes)
+print("Effect of board size on configurations")
+ship_sizes = [3, 3, 2]
+sizes = list(range(3, 11))  # Board sizes 4x4 to 8x8
+
+config_counts_by_board = []
+for N in sizes:
+    res = count_configurations(N, ship_sizes)
+    config_counts_by_board.append(res)
+    print("res", res)
+
+print("Effect of ship loadout on configurations")
+# Plot 2: Effect of ship loadout (fixed board size)
+board_size = 5
+ship_variants = [
+    [3, 3],
+    [2, 2],
+    [3, 2],
+    [3, 3, 2],
+    [3, 2, 2],
+    [4, 3, 3, 2],
+    [4, 3, 2, 2],
+]
+labels = [str(s) for s in ship_variants]
+
+config_counts_by_ships = [count_configurations(board_size, s) for s in ship_variants]
+
+
+plt.figure(figsize=(12, 5))
+
+# Plot 1 — Board size vs configurations
+plt.subplot(1, 2, 1)
+plt.plot(sizes, config_counts_by_board, marker='o', linewidth=2, markersize=6)
+plt.yscale('log')
+plt.title('Board Size vs. Configurations')
+plt.xlabel('Board Size (N × N)')
+plt.ylabel('Valid Configurations')
+plt.grid(True, which='major', axis='y', linestyle='--', linewidth=0.7)
+
+# Plot 2 — Ship loadout vs configurations
+plt.subplot(1, 2, 2)
+bars = plt.bar(labels, config_counts_by_ships)
+plt.yscale('log')
+plt.title(f'Ship Loadout vs. Configurations (Board: {board_size}×{board_size})')
+plt.xlabel('Ship Sizes')
+plt.ylabel('Valid Configurations')
+plt.xticks(rotation=30)
+plt.grid(True, which='major', axis='y', linestyle='--', linewidth=0.7)
+
+# Tight layout for better alignment
+plt.tight_layout()
+plt.show()
