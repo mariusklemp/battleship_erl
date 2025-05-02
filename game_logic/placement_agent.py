@@ -287,6 +287,44 @@ class PlacementAgent:
 
         return self.list_of_ships
 
+    def get_possible_ship_cells(self, board):
+        """Return a set of cells that could possibly contain a ship segment given current board state."""
+        candidate_map = self._generate_candidate_map(board)
+        possible = set()
+        for candidates in candidate_map.values():
+            for cand in candidates:
+                possible.update(cand["indexes"])
+        return possible
+
+    def get_impossible_ship_cells(self, board):
+        """Return a set of cells that cannot contain any ship segment given current board state."""
+        all_cells = set(range(self.board_size ** 2))
+        return all_cells - self.get_possible_ship_cells(board)
+
+    def generate_all_configurations(self, board):
+        """Return a list of all possible full ship placement configurations given current board state.
+        Each configuration is a list of candidate dicts for each ship in order self.ships."""
+        candidate_map = self._generate_candidate_map(board)
+        global_hits = {i for i, (hit, sunk) in enumerate(zip(board[1], board[3])) if hit == 1 and sunk == 0}
+        results = []
+        ships_list = self.ships
+
+        def backtrack(i, current, used):
+            if i == len(ships_list):
+                if global_hits.issubset(used):
+                    results.append(list(current))
+                return
+            for cand in candidate_map[ships_list[i]]:
+                idxs = set(cand["indexes"])
+                if idxs & used:
+                    continue
+                current.append(cand)
+                backtrack(i + 1, current, used | idxs)
+                current.pop()
+
+        backtrack(0, [], set())
+        return results
+
 
 if __name__ == "__main__":
     # Example usage

@@ -14,7 +14,7 @@ from game_logic.game_manager import GameManager
 from ai.model import ANET
 from inner_loop import InnerLoopManager
 from neat_system.neat_manager import NeatManager
-
+import visualize
 
 class OuterLoopManager:
     """
@@ -285,6 +285,7 @@ class OuterLoopManager:
             step_start = time.perf_counter()
             if self.run_inner_loop:
                 print(f"\nInner loop: Training {len(self.search_agents)} search agents")
+                #visualize.print_rbuf(rbuf.get_training_set(10), 10, self.board_size)
                 for i, search_agent in tqdm(enumerate(self.search_agents), desc="Training search agents",
                                             total=len(self.search_agents)):
                     self.inner_loop_manager.run(search_agent, rbuf=rbuf, gen=gen)

@@ -53,7 +53,6 @@ class Game:
             else:
                 visualize.show_board(current_state_2.board, self.game_manager2.size)
                 move, _ = self.player2_search.strategy.find_move(current_state_2, topp=True)
-                visualize.plot_action_distribution(_, self.game_manager2.size)
 
         try:
             # Validate move
