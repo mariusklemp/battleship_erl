@@ -445,7 +445,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.fill_between(x, end_m - end_s, end_m + end_s, alpha=0.2, color='#ff7f0e')
         ax.set_xticks(x)
         ax.set_xticklabels([str(g) for g in gens], rotation=45)
-        ax.set_title(f"{experiment} — Distribution Entropy (mean ± std)", fontsize=14)
+        ax.set_title(f"{experiment} — Distribution Entropy", fontsize=14)
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
@@ -1006,27 +1006,31 @@ class PlacementEvaluator(BaseEvaluator):
         experiment: like "neat" or "rl"
         Plots placement metrics with mean±std fill‐between.
         """
-        # === 1) Baseline‐dependent metrics ===
+        # === 1) Baseline‐dependent metrics AS SUBPLOTS ===
         for title, key in [("Move Count", "move_count"),
                            ("Hit-to-Sunk Ratio", "hit_to_sunk_ratio")]:
-            gens = stats[key][next(iter(stats[key]))]['gens']
-            x = np.arange(len(gens))
+            # extract list of baselines
+            baselines = list(stats[key].keys())
+            n = len(baselines)
 
-            fig, ax = plt.subplots(figsize=(12, 6))
-            for baseline, data in stats[key].items():
-                m, s = data['mean'], data['std']
-                ax.plot(x, m, "o-", linewidth=3, markersize=6, label=baseline)
+            fig, axes = plt.subplots(1, n, figsize=(4 * n, 4), squeeze=False)
+            for ax, baseline in zip(axes[0], baselines):
+                data = stats[key][baseline]
+                gens, m, s = data['gens'], data['mean'], data['std']
+                x = np.arange(len(gens))
+
+                ax.plot(x, m, 'o-', linewidth=2, markersize=6, label=baseline)
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
+                ax.set_title(baseline)
+                ax.set_xlabel("Gen")
+                ax.set_xticks(x)
+                ax.set_xticklabels([str(g) for g in gens], rotation=45)
+                ax.grid(alpha=0.3)
 
-            ax.set_xticks(x)
-            ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title} (mean ± std)", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
-            ax.grid(alpha=0.3)
-            ax.legend(title="Search Baseline", loc="upper left",
-                      bbox_to_anchor=(1.02, 1), fontsize=10)
-            plt.tight_layout()
+            # only the first subplot gets the y‐label
+            axes[0][0].set_ylabel(title)
+            fig.suptitle(f"{experiment} — {title}")
+            plt.tight_layout(rect=[0, 0, 1, 0.92])
             plt.show()
 
         # === 2) Baseline-independent metrics ===
@@ -1043,9 +1047,9 @@ class PlacementEvaluator(BaseEvaluator):
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"Placing {experiment} — {title} (mean ± std)", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"Placing {experiment} — {title}")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(title)
             ax.grid(alpha=0.3)
             plt.tight_layout()
             plt.show()
@@ -1060,31 +1064,72 @@ class PlacementEvaluator(BaseEvaluator):
         """
 
         # --- 1) Baseline‐dependent metrics ---
+        # inside plot_combined_all, replace the bd‐metrics block with this
         bd_metrics = [
             ("Move Count", "move_count"),
             ("Hit-to-Sunk Ratio", "hit_to_sunk_ratio"),
         ]
         for title, key in bd_metrics:
-            fig, ax = plt.subplots(figsize=(10, 5))
-            for exp_label, stats in all_stats.items():
-                sk = stats[key]  # dict: baseline -> {gens, mean, std}
-                for baseline_name, data in sk.items():
-                    gens = data["gens"]
-                    m    = data["mean"]
-                    s    = data["std"]
+            # assume all_stats has the same baselines under each experiment
+            example = next(iter(all_stats.values()))
+            baselines = list(example[key].keys())
+            n = len(baselines)
+
+            # no sharey → each subplot gets its own y‐axis
+            fig, axes = plt.subplots(1, n, figsize=(4 * n, 4), squeeze=False)
+
+            # plot each experiment *on each* baseline
+            for ax, baseline in zip(axes[0], baselines):
+                mins, maxs = [], []
+                for exp_label, stats in all_stats.items():
+                    data = stats[key][baseline]
+                    gens, m, s = data["gens"], data["mean"], data["std"]
                     x = np.arange(len(gens))
-                    label = f"{exp_label} − {baseline_name}"
-                    ax.plot(x, m, 'o-', linewidth=2, label=label)
+
+                    ax.plot(x, m, "o-", linewidth=2, label=exp_label)
                     ax.fill_between(x, m - s, m + s, alpha=0.2)
 
-            ax.set_xticks(x)
-            ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"Placement: {title} (mean ± std)")
-            ax.set_xlabel("Generation")
-            ax.set_ylabel(title)
-            ax.legend(title="Experiment − Baseline", bbox_to_anchor=(1.02, 1), loc="upper left")
-            ax.grid(alpha=0.3)
-            plt.tight_layout(rect=[0, 0, 1, 0.95])
+                    mins.append((m - s).min())
+                    maxs.append((m + s).max())
+
+                # tighten this subplot’s y‐limit
+                lo, hi = min(mins), max(maxs)
+                pad = (hi - lo) * 0.1
+                ax.set_ylim(lo - pad, hi + pad)
+
+                # new per‐subplot title
+                ax.set_title(f"Versus {baseline} baseline", fontsize=9)
+                ax.set_xlabel("Generation", fontsize=8)
+                ax.set_xticks(x)
+                ax.set_xticklabels([str(g) for g in gens], rotation=45)
+                ax.grid(alpha=0.3)
+
+            # only the first gets the y‐label
+            axes[0][0].set_ylabel(title, fontsize=8)
+
+            # overall figure title (metric name)
+            fig.suptitle(f"Placement: {title} Across Experiments", fontsize=10)
+
+            # collect handles & labels once
+            seen = {}
+            for ax in axes.flatten():
+                for h, lab in zip(*ax.get_legend_handles_labels()):
+                    if lab not in seen:
+                        seen[lab] = h
+
+            # 1) give the bottom of the figure more breathing room
+            fig.subplots_adjust(bottom=0.3)  # increase bottom margin from 0.1 to 0.2
+
+            # 2) place legend centered below all subplots
+            fig.legend(
+                seen.values(), seen.keys(),
+                loc="lower center",               # use lower center
+                ncol=len(seen),
+                bbox_to_anchor=(0.5, -0.02),      # slightly below the axes
+                bbox_transform=fig.transFigure,
+                title="Opposing Agent"
+            )
+
             plt.show()
 
         # --- 2) Baseline‐independent metrics ---
@@ -1098,22 +1143,21 @@ class PlacementEvaluator(BaseEvaluator):
             for exp_label, stats in all_stats.items():
                 sk = stats[key]  # { 'gens':…, 'mean':…, 'std':… }
                 gens = sk["gens"]
-                m    = sk["mean"]
-                s    = sk["std"]
+                m = sk["mean"]
+                s = sk["std"]
                 x = np.arange(len(gens))
                 ax.plot(x, m, 'o-', linewidth=2, label=exp_label)
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"Placement: {title} (mean ± std)")
+            ax.set_title(f"Placement: {title}")
             ax.set_xlabel("Generation")
             ax.set_ylabel(title)
             ax.legend(title="Experiment", bbox_to_anchor=(1.02, 1), loc="upper left")
             ax.grid(alpha=0.3)
             plt.tight_layout(rect=[0, 0, 1, 0.95])
             plt.show()
-
 
     # ------------------- Helper to Create Board from Chromosome -------------------
     def create_board_from_chromosome(self, chromosome):
