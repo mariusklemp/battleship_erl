@@ -1,3 +1,4 @@
+import visualize
 from ai.mcts import MCTS
 from game_logic.game import Game
 from game_logic.game_manager import GameManager
@@ -263,12 +264,40 @@ def initialize_game(
 
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
+    board_size = 5
+    board = [[1, 0, 1, 1, 0,
+              1, 0, 1, 0, 1,
+              1, 0, 1, 0, 0,
+              0, 1, 1, 0, 1,
+              1, 0, 1, 0, 1],
+             [1, 0, 0, 0, 0,
+              1, 0, 0, 0, 0,
+              1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0],
+             [0, 0, 0, 1, 1,
+              0, 0, 0, 0, 0,
+              0, 1, 0, 1, 0,
+              0, 0, 0, 1, 0,
+              1, 0, 1, 1, 0],
+             [1, 1, 1, 0, 0,
+              1, 0, 0, 0, 0,
+              1, 0, 0, 0, 1,
+              0, 0, 0, 0, 1,
+              0, 0, 0, 0, 1],
+             [0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0]  # Example board, replace with actual board data
+             ]
+    visualize.show_board(board, board_size)
     initialize_game(
         board_size=5,
         sizes=[3, 3, 2],
         human_player=True,
-        file_path_1="models/5/rl/1/model_gen90.pth",
-        file_path_2="models/5/rl/1/model_gen90.pth",
+        file_path_1="models/5/rl/solo/8/model_gen100.pth",
+        file_path_2="models/5/rl/solo/8/model_gen100.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",

@@ -249,7 +249,7 @@ class OuterLoopManager:
                         )
 
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen}.pth"
+                    model_path = f"{model_dir_search}/rl/solo/{experiment}/model_gen{gen}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
 
                     if self.run_ga:
@@ -380,7 +380,7 @@ class OuterLoopManager:
                         )
 
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen + 1}.pth"
+                    model_path = f"{model_dir_search}/rl/solo/{experiment}/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
                     if self.run_ga:
                         self.save_placement_population(
@@ -686,7 +686,10 @@ class OuterLoopManager:
                 pass
 
     def save_best_neat_agent(self, model_dir, subdir, gen, experiment):
-        model_path = f"{model_dir}/{subdir}/{experiment}/model_gen{gen + 1}.pth"
+        if self.run_ga:
+            model_path = f"{model_dir}/{subdir}/co_evo/{experiment}/model_gen{gen + 1}.pth"
+        else:
+            model_path = f"{model_dir}/{subdir}/solo/{experiment}/model_gen{gen + 1}.pth"
         best_fitness = float("-inf")
         best_agent = None
         if gen == -1:

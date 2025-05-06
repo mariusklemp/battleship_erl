@@ -47,11 +47,13 @@ class Tournament:
         self.search_players = {}
         self.placement_populations = {}
 
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "evolution_config.json")
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config",
+                                   "evolution_config.json")
         with open(config_path, "r") as f:
             evolution_config = json.load(f)
 
-        neat_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "neat_system", "config.txt")
+        neat_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "neat_system",
+                                        "config.txt")
         self.neat_manager = NeatManager(
             neat_config_path=neat_config_path,
             evolution_config=evolution_config,
@@ -113,13 +115,13 @@ class Tournament:
 
         return search_agent
 
-    def init_players(self, experiment, variation):
+    def init_players(self, experiment, variation, subdir):
         self.search_players.clear()
 
         config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai",
                                    "config_simple.json")
         for i in range(self.num_players + 1):
-            agent = self.set_nn_agent(i, config_path, f"models/{self.board_size}/{experiment}/{variation}")
+            agent = self.set_nn_agent(i, config_path, subdir)
             self.search_players[agent.name] = agent
 
     def init_placement_agents(self, experiment, variation):
@@ -151,37 +153,70 @@ class Tournament:
             num_evaluation_games=100,
             game_manager=self.game_manager,
         )
-        experiments_evals = {"rl": [], "neat": [], "erl": []}
 
-        for experiment in experiments_evals:
-            print(f"\n=== SEARCH: {experiment.upper()} ===")
-            if variation is not None:
-                self.init_players(experiment, variation)
-                for gen, agent in tqdm(self.search_players.items()):
-                    evaluator.evaluate_search_agents([agent], gen)
-                results = evaluator.search_evaluator.get_results()
-                experiments_evals[experiment].append(results)
-                evaluator.search_evaluator.reset()
-            else:
-                for var in range(1, self.num_variations + 1):
-                    print(f"\n--- Variation {var} ---")
-                    self.init_players(experiment, var)
+        experiments_evals = {
+            "rl": {"solo": []},
+            "neat": {"solo": [], "co_evo": []},
+            "erl": {"solo": [], "co_evo": []},
+        }
+
+        for exp, modes in experiments_evals.items():
+            for mode in modes:
+                if exp == "rl" and mode == "co_evo":
+                    continue
+
+                print(f"\n=== SEARCH: {exp.upper()} — MODE: {mode} ===")
+
+                if variation is not None:
+                    # single-variation mode
+                    print(f"Variation {variation}")
+                    # pick correct folder root for this mode/experiment
+                    subdir = f"models/{self.board_size}/{exp}/{mode}/{variation}"
+                    self.init_players(exp, variation, subdir=subdir)
                     for gen, agent in tqdm(self.search_players.items()):
                         evaluator.evaluate_search_agents([agent], gen)
                     results = evaluator.search_evaluator.get_results()
-                    experiments_evals[experiment].append(results)
+                    experiments_evals[exp][mode].append(results)
                     evaluator.search_evaluator.reset()
 
-        # aggregate & plot
-        all_stats = {
-            exp: evaluator.search_evaluator.aggregate_runs(runs)
-            for exp, runs in experiments_evals.items()
-        }
-        for exp, stats in all_stats.items():
-            print(f"\n>>> SEARCH PLOTTING {exp.upper()}")
-            evaluator.search_evaluator.plot_metrics_from_agg(stats, exp.upper())
-        evaluator.search_evaluator.plot_combined_all(all_stats)
+                else:
+                    # loop over all variations
+                    for var in range(1, self.num_variations + 1):
+                        print(f"\n--- Variation {var} ---")
+                        # pick correct folder root for this mode/experiment
+                        subdir = f"models/{self.board_size}/{exp}/{mode}/{var}"
+                        self.init_players(exp, var, subdir=subdir)
+                        for gen, agent in tqdm(self.search_players.items()):
+                            evaluator.evaluate_search_agents([agent], gen)
+                        results = evaluator.search_evaluator.get_results()
+                        experiments_evals[exp][mode].append(results)
+                        evaluator.search_evaluator.reset()
 
+        # now aggregate each exp/mode separately
+        all_stats = {
+            exp: {
+                mode: evaluator.search_evaluator.aggregate_runs(runs)
+                for mode, runs in modes.items()
+            }
+            for exp, modes in experiments_evals.items()
+        }
+
+        # plotting
+        for exp, mode_stats in all_stats.items():
+            print(f"\n>>> PLOTTING {exp.upper()}")
+            evaluator.search_evaluator.plot_metrics_from_agg(
+                mode_stats, exp.upper()
+            )
+
+        flat_stats = {}
+        for exp, stats in all_stats.items():
+            if isinstance(stats, dict) and "solo" in stats:
+                # unwrap the solo branch for BOTH RL (only solo) and Neat/Erl
+                flat_stats[exp] = stats["solo"]
+            else:
+                flat_stats[exp] = stats
+
+        evaluator.search_evaluator.plot_combined_all(flat_stats)
 
     def skill_progression_placement(self, variation=None):
         evaluator = Evaluator(
@@ -220,7 +255,6 @@ class Tournament:
             print(f"\n>>> PLACEMENT PLOTTING {exp.upper()}")
             evaluator.placement_evaluator.plot_metrics_from_agg(stats, exp.upper())
         evaluator.placement_evaluator.plot_combined_all(all_place_stats)
-
 
     def skill_progression(self, variation=None):
         """Legacy entry point that runs both."""
@@ -324,11 +358,11 @@ def main():
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=10,
-        num_variations=1,
+        num_players=2,
+        num_variations=2,
         game_manager=game_manager,
-        run_search=False,
-        run_placement=True,
+        run_search=True,
+        run_placement=False,
     )
     # tournament.skill_final_agent(baseline=True, experiment="rl")
     tournament.skill_progression()

@@ -427,22 +427,119 @@ class SearchEvaluator(BaseEvaluator):
 
     def plot_metrics_from_agg(self, stats, experiment: str):
         """
-        stats: output of aggregate_runs()
-        experiment: name of the experiment (e.g. "neat", "rl") to include in titles
-        Plots the same six figures as plot_metrics(), but using mean±std fill-between shading and thesis-quality styling.
+        stats: either
+          - a single-agg dict (old behavior), or
+          - a dict with exactly one key "solo" (RL), or
+          - a dict with keys "solo" and "co_evo" (neat/erl)
         """
+        # --- unwrap the RL-only case ---
+        if isinstance(stats, dict) and "solo" in stats and "co_evo" not in stats:
+            stats = stats["solo"]
+            is_nested = False
+        elif isinstance(stats, dict) and "solo" in stats and "co_evo" in stats:
+            is_nested = True
+        else:
+            is_nested = False
+
+        # color maps
+        base_colors = {
+            "random": "#1f77b4",  # blue
+            "uniform spread": "#ff7f0e",  # orange
+        }
+        dark_colors = {
+            "random": "#0d3f8b",  # darker blue
+            "uniform spread": "#d66000",  # darker orange
+        }
+
+        def classify_baseline(name):
+            nl = name.lower()
+            if "random" in nl:
+                return "random"
+            if "uniform" in nl or "spread" in nl:
+                return "uniform spread"
+            return name
+
+        def get_color(baseline, mode):
+            key = classify_baseline(baseline)
+            if is_nested and mode == "co_evo":
+                return dark_colors[key]
+            return base_colors[key]
+
+        def get_label(baseline, mode):
+            cls = classify_baseline(baseline).title()
+            if is_nested:
+                suffix = "Co-evo" if mode == "co evo" else "non co evo"
+                return f"{cls} ({suffix})"
+            return cls
+
         # --- 1) Distribution Entropy ---
-        gens = stats['start_entropy']['gens']
-        start_m, start_s = stats['start_entropy']['mean'], stats['start_entropy']['std']
-        end_m, end_s = stats['end_entropy']['mean'], stats['end_entropy']['std']
-        x = np.arange(len(gens))
         fig, ax = plt.subplots(figsize=(12, 6))
-        # Start
-        ax.plot(x, start_m, 'o-', linewidth=3, markersize=6, label='Start Entropy', color='#1f77b4')
-        ax.fill_between(x, start_m - start_s, start_m + start_s, alpha=0.2, color='#1f77b4')
-        # End
-        ax.plot(x, end_m, 'o-', linewidth=3, markersize=6, label='End Entropy', color='#ff7f0e')
-        ax.fill_between(x, end_m - end_s, end_m + end_s, alpha=0.2, color='#ff7f0e')
+        if not is_nested:
+            gens = stats['start_entropy']['gens']
+            start_m, start_s = stats['start_entropy']['mean'], stats['start_entropy']['std']
+            end_m, end_s = stats['end_entropy']['mean'], stats['end_entropy']['std']
+            x = np.arange(len(gens))
+
+            ax.plot(
+                x, start_m,
+                marker='o', linestyle='-', linewidth=3, markersize=6,
+                label='Start Entropy',
+                color=base_colors["random"]
+            )
+            ax.fill_between(x, start_m - start_s, start_m + start_s,
+                            alpha=0.2, color=base_colors["random"])
+
+            ax.plot(
+                x, end_m,
+                marker='o', linestyle='-', linewidth=3, markersize=6,
+                label='End Entropy',
+                color=base_colors["uniform spread"]
+            )
+            ax.fill_between(x, end_m - end_s, end_m + end_s,
+                            alpha=0.2, color=base_colors["uniform spread"])
+        else:
+            styles = {
+                "solo": {"linestyle": "-", "color": base_colors["random"]},
+                "co_evo": {"linestyle": "--", "color": dark_colors["random"]},
+            }
+            # plot Start Entropy
+            for mode, style in styles.items():
+                s = stats[mode]
+                gens = s['start_entropy']['gens']
+                x = np.arange(len(gens))
+                m0, s0 = s['start_entropy']['mean'], s['start_entropy']['std']
+
+                ax.plot(
+                    x, m0,
+                    marker='o', linewidth=3, markersize=6,
+                    linestyle=style["linestyle"],
+                    label=get_label("random", mode),
+                    color=style["color"]
+                )
+                ax.fill_between(x, m0 - s0, m0 + s0,
+                                alpha=0.2, color=style["color"])
+
+            # plot End Entropy (uniform spread baselines)
+            styles_end = {
+                "solo": {"linestyle": "-", "color": base_colors["uniform spread"]},
+                "co_evo": {"linestyle": "--", "color": dark_colors["uniform spread"]},
+            }
+            for mode, style in styles_end.items():
+                s = stats[mode]
+                gens = s['end_entropy']['gens']
+                x = np.arange(len(gens))
+                m1, s1 = s['end_entropy']['mean'], s['end_entropy']['std']
+
+                ax.plot(
+                    x, m1,
+                    marker='o', linewidth=3, markersize=6,
+                    linestyle=style["linestyle"],
+                    label=get_label("uniform spread", mode),
+                    color=style["color"]
+                )
+                ax.fill_between(x, m1 - s1, m1 + s1,
+                                alpha=0.2, color=style["color"])
+
         ax.set_xticks(x)
         ax.set_xticklabels([str(g) for g in gens], rotation=45)
         ax.set_title(f"{experiment} — Distribution Entropy", fontsize=14)
@@ -460,22 +557,46 @@ class SearchEvaluator(BaseEvaluator):
             ("Moves Between Hits", "moves_between_hits"),
             ("Sink Efficiency", "sink_efficiency"),
         ]
+
         for title, key in metrics:
             fig, ax = plt.subplots(figsize=(12, 6))
-            for baseline, data in stats[key].items():
-                gens = data['gens'];
-                m = data['mean'];
-                s = data['std']
-                x = np.arange(len(gens))
-                ax.plot(x, m, 'o-', linewidth=3, markersize=6, label=baseline)
-                ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+            if not is_nested:
+                for baseline, data in stats[key].items():
+                    gens = data['gens']
+                    m, s = data['mean'], data['std']
+                    x = np.arange(len(gens))
+                    col = base_colors[classify_baseline(baseline)]
+                    ax.plot(
+                        x, m,
+                        marker='o', linestyle='-', linewidth=3, markersize=6,
+                        label=classify_baseline(baseline).title(),
+                        color=col
+                    )
+                    ax.fill_between(x, m - s, m + s, alpha=0.2, color=col)
+            else:
+                for mode, ls in [("solo", "-"), ("co_evo", "--")]:
+                    sdict = stats[mode]
+                    for baseline, data in sdict[key].items():
+                        gens = data['gens']
+                        m, s = data['mean'], data['std']
+                        x = np.arange(len(gens))
+                        col = get_color(baseline, mode)
+                        ax.plot(
+                            x, m,
+                            marker='o', linestyle=ls, linewidth=3, markersize=6,
+                            label=get_label(baseline, mode),
+                            color=col
+                        )
+                        ax.fill_between(x, m - s, m + s, alpha=0.2, color=col)
+
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title} (mean ± std)", fontsize=14)
+            ax.set_title(f"{experiment} — {title}", fontsize=14)
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
-            ax.legend(title="Baseline", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
@@ -503,7 +624,7 @@ class SearchEvaluator(BaseEvaluator):
             ax.fill_between(x, e_mean - e_std, e_mean + e_std, alpha=0.2)
         ax.set_xticks(x)
         ax.set_xticklabels([str(g) for g in gens], rotation=45)
-        ax.set_title("Entropy Across Experiments (Start & End, mean ± std)", fontsize=14)
+        ax.set_title("Entropy Across Experiments", fontsize=14)
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
@@ -535,7 +656,7 @@ class SearchEvaluator(BaseEvaluator):
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{title} Across Experiments (mean ± std)", fontsize=14)
+            ax.set_title(f"{title} Across Experiments", fontsize=14)
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
@@ -1123,9 +1244,9 @@ class PlacementEvaluator(BaseEvaluator):
             # 2) place legend centered below all subplots
             fig.legend(
                 seen.values(), seen.keys(),
-                loc="lower center",               # use lower center
+                loc="lower center",  # use lower center
                 ncol=len(seen),
-                bbox_to_anchor=(0.5, -0.02),      # slightly below the axes
+                bbox_to_anchor=(0.5, -0.02),  # slightly below the axes
                 bbox_transform=fig.transFigure,
                 title="Opposing Agent"
             )

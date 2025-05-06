@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
 fitness_threshold = 13.600000000000001
-pop_size = 1
+pop_size = 50
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -25,8 +25,8 @@ max_num_conv_layer = 1
 max_num_fc_layer = 1
 layer_add_prob = 0.2
 layer_delete_prob = 0.2
-conv_params_mutate_prob = 0.8
-fc_params_mutate_prob = 0.8
+conv_params_mutate_prob = 0.5
+fc_params_mutate_prob = 0.5
 pool_sizes = [2, 4]
 pool_strides = [1, 2]
 pool_type = max, avg
