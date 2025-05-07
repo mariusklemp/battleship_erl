@@ -298,7 +298,7 @@ class Tournament:
                 if strat == "mcts":
                     m = MCTS(self.game_manager, time_limit=1.2)
                     base.strategy.set_mcts(m)
-                bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=1)
+                bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=10)
                 zero_std = {k: 0.0 for k in bm}
                 labeled_metrics.append((f"{strat.capitalize()} Agent", bm, zero_std))
 
@@ -320,18 +320,18 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=1000,
+        num_games=100,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
         num_players=10,
-        num_variations=3,
+        num_variations=10,
         game_manager=game_manager,
         run_search=True,
         run_placement=False,
     )
-    #tournament.skill_final_agent(baseline=True, variation=5, experiment="rl")
-    tournament.skill_progression(variation=5)
+    tournament.skill_final_agent(baseline=True, experiment="rl")
+    #tournament.skill_progression()
 
 
 if __name__ == "__main__":

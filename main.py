@@ -264,11 +264,11 @@ def initialize_game(
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
     initialize_game(
-        board_size=5,
-        sizes=[3, 3, 2],
+        board_size=7,
+        sizes=[4, 3, 3, 2],
         human_player=True,
-        file_path_1="models/5/rl/1/model_gen90.pth",
-        file_path_2="models/5/rl/1/model_gen90.pth",
+        file_path_1="models/7/rl/1/model_gen100.pth",
+        file_path_2="models/7/rl/1/model_gen100.pth",
         player1_search_strategy="nn_search",
         player1_placing_strategy="random",
         player2_search_strategy="nn_search",
