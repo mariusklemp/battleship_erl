@@ -413,7 +413,11 @@ class OuterLoopManager:
                 name=f"best_agent",
                 lr=0.0001,
             )
-            model_path = f"models/{str(self.board_size)}/erl/{self.evolution_config['experiment']}/best_agent.pth"
+            if self.run_ga:
+                model_path = f"models/{str(self.board_size)}/erl/co_evo/{self.evolution_config['experiment']}/best_agent.pth"
+            else:
+                model_path = f"models/{str(self.board_size)}/neat/solo/{self.evolution_config['experiment']}/best_agent.pth"
+
             best_agent.strategy.net.save_model_genome(model_path)
         elif self.run_neat:
             best_genome = self.neat_manager.population.best_genome
@@ -427,7 +431,10 @@ class OuterLoopManager:
                 name=f"best_agent",
                 lr=0.0001,
             )
-            model_path = f"models/{str(self.board_size)}/neat/{self.evolution_config['experiment']}/best_agent.pth"
+            if self.run_ga:
+                model_path = f"models/{str(self.board_size)}/neat/co_evo{self.evolution_config['experiment']}/best_agent.pth"
+            else:
+                model_path = f"models/{str(self.board_size)}/neat/solo/{self.evolution_config['experiment']}/best_agent.pth"
             best_agent.strategy.net.save_model_genome(model_path)
 
         # --- Step 7: Plot ---

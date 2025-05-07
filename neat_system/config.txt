@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
 fitness_threshold = 13.600000000000001
-pop_size = 50
+pop_size = 20
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -13,9 +13,9 @@ kernel_sizes = [1, 3, 5]
 strides = [1, 2]
 paddings = [0, 1]
 out_channels_min = 32
-out_channels_max = 64
+out_channels_max = 256
 fc_layer_size_min = 32
-fc_layer_size_max = 256
+fc_layer_size_max = 3200
 compatibility_topology_coefficient = 0.1
 compatibility_weight_coefficient = 0.4
 compatibility_disjoint_coefficient = 1
@@ -39,7 +39,7 @@ weight_min_value = -5.0
 weight_mutate_rate = 0.9
 weight_replace_rate = 0.1
 weight_mutate_power = 1.0
-mutate_architecture = False
+mutate_architecture = True
 mutate_weights = True
 crossover_architecture = False
 crossover_weights = False
@@ -55,5 +55,5 @@ species_elitism = 0
 [DefaultReproduction]
 elitism = 1
 survival_threshold = 0.2
-min_species_size = 2
+min_species_size = 1
 

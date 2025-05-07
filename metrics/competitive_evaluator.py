@@ -1,4 +1,3 @@
-# metrics/competitive_evaluator.py
 import math
 
 import numpy as np
@@ -40,76 +39,129 @@ class CompetitiveEvaluator:
         return placement_agents
 
     def evaluate(self, search_agents, placement_agents=None):
-        """
-        Evaluate every pairing between placement agents and search agents.
-        Supports both NEAT-style mappings (dict) and plain lists of search agents.
-
-        Parameters:
-          search_agents    : Either a dict {key: (genome, agent)} or a list of search agent instances.
-          placement_agents : A list of placement agent instances. If None, defaults are created.
-        """
-        print("Evaluating agents...")
-        # Create default placement agents if not provided
         if placement_agents is None:
             placement_agents = self.init_placement_agents()
 
-        # Check search agent input format
         is_mapping = isinstance(search_agents, dict)
-        if is_mapping:
-            agent_list = [agent for _, (_, agent) in search_agents.items()]
-        else:
-            agent_list = search_agents
+        agent_list = [agent for _, (_, agent) in search_agents.items()] if is_mapping else search_agents
 
-        # Init fitness containers
-        placing_fitness = {agent: 0.0 for agent in placement_agents}
-        search_fitness = {agent: 0.0 for agent in agent_list}
+        # accumulate for placement GA
+        placing_fitness = {pa: 0.0 for pa in placement_agents}
 
-        num_placement_agents = len(placement_agents)
-        num_search_agents = len(agent_list)
+        # accumulate all six metrics for search agents
+        sums = {
+            sa: {'raw': 0., 'accuracy': 0., 'sink_eff': 0., 'start_ent': 0., 'end_ent': 0.}
+            for sa in agent_list
+        }
 
-        # Evaluate all pairings
-        for placement_agent in placement_agents:
-            for search_agent in agent_list:
-                move_count = self.game_manager.simulate_game(placement_agent, search_agent)
+        # simulate
+        for pa in placement_agents:
+            for sa in agent_list:
+                (moves,
+                 accuracy,
+                 avg_sink_eff,
+                 _avg_moves_btwn,  # unused here
+                 start_ent,
+                 end_ent) = self.game_manager.simulate_game(pa, sa)
 
-                placing_fitness[placement_agent] += move_count
-                search_fitness[search_agent] += (self.board_size ** 2 - move_count)
+                placing_fitness[pa] += moves
+                sums[sa]['raw'] += (self.board_size ** 2 - moves)
+                sums[sa]['accuracy'] += accuracy
+                sums[sa]['sink_eff'] += avg_sink_eff
+                sums[sa]['start_ent'] += start_ent
+                sums[sa]['end_ent'] += end_ent
 
-        # Assign placement agent fitness
-        for placement_agent in placement_agents:
-            avg_fitness = placing_fitness[placement_agent] / num_search_agents
+        # assign GA fitness
+        for pa in placement_agents:
+            avg_moves = placing_fitness[pa] / len(agent_list)
             if self.run_ga:
-                placement_agent.fitness.values = (avg_fitness,)
+                pa.fitness.values = (avg_moves,)
 
-        # Assign search agent fitness if using NEAT (genomes available)
+        # build composite for NEAT
+        overall_raw = []
         if is_mapping:
-            for key, (genome, search_agent) in search_agents.items():
-                avg_val = np.mean(search_agent.strategy.avg_validation_history)
-                avg_acc = np.mean(search_agent.strategy.val_top1_accuracy_history)
-                avg_fitness = search_fitness[search_agent] / num_placement_agents
-                genome.fitness = avg_fitness
+            for key, (genome, sa) in search_agents.items():
+                data = sums[sa]
+                n = len(placement_agents)
 
-        # FOR PLOTTING: compute correct overall averages from fitness values
-        overall_avg_placing = np.mean([
-            agent.fitness.values[0] if self.run_ga else placing_fitness[agent] / num_search_agents
-            for agent in placement_agents
-        ])
+                # averages
+                avg_raw = data['raw'] / n
+                avg_acc = data['accuracy'] / n
+                avg_eff = data['sink_eff'] / n
+                avg_start = data['start_ent'] / n
+                avg_end = data['end_ent'] / n
 
-        if is_mapping:
-            overall_avg_search = np.mean([
-                genome.fitness for genome, _ in search_agents.values()
-            ])
+                overall_raw.append(avg_raw)
+
+                # 2) compute theoretical bounds
+                board_cells    = float(self.board_size**2)
+                sum_ship_cells = float(sum(self.ship_sizes))
+
+                # — 2) “Raw” is already inverted moves:  raw = board_cells – moves
+                max_raw   = board_cells - sum_ship_cells       # worst inverted (i.e. best moves)
+                moves_score = avg_raw / max_raw                # now in [0,1]
+
+                # sink-eff: best is finishing each ship immediately, worst same as moves
+                max_eff   = board_cells
+                eff_score = (max_eff - avg_eff) / max_eff      # in [0,1]
+
+                # 4) shape accuracy (power-law here, but you can swap in a logistic)
+                acc_score = avg_acc ** 3
+
+
+                # Gaussian‐shape start around 1.0
+                sigma_start = 0.05
+                start_score = math.exp(-((avg_start - 1.0)**2) / (2 * sigma_start**2))
+
+                # Gaussian‐shape end around your sweet-spot 0.6
+                center_end = 0.6
+                sigma_end  = 0.15
+                end_score  = math.exp(-((avg_end - center_end)**2) / (2 * sigma_end**2))
+
+                # Both are in (0,1]; if either collapses → near 0
+                entropy_score = start_score * end_score
+
+
+                # 6) Re‐combine with a single entropy weight
+                w = {
+                    'moves'  : 0.40,
+                    'acc'    : 0.15,
+                    'eff'    : 0.15,
+                    'entropy': 0.30
+                }
+
+                composite = (
+                        w['moves']   * moves_score +
+                        w['acc']     * acc_score +
+                        w['eff']     * eff_score +
+                        w['entropy'] * entropy_score
+                )
+
+                genome.fitness = composite
+
+                print(f"  start_score = {start_score:.2f}, end_score = {end_score:.2f}")
+                print(f"  entropy_combined = {entropy_score:.2f}")
+                print(f"  composite fitness = {composite:.3f}")
+
+            # keep plotting on raw move-based fitness
+            overall_avg_search = float(np.mean(overall_raw))
+
         else:
-            overall_avg_search = np.mean([
-                search_fitness[agent] / num_placement_agents for agent in agent_list
-            ])
+            overall_avg_search = float(np.mean([
+                sums[sa]['raw'] / len(placement_agents) for sa in agent_list
+            ]))
 
-        # Record fitness history
-        self.placement_eval_history.append(overall_avg_placing)
+        # record for your existing plots
+        overall_avg_place = np.mean([
+            pa.fitness.values[0] if self.run_ga
+            else placing_fitness[pa] / len(agent_list)
+            for pa in placement_agents
+        ])
+        self.placement_eval_history.append(overall_avg_place)
         self.search_eval_history.append(overall_avg_search)
 
-        print(f"Placement pop Fitness: {overall_avg_placing:.2f}, Search pop Fitness: {overall_avg_search:.2f}")
-
+        print(f"Placement pop Fitness: {overall_avg_place:.2f}, "
+              f"Search pop Fitness (raw): {overall_avg_search:.2f}")
         return search_agents, placement_agents
 
     def create_board_from_chromosome(self, chromosome):
