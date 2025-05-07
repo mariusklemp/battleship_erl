@@ -1,3 +1,4 @@
+import visualize
 from ai.mcts import MCTS
 from game_logic.game import Game
 from game_logic.game_manager import GameManager
@@ -263,6 +264,34 @@ def initialize_game(
 
 if __name__ == "__main__":
     # Example: AI vs AI (Search 1 vs Placing 2, Search 2 vs Placing 1)
+    board_size = 5
+    board = [[1, 0, 1, 1, 0,
+              1, 0, 1, 0, 1,
+              1, 0, 1, 0, 0,
+              0, 1, 1, 0, 1,
+              1, 0, 1, 0, 1],
+             [1, 0, 0, 0, 0,
+              1, 0, 0, 0, 0,
+              1, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0],
+             [0, 0, 0, 1, 1,
+              0, 0, 0, 0, 0,
+              0, 1, 0, 1, 0,
+              0, 0, 0, 1, 0,
+              1, 0, 1, 1, 0],
+             [1, 1, 1, 0, 0,
+              1, 0, 0, 0, 0,
+              1, 0, 0, 0, 1,
+              0, 0, 0, 0, 1,
+              0, 0, 0, 0, 1],
+             [0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0,
+              0, 0, 0, 0, 0]  # Example board, replace with actual board data
+             ]
+    visualize.show_board(board, board_size)
     initialize_game(
         board_size=7,
         sizes=[4, 3, 3, 2],

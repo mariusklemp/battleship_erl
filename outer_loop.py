@@ -110,6 +110,22 @@ class OuterLoopManager:
 
         return search_agents
 
+    def _initialize_hunt_down_search_agents(self):
+        """Initialize search agents with neural networks."""
+        population_size = self.evolution_config["search_population"]["size"]
+        search_agents = []
+
+        for i in range(population_size):
+            agent = SearchAgent(
+                board_size=self.board_size,
+                strategy="hunt_down",
+                name=f"hunt_down_{i}",
+            )
+
+            search_agents.append(agent)
+
+        return search_agents
+
     def _create_nn_agent(self, model_number):
         """Create a neural network-based search agent."""
 
@@ -187,6 +203,9 @@ class OuterLoopManager:
             if not self.run_neat:
                 self.search_agents = self._initialize_nn_search_agents()
 
+        if not self.run_neat and not self.run_inner_loop:
+            self.search_agents = self._initialize_hunt_down_search_agents()
+
         for gen in range(num_generations):
 
             print(f"\n\n--- Generation {gen}/{num_generations} ---")
@@ -206,27 +225,50 @@ class OuterLoopManager:
                 if self.run_neat and self.run_inner_loop:
                     self.save_best_neat_agent(model_dir=model_dir_search, subdir="erl", gen=gen - 1,
                                               experiment=experiment)
-                    self.save_placement_population(
-                        chromosomes=self.placement_ga.population_chromosomes,
-                        model_dir=model_dir_placement,
-                        subdir="erl",
-                        gen=gen - 1,
-                        experiment=experiment,
-                    )
+
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="erl",
+                            gen=gen - 1,
+                            experiment=experiment,
+                        )
 
                 elif self.run_neat:
                     self.save_best_neat_agent(model_dir=model_dir_search, subdir="neat", gen=gen - 1,
                                               experiment=experiment)
-                    self.save_placement_population(
-                        chromosomes=self.placement_ga.population_chromosomes,
-                        model_dir=model_dir_placement,
-                        subdir="erl",
-                        gen=gen - 1,
-                        experiment=experiment,
-                    )
+
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="neat",
+                            gen=gen - 1,
+                            experiment=experiment,
+                        )
+
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen}.pth"
+                    model_path = f"{model_dir_search}/rl/solo/{experiment}/model_gen{gen}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
+
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="rl",
+                            gen=gen - 1,
+                            experiment=experiment,
+                        )
+                else:
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="hunt_down",
+                            gen=gen - 1,
+                            experiment=experiment,
+                        )
 
             # --- Step 2: Baseline Evaluation ---
             print("__Step 2: Evaluating against baseline opponents__")
@@ -317,25 +359,46 @@ class OuterLoopManager:
 
                 if self.run_neat and self.run_inner_loop:
                     self.save_best_neat_agent(model_dir=model_dir_search, subdir="erl", gen=gen, experiment=experiment)
-                    self.save_placement_population(
-                        chromosomes=self.placement_ga.population_chromosomes,
-                        model_dir=model_dir_placement,
-                        subdir="erl",
-                        gen=gen,
-                        experiment=experiment,
-                    )
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="erl",
+                            gen=gen,
+                            experiment=experiment,
+                        )
+
                 elif self.run_neat:
                     self.save_best_neat_agent(model_dir=model_dir_search, subdir="neat", gen=gen, experiment=experiment)
-                    self.save_placement_population(
-                        chromosomes=self.placement_ga.population_chromosomes,
-                        model_dir=model_dir_placement,
-                        subdir="erl",
-                        gen=gen,
-                        experiment=experiment,
-                    )
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="neat",
+                            gen=gen,
+                            experiment=experiment,
+                        )
+
                 elif self.run_inner_loop:
-                    model_path = f"{model_dir_search}/rl/{experiment}/model_gen{gen + 1}.pth"
+                    model_path = f"{model_dir_search}/rl/solo/{experiment}/model_gen{gen + 1}.pth"
                     self.search_agents[0].strategy.net.save_model(model_path)
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="rl",
+                            gen=gen,
+                            experiment=experiment,
+                        )
+                else:
+                    if self.run_ga:
+                        self.save_placement_population(
+                            chromosomes=self.placement_ga.population_chromosomes,
+                            model_dir=model_dir_placement,
+                            subdir="hunt_down",
+                            gen=gen,
+                            experiment=experiment,
+                        )
 
         # Save the best NEAT agent at the end of training
         if self.run_neat and self.run_inner_loop:
@@ -350,7 +413,11 @@ class OuterLoopManager:
                 name=f"best_agent",
                 lr=0.0001,
             )
-            model_path = f"models/{str(self.board_size)}/erl/{self.evolution_config['experiment']}/best_agent.pth"
+            if self.run_ga:
+                model_path = f"models/{str(self.board_size)}/erl/co_evo/{self.evolution_config['experiment']}/best_agent.pth"
+            else:
+                model_path = f"models/{str(self.board_size)}/neat/solo/{self.evolution_config['experiment']}/best_agent.pth"
+
             best_agent.strategy.net.save_model_genome(model_path)
         elif self.run_neat:
             best_genome = self.neat_manager.population.best_genome
@@ -364,7 +431,10 @@ class OuterLoopManager:
                 name=f"best_agent",
                 lr=0.0001,
             )
-            model_path = f"models/{str(self.board_size)}/neat/{self.evolution_config['experiment']}/best_agent.pth"
+            if self.run_ga:
+                model_path = f"models/{str(self.board_size)}/neat/co_evo{self.evolution_config['experiment']}/best_agent.pth"
+            else:
+                model_path = f"models/{str(self.board_size)}/neat/solo/{self.evolution_config['experiment']}/best_agent.pth"
             best_agent.strategy.net.save_model_genome(model_path)
 
         # --- Step 7: Plot ---
@@ -386,8 +456,6 @@ class OuterLoopManager:
         # Plot general metrics
         self.plot_timings(timings)
         self.evaluator.plot_metrics_search()
-        if not self.run_neat:
-            self.competitive_evaluator.plot()
 
         # Plot NEAT-specific visualizations if NEAT was used
         if self.run_neat:
@@ -395,7 +463,18 @@ class OuterLoopManager:
 
         if self.run_ga:
             self.evaluator.plot_metrics_placement()
-            self.competitive_evaluator.plot(hof=self.placement_ga.hof, hos=self.placement_ga.hos)
+            self.competitive_evaluator.plot_hall_frequencies(
+                hof_per_generation=self.placement_ga.hof_per_generation,
+                hos_per_generation=self.placement_ga.hos_per_generation,
+                board_size=self.placement_ga.board_size
+            )
+            self.competitive_evaluator.plot_halls_wrapped(
+                hof_per_generation=self.placement_ga.hof_per_generation,
+                hos_per_generation=self.placement_ga.hos_per_generation,
+                board_size=self.placement_ga.board_size
+            )
+
+        self.competitive_evaluator.plot()
 
     def plot_timings(self, timings):
         import matplotlib.pyplot as plt
@@ -614,7 +693,10 @@ class OuterLoopManager:
                 pass
 
     def save_best_neat_agent(self, model_dir, subdir, gen, experiment):
-        model_path = f"{model_dir}/{subdir}/{experiment}/model_gen{gen + 1}.pth"
+        if self.run_ga:
+            model_path = f"{model_dir}/{subdir}/co_evo/{experiment}/model_gen{gen + 1}.pth"
+        else:
+            model_path = f"{model_dir}/{subdir}/solo/{experiment}/model_gen{gen + 1}.pth"
         best_fitness = float("-inf")
         best_agent = None
         if gen == -1:

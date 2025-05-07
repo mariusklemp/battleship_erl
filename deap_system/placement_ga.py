@@ -39,9 +39,7 @@ class ChromosomeHallOfFame:
         self.items = []
 
     def update(self, population):
-        # Select the best individuals from the population.
         best = tools.selBest(population, self.maxsize)
-        # Store only a deep copy of each individual's chromosome.
         self.items = [copy.deepcopy(agent.strategy.chromosome) for agent in best]
 
 
@@ -51,9 +49,7 @@ class ChromosomeHallOfShame:
         self.items = []
 
     def update(self, population):
-        # Select the worst individuals from the population.
         worst = tools.selWorst(population, self.maxsize)
-        # Store only a deep copy of each individual's chromosome.
         self.items = [copy.deepcopy(agent.strategy.chromosome) for agent in worst]
 
 
@@ -80,8 +76,12 @@ class PlacementGeneticAlgorithm:
         self.avg_moves_over_gens = []
         self.boards_over_generations = []  # Average board overlay per generation
         # Use the custom hall-of-fame and hall-of-shame classes.
-        self.hof = ChromosomeHallOfFame(maxsize=5)
-        self.hos = ChromosomeHallOfShame(maxsize=5)
+        self.hof = ChromosomeHallOfFame(maxsize=1)
+        self.hos = ChromosomeHallOfShame(maxsize=1)
+        # Record halls per generation
+        self.hof_per_generation = []
+        self.hos_per_generation = []
+
         self.avg_fitness_over_gens = []
         self.diversity_over_gens = []
         self.sparsity_over_gens = []
@@ -158,6 +158,8 @@ class PlacementGeneticAlgorithm:
         # Update Hall of Fame and Hall of Shame.
         self.hof.update(self.pop_placing_agents)
         self.hos.update(self.pop_placing_agents)
+        self.hof_per_generation.append(copy.deepcopy(self.hof.items))
+        self.hos_per_generation.append(copy.deepcopy(self.hos.items))
 
         # --- Elitism: Preserve best chromosomes ---
         elite_agents = tools.selBest(self.pop_placing_agents, self.elite_size)

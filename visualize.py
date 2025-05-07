@@ -461,7 +461,7 @@ def plot_stats(statistics, best_possible, ylog=False, view=False):
     plt.plot(generations, median_fitness, "c-", marker='o', label="Median Fitness")
     plt.plot(generations, stdev_fitness, "y-", marker='o', label="Fitness Std Dev")
     plt.plot(generations, avg_best_species_fitness, "m-", marker='o', label="Avg. Best Fitness per Species")
-    plt.axhline(y=best_possible, color="r", linestyle="--", label="Best Possible Fitness")
+    # plt.axhline(y=best_possible, color="r", linestyle="--", label="Best Possible Fitness")
 
     plt.title("Population's Fitness over Generations")
     plt.xlabel("Generation")

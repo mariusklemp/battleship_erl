@@ -427,29 +427,126 @@ class SearchEvaluator(BaseEvaluator):
 
     def plot_metrics_from_agg(self, stats, experiment: str):
         """
-        stats: output of aggregate_runs()
-        experiment: name of the experiment (e.g. "neat", "rl") to include in titles
-        Plots the same six figures as plot_metrics(), but using mean±std fill-between shading and thesis-quality styling.
+        stats: either
+          - a single-agg dict (old behavior), or
+          - a dict with exactly one key "solo" (RL), or
+          - a dict with keys "solo" and "co_evo" (neat/erl)
         """
+        # --- unwrap the RL-only case ---
+        if isinstance(stats, dict) and "solo" in stats and "co_evo" not in stats:
+            stats = stats["solo"]
+            is_nested = False
+        elif isinstance(stats, dict) and "solo" in stats and "co_evo" in stats:
+            is_nested = True
+        else:
+            is_nested = False
+
+        # color maps
+        base_colors = {
+            "random": "#1f77b4",  # blue
+            "uniform spread": "#ff7f0e",  # orange
+        }
+        dark_colors = {
+            "random": "#0d3f8b",  # darker blue
+            "uniform spread": "#d66000",  # darker orange
+        }
+
+        def classify_baseline(name):
+            nl = name.lower()
+            if "random" in nl:
+                return "random"
+            if "uniform" in nl or "spread" in nl:
+                return "uniform spread"
+            return name
+
+        def get_color(baseline, mode):
+            key = classify_baseline(baseline)
+            if is_nested and mode == "co_evo":
+                return dark_colors[key]
+            return base_colors[key]
+
+        def get_label(baseline, mode):
+            cls = classify_baseline(baseline).title()
+            if is_nested:
+                suffix = "Co-evo" if mode == "co evo" else "non co evo"
+                return f"{cls} ({suffix})"
+            return cls
+
         # --- 1) Distribution Entropy ---
-        gens = stats['start_entropy']['gens']
-        start_m, start_s = stats['start_entropy']['mean'], stats['start_entropy']['std']
-        end_m,   end_s   = stats['end_entropy']['mean'],   stats['end_entropy']['std']
-        x = np.arange(len(gens))
         fig, ax = plt.subplots(figsize=(12, 6))
-        # Start
-        ax.plot(x, start_m, 'o-', linewidth=3, markersize=6, label='Start Entropy', color='#1f77b4')
-        ax.fill_between(x, start_m - start_s, start_m + start_s, alpha=0.2, color='#1f77b4')
-        # End
-        ax.plot(x, end_m, 'o-', linewidth=3, markersize=6, label='End Entropy', color='#ff7f0e')
-        ax.fill_between(x, end_m - end_s, end_m + end_s, alpha=0.2, color='#ff7f0e')
+        if not is_nested:
+            gens = stats['start_entropy']['gens']
+            start_m, start_s = stats['start_entropy']['mean'], stats['start_entropy']['std']
+            end_m, end_s = stats['end_entropy']['mean'], stats['end_entropy']['std']
+            x = np.arange(len(gens))
+
+            ax.plot(
+                x, start_m,
+                marker='o', linestyle='-', linewidth=3, markersize=6,
+                label='Start Entropy',
+                color=base_colors["random"]
+            )
+            ax.fill_between(x, start_m - start_s, start_m + start_s,
+                            alpha=0.2, color=base_colors["random"])
+
+            ax.plot(
+                x, end_m,
+                marker='o', linestyle='-', linewidth=3, markersize=6,
+                label='End Entropy',
+                color=base_colors["uniform spread"]
+            )
+            ax.fill_between(x, end_m - end_s, end_m + end_s,
+                            alpha=0.2, color=base_colors["uniform spread"])
+        else:
+            styles = {
+                "solo": {"linestyle": "-", "color": base_colors["random"]},
+                "co_evo": {"linestyle": "--", "color": dark_colors["random"]},
+            }
+            # plot Start Entropy
+            for mode, style in styles.items():
+                s = stats[mode]
+                gens = s['start_entropy']['gens']
+                x = np.arange(len(gens))
+                m0, s0 = s['start_entropy']['mean'], s['start_entropy']['std']
+
+                ax.plot(
+                    x, m0,
+                    marker='o', linewidth=3, markersize=6,
+                    linestyle=style["linestyle"],
+                    label=get_label("random", mode),
+                    color=style["color"]
+                )
+                ax.fill_between(x, m0 - s0, m0 + s0,
+                                alpha=0.2, color=style["color"])
+
+            # plot End Entropy (uniform spread baselines)
+            styles_end = {
+                "solo": {"linestyle": "-", "color": base_colors["uniform spread"]},
+                "co_evo": {"linestyle": "--", "color": dark_colors["uniform spread"]},
+            }
+            for mode, style in styles_end.items():
+                s = stats[mode]
+                gens = s['end_entropy']['gens']
+                x = np.arange(len(gens))
+                m1, s1 = s['end_entropy']['mean'], s['end_entropy']['std']
+
+                ax.plot(
+                    x, m1,
+                    marker='o', linewidth=3, markersize=6,
+                    linestyle=style["linestyle"],
+                    label=get_label("uniform spread", mode),
+                    color=style["color"]
+                )
+                ax.fill_between(x, m1 - s1, m1 + s1,
+                                alpha=0.2, color=style["color"])
+
         ax.set_xticks(x)
         ax.set_xticklabels([str(g) for g in gens], rotation=45)
-        ax.set_title(f"{experiment} — Distribution Entropy (mean ± std)", fontsize=14)
+        ax.set_title(f"{experiment} — Distribution Entropy", fontsize=14)
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+        ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
         plt.tight_layout()
         plt.show()
 
@@ -460,20 +557,46 @@ class SearchEvaluator(BaseEvaluator):
             ("Moves Between Hits", "moves_between_hits"),
             ("Sink Efficiency", "sink_efficiency"),
         ]
+
         for title, key in metrics:
             fig, ax = plt.subplots(figsize=(12, 6))
-            for baseline, data in stats[key].items():
-                gens = data['gens']; m = data['mean']; s = data['std']
-                x = np.arange(len(gens))
-                ax.plot(x, m, 'o-', linewidth=3, markersize=6, label=baseline)
-                ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+            if not is_nested:
+                for baseline, data in stats[key].items():
+                    gens = data['gens']
+                    m, s = data['mean'], data['std']
+                    x = np.arange(len(gens))
+                    col = base_colors[classify_baseline(baseline)]
+                    ax.plot(
+                        x, m,
+                        marker='o', linestyle='-', linewidth=3, markersize=6,
+                        label=classify_baseline(baseline).title(),
+                        color=col
+                    )
+                    ax.fill_between(x, m - s, m + s, alpha=0.2, color=col)
+            else:
+                for mode, ls in [("solo", "-"), ("co_evo", "--")]:
+                    sdict = stats[mode]
+                    for baseline, data in sdict[key].items():
+                        gens = data['gens']
+                        m, s = data['mean'], data['std']
+                        x = np.arange(len(gens))
+                        col = get_color(baseline, mode)
+                        ax.plot(
+                            x, m,
+                            marker='o', linestyle=ls, linewidth=3, markersize=6,
+                            label=get_label(baseline, mode),
+                            color=col
+                        )
+                        ax.fill_between(x, m - s, m + s, alpha=0.2, color=col)
+
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title} (mean ± std)", fontsize=14)
+            ax.set_title(f"{experiment} — {title}", fontsize=14)
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
-            ax.legend(title="Baseline", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
@@ -501,11 +624,11 @@ class SearchEvaluator(BaseEvaluator):
             ax.fill_between(x, e_mean - e_std, e_mean + e_std, alpha=0.2)
         ax.set_xticks(x)
         ax.set_xticklabels([str(g) for g in gens], rotation=45)
-        ax.set_title("Entropy Across Experiments (Start & End, mean ± std)", fontsize=14)
+        ax.set_title("Entropy Across Experiments", fontsize=14)
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
         plt.tight_layout()
         plt.show()
 
@@ -533,29 +656,29 @@ class SearchEvaluator(BaseEvaluator):
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{title} Across Experiments (mean ± std)", fontsize=14)
+            ax.set_title(f"{title} Across Experiments", fontsize=14)
             ax.set_xlabel("Generation", fontsize=12)
             ax.set_ylabel(title, fontsize=12)
             ax.grid(alpha=0.3)
-            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02,1), fontsize=10)
+            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
             plt.tight_layout()
             plt.show()
 
     def gen_key(self, x):
-            """
+        """
             Extract generation number as int from keys like:
               - 'nn_gen20'
               - 'random'   (no digits → fallback to 0 or just return x if you prefer)
               - 5          (already an int)
             """
-            if isinstance(x, str):
-                m = re.search(r'(\d+)$', x)
-                if m:
-                    return int(m.group(1))
-                else:
-                    # no trailing digits → put these first or last as you like
-                    return -1
-            return int(x)
+        if isinstance(x, str):
+            m = re.search(r'(\d+)$', x)
+            if m:
+                return int(m.group(1))
+            else:
+                # no trailing digits → put these first or last as you like
+                return -1
+        return int(x)
 
     def normalize(self, m):
         # Setup
@@ -617,7 +740,7 @@ class SearchEvaluator(BaseEvaluator):
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
         ax.set_xticks(angles[:-1])
         ax.set_xticklabels(categories, fontsize=12)
-        ax.set_yticklabels([])        # hide radial labels
+        ax.set_yticklabels([])  # hide radial labels
         ax.grid(alpha=0.3)
 
         # Plot each agent
@@ -1004,27 +1127,31 @@ class PlacementEvaluator(BaseEvaluator):
         experiment: like "neat" or "rl"
         Plots placement metrics with mean±std fill‐between.
         """
-        # === 1) Baseline‐dependent metrics ===
+        # === 1) Baseline‐dependent metrics AS SUBPLOTS ===
         for title, key in [("Move Count", "move_count"),
                            ("Hit-to-Sunk Ratio", "hit_to_sunk_ratio")]:
-            gens = stats[key][next(iter(stats[key]))]['gens']
-            x = np.arange(len(gens))
+            # extract list of baselines
+            baselines = list(stats[key].keys())
+            n = len(baselines)
 
-            fig, ax = plt.subplots(figsize=(12,6))
-            for baseline, data in stats[key].items():
-                m, s = data['mean'], data['std']
-                ax.plot(x, m, "o-", linewidth=3, markersize=6, label=baseline)
-                ax.fill_between(x, m-s, m+s, alpha=0.2)
+            fig, axes = plt.subplots(1, n, figsize=(4 * n, 4), squeeze=False)
+            for ax, baseline in zip(axes[0], baselines):
+                data = stats[key][baseline]
+                gens, m, s = data['gens'], data['mean'], data['std']
+                x = np.arange(len(gens))
 
-            ax.set_xticks(x)
-            ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title} (mean ± std)", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
-            ax.grid(alpha=0.3)
-            ax.legend(title="Search Baseline", loc="upper left",
-                      bbox_to_anchor=(1.02,1), fontsize=10)
-            plt.tight_layout()
+                ax.plot(x, m, 'o-', linewidth=2, markersize=6, label=baseline)
+                ax.fill_between(x, m - s, m + s, alpha=0.2)
+                ax.set_title(baseline)
+                ax.set_xlabel("Gen")
+                ax.set_xticks(x)
+                ax.set_xticklabels([str(g) for g in gens], rotation=45)
+                ax.grid(alpha=0.3)
+
+            # only the first subplot gets the y‐label
+            axes[0][0].set_ylabel(title)
+            fig.suptitle(f"{experiment} — {title}")
+            plt.tight_layout(rect=[0, 0, 1, 0.92])
             plt.show()
 
         # === 2) Baseline-independent metrics ===
@@ -1032,20 +1159,125 @@ class PlacementEvaluator(BaseEvaluator):
                            ("Diversity", "diversity"),
                            ("Orientation % Vertical", "orientation")]:
             gens = stats[key]['gens']
-            m, s  = stats[key]['mean'], stats[key]['std']
+            m, s = stats[key]['mean'], stats[key]['std']
             x = np.arange(len(gens))
 
-            fig, ax = plt.subplots(figsize=(12,6))
+            fig, ax = plt.subplots(figsize=(12, 6))
             ax.plot(x, m, "o-", linewidth=3, markersize=6)
-            ax.fill_between(x, m-s, m+s, alpha=0.2)
+            ax.fill_between(x, m - s, m + s, alpha=0.2)
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"Placing {experiment} — {title} (mean ± std)", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"Placing {experiment} — {title}")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(title)
             ax.grid(alpha=0.3)
             plt.tight_layout()
+            plt.show()
+
+    def plot_combined_all(self, all_stats):
+        """
+        all_stats: dict mapping experiment_name -> aggregated_stats
+                   (output of PlacementEvaluator.aggregate_runs)
+        This will:
+          - For move_count & hit_to_sunk_ratio: plot one mean±std curve PER EXPERIMENT PER BASELINE.
+          - For sparsity, diversity, orientation: plot one mean±std curve PER EXPERIMENT.
+        """
+
+        # --- 1) Baseline‐dependent metrics ---
+        # inside plot_combined_all, replace the bd‐metrics block with this
+        bd_metrics = [
+            ("Move Count", "move_count"),
+            ("Hit-to-Sunk Ratio", "hit_to_sunk_ratio"),
+        ]
+        for title, key in bd_metrics:
+            # assume all_stats has the same baselines under each experiment
+            example = next(iter(all_stats.values()))
+            baselines = list(example[key].keys())
+            n = len(baselines)
+
+            # no sharey → each subplot gets its own y‐axis
+            fig, axes = plt.subplots(1, n, figsize=(4 * n, 4), squeeze=False)
+
+            # plot each experiment *on each* baseline
+            for ax, baseline in zip(axes[0], baselines):
+                mins, maxs = [], []
+                for exp_label, stats in all_stats.items():
+                    data = stats[key][baseline]
+                    gens, m, s = data["gens"], data["mean"], data["std"]
+                    x = np.arange(len(gens))
+
+                    ax.plot(x, m, "o-", linewidth=2, label=exp_label)
+                    ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+                    mins.append((m - s).min())
+                    maxs.append((m + s).max())
+
+                # tighten this subplot’s y‐limit
+                lo, hi = min(mins), max(maxs)
+                pad = (hi - lo) * 0.1
+                ax.set_ylim(lo - pad, hi + pad)
+
+                # new per‐subplot title
+                ax.set_title(f"Versus {baseline} baseline", fontsize=9)
+                ax.set_xlabel("Generation", fontsize=8)
+                ax.set_xticks(x)
+                ax.set_xticklabels([str(g) for g in gens], rotation=45)
+                ax.grid(alpha=0.3)
+
+            # only the first gets the y‐label
+            axes[0][0].set_ylabel(title, fontsize=8)
+
+            # overall figure title (metric name)
+            fig.suptitle(f"Placement: {title} Across Experiments", fontsize=10)
+
+            # collect handles & labels once
+            seen = {}
+            for ax in axes.flatten():
+                for h, lab in zip(*ax.get_legend_handles_labels()):
+                    if lab not in seen:
+                        seen[lab] = h
+
+            # 1) give the bottom of the figure more breathing room
+            fig.subplots_adjust(bottom=0.3)  # increase bottom margin from 0.1 to 0.2
+
+            # 2) place legend centered below all subplots
+            fig.legend(
+                seen.values(), seen.keys(),
+                loc="lower center",  # use lower center
+                ncol=len(seen),
+                bbox_to_anchor=(0.5, -0.02),  # slightly below the axes
+                bbox_transform=fig.transFigure,
+                title="Opposing Agent"
+            )
+
+            plt.show()
+
+        # --- 2) Baseline‐independent metrics ---
+        bi_metrics = [
+            ("Sparsity", "sparsity"),
+            ("Diversity", "diversity"),
+            ("Orientation % Vertical", "orientation"),
+        ]
+        for title, key in bi_metrics:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            for exp_label, stats in all_stats.items():
+                sk = stats[key]  # { 'gens':…, 'mean':…, 'std':… }
+                gens = sk["gens"]
+                m = sk["mean"]
+                s = sk["std"]
+                x = np.arange(len(gens))
+                ax.plot(x, m, 'o-', linewidth=2, label=exp_label)
+                ax.fill_between(x, m - s, m + s, alpha=0.2)
+
+            ax.set_xticks(x)
+            ax.set_xticklabels([str(g) for g in gens], rotation=45)
+            ax.set_title(f"Placement: {title}")
+            ax.set_xlabel("Generation")
+            ax.set_ylabel(title)
+            ax.legend(title="Experiment", bbox_to_anchor=(1.02, 1), loc="upper left")
+            ax.grid(alpha=0.3)
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
             plt.show()
 
     # ------------------- Helper to Create Board from Chromosome -------------------
