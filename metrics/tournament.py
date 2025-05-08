@@ -338,23 +338,29 @@ class Tournament:
             avg_best, std_best = mean_and_std(best_metrics)
             labeled_metrics.append((f"Best Final {experiment.upper()} Agent", avg_best, std_best))
 
-        # --- Append baselines
+        # --- Append baselines properly with deviation ---
         if baseline:
-            for strat in ("mcts", "random", "hunt_down"):
+            # 1) gather per‐replicate metrics
+            baseline_results = {strat: [] for strat in ("mcts", "random", "hunt_down")}
+            for strat in baseline_results:
                 print(f"\n=== {strat.upper()} ===")
                 base = SearchAgent(board_size=self.board_size, strategy=strat, name=strat)
                 if strat == "mcts":
                     m = MCTS(self.game_manager, time_limit=1.2)
                     base.strategy.set_mcts(m)
-                bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=10)
-                zero_std = {k: 0.0 for k in bm}
-                labeled_metrics.append((f"{strat.capitalize()} Agent", bm, zero_std))
+                for rep in range(self.num_variations):
+                    bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=2)
+                    baseline_results[strat].append(bm)
+
+            # 2) collapse across replicates
+            for strat, results in baseline_results.items():
+                avg_bm, std_bm = mean_and_std(results)
+                labeled_metrics.append((f"{strat.capitalize()} Agent", avg_bm, std_bm))
 
         evaluator.search_evaluator.plot_final_skill_radar_chart(
             labeled_metrics,
             title="Skill of Final Iteration"
         )
-
 
     def skill_final_agent_combined(self, baseline=True):
         """
@@ -425,7 +431,6 @@ class Tournament:
         )
 
 
-
 def main():
     base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     config_path = os.path.join(base_path, "config", "mcts_config.json")
@@ -447,9 +452,9 @@ def main():
         run_search=True,
         run_placement=False,
     )
-    tournament.skill_final_agent(baseline=False, experiment="rl")
+    tournament.skill_final_agent(baseline=True, experiment="rl")
     # tournament.skill_progression()
-    #tournament.skill_final_agent_combined(baseline=True)
+    # tournament.skill_final_agent_combined(baseline=True)
 
 
 if __name__ == "__main__":
