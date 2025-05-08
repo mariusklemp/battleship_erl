@@ -548,7 +548,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+        ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
         plt.tight_layout()
         plt.show()
 
@@ -594,11 +594,11 @@ class SearchEvaluator(BaseEvaluator):
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title}", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"{experiment} — {title}", fontsize=16)
+            ax.set_xlabel("Generation", fontsize=14)
+            ax.set_ylabel(title, fontsize=14)
             ax.grid(alpha=0.3)
-            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+            ax.legend(loc='upper right', fontsize=12, framealpha=0.9)
             plt.tight_layout()
             plt.show()
 
@@ -630,7 +630,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+        ax.legend(title="Experiment", loc='upper right', fontsize=10, framealpha=0.9)
         plt.tight_layout()
         plt.show()
 
@@ -658,11 +658,12 @@ class SearchEvaluator(BaseEvaluator):
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{title} Across Experiments", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"{title} Across Experiments", fontsize=16)
+            ax.set_xlabel("Generation", fontsize=14)
+            ax.set_ylabel(title, fontsize=14)
             ax.grid(alpha=0.3)
-            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+            ax.legend(title="Experiment", loc='upper right', fontsize=12, framealpha=0.9)
+
             plt.tight_layout()
             plt.show()
 
@@ -726,59 +727,72 @@ class SearchEvaluator(BaseEvaluator):
             (label, metrics_mean: dict, metrics_std: dict)
         Baselines can pass a std‐dict of zeros.
         """
-        # --- Print mean ± std in console ---
+        import matplotlib.pyplot as plt
+        import numpy as np
+
         print("\n📊 Radar Chart Metrics:")
         for label, mean_m, std_m in labeled_metrics:
             print(f"\n🔹 {label}:")
             for k in mean_m:
                 print(f"    {k:<22} mean={mean_m[k]:.3f} ± std={std_m[k]:.3f}")
 
-        # Fixed metric order
         categories = ["Avg Moves", "Hit Accuracy", "Moves Between Hits", "Sink Efficiency"]
         angles = np.linspace(0, 2 * np.pi, len(categories), endpoint=False).tolist()
         angles += angles[:1]
 
-        # Set up polar plot
         fig, ax = plt.subplots(figsize=(8, 8), subplot_kw=dict(polar=True))
+
+        # Set tick positions but not labels (we'll add them manually)
         ax.set_xticks(angles[:-1])
-        ax.set_xticklabels(categories, fontsize=12)
+        ax.set_xticklabels([])  # clear default labels
+
+        # Define custom label placement
+        for i, (angle, label) in enumerate(zip(angles[:-1], categories)):
+            if i == 0 or i == 2:  # Right (0°) and left (180°) positions
+                rotation = 90
+                ha = 'center'
+            else:
+                rotation = 0
+                ha = 'center'
+
+            ax.text(
+                angle,
+                1.1,  # distance from center
+                label,
+                fontsize=12,
+                rotation=rotation,
+                rotation_mode='anchor',
+                horizontalalignment=ha,
+                verticalalignment='center'
+            )
+
         ax.set_yticklabels([])  # hide radial labels
         ax.grid(alpha=0.3)
 
-        # Plot each agent
         for label, mean_m, std_m in labeled_metrics:
-            # Normalize the mean metrics
             norm_mean = self.normalize(mean_m)
             values = [norm_mean[c] for c in categories] + [norm_mean[categories[0]]]
 
-            # Compute normalized ±std bounds by normalizing mean±std individually
-            low_vals = []
-            high_vals = []
+            low_vals, high_vals = [], []
             for c in categories:
-                normalized = self.normalize({
+                low = self.normalize({
                     "Avg Moves": mean_m.get("Avg Moves", 0) - std_m.get("Avg Moves", 0),
                     "Hit Accuracy": mean_m.get("Hit Accuracy", 0) - std_m.get("Hit Accuracy", 0),
                     "Moves Between Hits": mean_m.get("Moves Between Hits", 0) - std_m.get("Moves Between Hits", 0),
                     "Sink Efficiency": mean_m.get("Sink Efficiency", 0) - std_m.get("Sink Efficiency", 0),
-                })
-                lo = normalized[c]
-
-                normalized = self.normalize({
+                })[c]
+                high = self.normalize({
                     "Avg Moves": mean_m.get("Avg Moves", 0) + std_m.get("Avg Moves", 0),
                     "Hit Accuracy": mean_m.get("Hit Accuracy", 0) + std_m.get("Hit Accuracy", 0),
                     "Moves Between Hits": mean_m.get("Moves Between Hits", 0) + std_m.get("Moves Between Hits", 0),
                     "Sink Efficiency": mean_m.get("Sink Efficiency", 0) + std_m.get("Sink Efficiency", 0),
-                })
-                hi = normalized[c]
+                })[c]
+                low_vals.append(low)
+                high_vals.append(high)
 
-                low_vals.append(lo)
-                high_vals.append(hi)
-
-            # 🧹 Close the circle
             low_vals += low_vals[:1]
             high_vals += high_vals[:1]
 
-            # Style: dashed for initial, solid for final, dotted for baselines
             ll = label.lower()
             if "initial" in ll:
                 ls, lw, alpha_fill = 'dashed', 3, 0.1
@@ -787,16 +801,15 @@ class SearchEvaluator(BaseEvaluator):
             else:
                 ls, lw, alpha_fill = 'dotted', 2, 0.08
 
-            # Draw the mean line
             ax.plot(angles, values, linestyle=ls, linewidth=lw,
                     marker='o', markersize=6, label=label)
-            # Shade ±std region
             ax.fill_between(angles, low_vals, high_vals, alpha=alpha_fill)
 
-        ax.set_title(title, fontsize=16, pad=20)
-        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=10)
+        ax.set_title(title, fontsize=16, pad=40)
+        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12)
         plt.tight_layout()
         plt.show()
+
 
 
 class PlacementEvaluator(BaseEvaluator):

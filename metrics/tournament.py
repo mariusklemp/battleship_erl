@@ -67,6 +67,7 @@ class Tournament:
         the checkpoint contains a genome (NEAT/ERL) or just a plain state_dict.
         """
         model_number = i * (self.num_games // self.num_players)
+        print(f"[OuterLoop] {i}, {self.num_games} games, {self.num_players} players")
         print(f"[OuterLoop] Setting up agent {model_number}")
 
         # Build the filesystem path
@@ -109,7 +110,7 @@ class Tournament:
             strategy="nn_search",
             net=net,
             optimizer="adam",
-            name=f"nn_gen{model_number}",
+            name=model_number,
             lr=0.001,
         )
 
@@ -265,47 +266,57 @@ class Tournament:
 
     def skill_final_agent(self, baseline=True, variation=None, experiment="rl"):
         """
-        Compare average initial vs. final RL agents (across variations) + baselines
+        Compare average initial vs. final agents (across variations) + baselines
         in a single radar chart, including standard deviations.
         """
         import numpy as np
         from game_logic.search_agent import SearchAgent
         from ai.mcts import MCTS
+        import os
 
-        # Path to your NN config
         config_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             "ai", "config_simple.json"
         )
+
         evaluator = Evaluator(
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
-            num_evaluation_games=self.num_games // 10,
+            num_evaluation_games=self.num_games,
             game_manager=self.game_manager,
         )
 
-        # 1) Gather per-variation metrics
         init_metrics = []
         fin_metrics = []
+        best_metrics = []
+
         print(f"\n=== {experiment.upper()} ===")
         if variation:
             print(f"\n=== Variation {variation} ===")
             subdir = f"models/{self.board_size}/{experiment}/{variation}"
             agent_init = self.set_nn_agent(0, config_path, subdir)
-            agent_final = self.set_nn_agent(10, config_path, subdir, best_agent=True)
+            agent_final = self.set_nn_agent(10, config_path, subdir)
             init_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_init, num_games=100))
             fin_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100))
+
+            if experiment != "rl":
+                agent_best = self.set_nn_agent(10, config_path, subdir, best_agent=True)
+                best_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_best, num_games=100))
+
         else:
             for var in range(1, self.num_variations + 1):
                 print(f"\n=== Variation {var} ===")
-                subdir = f"models/{self.board_size}/{experiment}/{var}"
+                subdir = f"models/{self.board_size}/{experiment}/solo/{var}"
                 agent_init = self.set_nn_agent(0, config_path, subdir)
-                agent_final = self.set_nn_agent(10, config_path, subdir)  # adjust final-gen index
-
+                agent_final = self.set_nn_agent(10, config_path, subdir)
                 init_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_init, num_games=100))
                 fin_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100))
 
-        # 2) Compute mean & std across variations
+                if experiment != "rl":
+                    agent_best = self.set_nn_agent(10, config_path, subdir, best_agent=True)
+                    best_metrics.append(evaluator.search_evaluator.evaluate_final_agent(agent_best, num_games=100))
+
+        # --- Aggregate mean and std
         def mean_and_std(list_of_dicts):
             keys = list_of_dicts[0].keys()
             mean_d, std_d = {}, {}
@@ -318,11 +329,88 @@ class Tournament:
         avg_init, std_init = mean_and_std(init_metrics)
         avg_fin, std_fin = mean_and_std(fin_metrics)
 
-        # 3) Build labeled_metrics triples
         labeled_metrics = [
             (f"Avg Initial {experiment.upper()} Agent", avg_init, std_init),
             (f"Avg Final {experiment.upper()} Agent", avg_fin, std_fin),
         ]
+
+        if experiment != "rl":
+            avg_best, std_best = mean_and_std(best_metrics)
+            labeled_metrics.append((f"Best Final {experiment.upper()} Agent", avg_best, std_best))
+
+        # --- Append baselines properly with deviation ---
+        if baseline:
+            # 1) gather per‐replicate metrics
+            baseline_results = {strat: [] for strat in ("mcts", "random", "hunt_down")}
+            for strat in baseline_results:
+                print(f"\n=== {strat.upper()} ===")
+                base = SearchAgent(board_size=self.board_size, strategy=strat, name=strat)
+                if strat == "mcts":
+                    m = MCTS(self.game_manager, time_limit=1.2)
+                    base.strategy.set_mcts(m)
+                for rep in range(self.num_variations):
+                    bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=2)
+                    baseline_results[strat].append(bm)
+
+            # 2) collapse across replicates
+            for strat, results in baseline_results.items():
+                avg_bm, std_bm = mean_and_std(results)
+                labeled_metrics.append((f"{strat.capitalize()} Agent", avg_bm, std_bm))
+
+        evaluator.search_evaluator.plot_final_skill_radar_chart(
+            labeled_metrics,
+            title="Skill of Final Iteration"
+        )
+
+    def skill_final_agent_combined(self, baseline=True):
+        """
+        Compare average final agents across RL/NEAT/ERL variations + baselines
+        in a single radar chart, including standard deviations.
+        """
+        import numpy as np
+        import os
+        from game_logic.search_agent import SearchAgent
+        from ai.mcts import MCTS
+
+        config_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "ai", "config_simple.json"
+        )
+
+        evaluator = Evaluator(
+            board_size=self.board_size,
+            ship_sizes=self.ship_sizes,
+            num_evaluation_games=self.num_games // 10,
+            game_manager=self.game_manager,
+        )
+
+        experiments = {"rl": [], "neat": [], "erl": []}
+
+        # 1) Gather per-variation metrics
+        for exp in experiments:
+            print(f"\n=== {exp.upper()} ===")
+            for var in range(1, self.num_variations + 1):
+                print(f"--- Variation {var} ---")
+                subdir = f"models/{self.board_size}/{exp}/solo/{var}"
+                agent_final = self.set_nn_agent(10, config_path, subdir)
+                metrics = evaluator.search_evaluator.evaluate_final_agent(agent_final, num_games=100)
+                experiments[exp].append(metrics)
+
+        # 2) Compute mean & std across variations
+        def mean_and_std(list_of_dicts):
+            keys = list_of_dicts[0].keys()
+            mean_d, std_d = {}, {}
+            for k in keys:
+                vals = [d[k] for d in list_of_dicts]
+                mean_d[k] = float(np.mean(vals))
+                std_d[k] = float(np.std(vals))
+            return mean_d, std_d
+
+        # 3) Build labeled_metrics triples
+        labeled_metrics = []
+        for exp in ("erl", "neat", "rl"):
+            avg_fin, std_fin = mean_and_std(experiments[exp])
+            labeled_metrics.append((f"Final {exp.upper()} Agent", avg_fin, std_fin))
 
         # 4) Append baselines (zero-std)
         if baseline:
@@ -422,18 +510,19 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=100,
+        num_games=10,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=10,
-        num_variations=5,
+        num_players=2,
+        num_variations=2,
         game_manager=game_manager,
         run_search=True,
         run_placement=False,
     )
-    #tournament.skill_final_agent(baseline=True, experiment="rl")
-    tournament.skill_progression()
+    tournament.skill_final_agent(baseline=True, experiment="rl")
+    # tournament.skill_progression()
+    # tournament.skill_final_agent_combined(baseline=True)
 
 
 if __name__ == "__main__":
