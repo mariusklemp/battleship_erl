@@ -468,7 +468,7 @@ class SearchEvaluator(BaseEvaluator):
         def get_label(baseline, mode):
             cls = classify_baseline(baseline).title()
             if is_nested:
-                suffix = "Co-evo" if mode == "co evo" else "non co evo"
+                suffix = "Co-evo" if mode == "co_evo" else ""
                 return f"{cls} ({suffix})"
             return cls
 
@@ -546,7 +546,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+        ax.legend(loc='upper right', fontsize=10, framealpha=0.9)
         plt.tight_layout()
         plt.show()
 
@@ -592,11 +592,11 @@ class SearchEvaluator(BaseEvaluator):
 
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{experiment} — {title}", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"{experiment} — {title}", fontsize=16)
+            ax.set_xlabel("Generation", fontsize=14)
+            ax.set_ylabel(title, fontsize=14)
             ax.grid(alpha=0.3)
-            ax.legend(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+            ax.legend(loc='upper right', fontsize=12, framealpha=0.9)
             plt.tight_layout()
             plt.show()
 
@@ -628,7 +628,7 @@ class SearchEvaluator(BaseEvaluator):
         ax.set_xlabel("Generation", fontsize=12)
         ax.set_ylabel("Entropy", fontsize=12)
         ax.grid(alpha=0.3)
-        ax.legend(title="Experiment / Phase", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+        ax.legend(title="Experiment", loc='upper right', fontsize=10, framealpha=0.9)
         plt.tight_layout()
         plt.show()
 
@@ -656,11 +656,12 @@ class SearchEvaluator(BaseEvaluator):
                 ax.fill_between(x, m - s, m + s, alpha=0.2)
             ax.set_xticks(x)
             ax.set_xticklabels([str(g) for g in gens], rotation=45)
-            ax.set_title(f"{title} Across Experiments", fontsize=14)
-            ax.set_xlabel("Generation", fontsize=12)
-            ax.set_ylabel(title, fontsize=12)
+            ax.set_title(f"{title} Across Experiments", fontsize=16)
+            ax.set_xlabel("Generation", fontsize=14)
+            ax.set_ylabel(title, fontsize=14)
             ax.grid(alpha=0.3)
-            ax.legend(title="Experiment", loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+            ax.legend(title="Experiment", loc='upper right', fontsize=12, framealpha=0.9)
+
             plt.tight_layout()
             plt.show()
 
@@ -792,7 +793,7 @@ class SearchEvaluator(BaseEvaluator):
             ax.fill_between(angles, low_vals, high_vals, alpha=alpha_fill)
 
         ax.set_title(title, fontsize=16, pad=20)
-        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=10)
+        ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), fontsize=12)
         plt.tight_layout()
         plt.show()
 
