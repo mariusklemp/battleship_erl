@@ -109,7 +109,7 @@ class Tournament:
             strategy="nn_search",
             net=net,
             optimizer="adam",
-            name=f"nn_gen{model_number}",
+            name=model_number,
             lr=0.001,
         )
 
@@ -434,14 +434,14 @@ def main():
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=10,
-        num_variations=10,
+        num_players=2,
+        num_variations=2,
         game_manager=game_manager,
         run_search=True,
         run_placement=False,
     )
-    tournament.skill_final_agent(baseline=True, experiment="rl")
-    #tournament.skill_progression()
+    # tournament.skill_final_agent(baseline=True, experiment="rl")
+    tournament.skill_progression()
     #tournament.skill_final_agent_combined(baseline=True)
 
 
