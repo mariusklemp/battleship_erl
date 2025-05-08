@@ -468,8 +468,10 @@ class SearchEvaluator(BaseEvaluator):
         def get_label(baseline, mode):
             cls = classify_baseline(baseline).title()
             if is_nested:
-                suffix = "Co-evo" if mode == "co evo" else "non co evo"
-                return f"{cls} ({suffix})"
+                if mode == "co_evo":
+                    return f"{cls} (Co-evo)"
+                else:
+                    return cls
             return cls
 
         # --- 1) Distribution Entropy ---

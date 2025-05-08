@@ -449,7 +449,7 @@ class OuterLoopManager:
                 self.plot_search_agent_metrics(search_agent_metrics)
             else:
                 print("No metrics available to plot for search agents")
-        self._generate_visualizations(timings)
+        #self._generate_visualizations(timings)
 
     def _generate_visualizations(self, timings):
         """Generate all visualizations at the end of training."""

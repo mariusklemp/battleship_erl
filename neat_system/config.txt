@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
-fitness_threshold = 13.600000000000001
-pop_size = 2
+fitness_threshold = 14.4
+pop_size = 50
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -39,7 +39,7 @@ weight_min_value = -5.0
 weight_mutate_rate = 0.9
 weight_replace_rate = 0.1
 weight_mutate_power = 1.0
-mutate_architecture = True
+mutate_architecture = False
 mutate_weights = True
 crossover_architecture = False
 crossover_weights = False
