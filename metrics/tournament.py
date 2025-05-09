@@ -413,17 +413,22 @@ class Tournament:
             avg_fin, std_fin = mean_and_std(experiments[exp])
             labeled_metrics.append((f"Final {exp.upper()} Agent", avg_fin, std_fin))
 
-        # 4) Append baselines (zero-std)
+        # 4) Append baselines with std (same as in skill_final_agent)
         if baseline:
-            for strat in ("mcts", "random", "hunt_down"):
+            baseline_results = {strat: [] for strat in ("mcts", "random", "hunt_down")}
+            for strat in baseline_results:
                 print(f"\n=== {strat.upper()} ===")
                 base = SearchAgent(board_size=self.board_size, strategy=strat, name=strat)
                 if strat == "mcts":
                     m = MCTS(self.game_manager, time_limit=1.2)
                     base.strategy.set_mcts(m)
-                bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=10)
-                zero_std = {k: 0.0 for k in bm}
-                labeled_metrics.append((f"{strat.capitalize()} Agent", bm, zero_std))
+                for rep in range(self.num_variations):
+                    bm = evaluator.search_evaluator.evaluate_final_agent(base, num_games=2)
+                    baseline_results[strat].append(bm)
+
+            for strat, results in baseline_results.items():
+                avg_bm, std_bm = mean_and_std(results)
+                labeled_metrics.append((f"{strat.capitalize()} Agent", avg_bm, std_bm))
 
         # 5) Plot
         evaluator.search_evaluator.plot_final_skill_radar_chart(
