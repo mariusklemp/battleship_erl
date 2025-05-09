@@ -94,54 +94,46 @@ class CompetitiveEvaluator:
                 overall_raw.append(avg_raw)
 
                 # 2) compute theoretical bounds
-                board_cells    = float(self.board_size**2)
+                board_cells = float(self.board_size ** 2)
                 sum_ship_cells = float(sum(self.ship_sizes))
 
                 # — 2) “Raw” is already inverted moves:  raw = board_cells – moves
-                max_raw   = board_cells - sum_ship_cells       # worst inverted (i.e. best moves)
-                moves_score = avg_raw / max_raw                # now in [0,1]
+                max_raw = board_cells - sum_ship_cells  # worst inverted (i.e. best moves)
+                moves_score = avg_raw / max_raw  # now in [0,1]
 
                 # sink-eff: best is finishing each ship immediately, worst same as moves
-                max_eff   = board_cells
-                eff_score = (max_eff - avg_eff) / max_eff      # in [0,1]
+                max_eff = board_cells
+                eff_score = (max_eff - avg_eff) / max_eff  # in [0,1]
 
                 # 4) shape accuracy (power-law here, but you can swap in a logistic)
-                acc_score = avg_acc ** 3
-
+                acc_score = avg_acc ** 2
 
                 # Gaussian‐shape start around 1.0
                 sigma_start = 0.05
-                start_score = math.exp(-((avg_start - 1.0)**2) / (2 * sigma_start**2))
+                start_score = math.exp(-((avg_start - 1.0) ** 2) / (2 * sigma_start ** 2))
 
                 # Gaussian‐shape end around your sweet-spot 0.6
                 center_end = 0.6
-                sigma_end  = 0.15
-                end_score  = math.exp(-((avg_end - center_end)**2) / (2 * sigma_end**2))
+                sigma_end = 0.15
+                end_score = math.exp(-((avg_end - center_end) ** 2) / (2 * sigma_end ** 2))
 
                 # Both are in (0,1]; if either collapses → near 0
                 entropy_score = start_score * end_score
 
-
                 # 6) Re‐combine with a single entropy weight
                 w = {
-                    'moves'  : 0.40,
-                    'acc'    : 0.15,
-                    'eff'    : 0.15,
-                    'entropy': 0.30
+                    'moves': 0.50,
+                    'acc': 0.50,
                 }
 
                 composite = (
-                        w['moves']   * moves_score +
-                        w['acc']     * acc_score +
-                        w['eff']     * eff_score +
-                        w['entropy'] * entropy_score
+                        w['moves'] * moves_score +
+                        w['acc'] * acc_score
+                        # w['eff'] * eff_score
+                        # w['entropy'] * entropy_score
                 )
 
                 genome.fitness = composite
-
-                print(f"  start_score = {start_score:.2f}, end_score = {end_score:.2f}")
-                print(f"  entropy_combined = {entropy_score:.2f}")
-                print(f"  composite fitness = {composite:.3f}")
 
             # keep plotting on raw move-based fitness
             overall_avg_search = float(np.mean(overall_raw))
