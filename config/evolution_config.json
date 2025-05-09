@@ -1,6 +1,6 @@
 {
     "experiment": 5,
-    "run_neat": true,
+    "run_neat": false,
     "run_ga": true,
     "placing_population": {
         "size": 50,

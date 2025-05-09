@@ -107,7 +107,7 @@ class GameManager:
             else:
                 move = result
                 # uniform fallback
-                prob_np = np.ones(self.board_size**2) / (self.board_size**2)
+                prob_np = np.ones(self.size**2) / (self.size**2)
 
             # mask out illegal moves
             flat_board = np.array(current_state.board[0]).flatten()
