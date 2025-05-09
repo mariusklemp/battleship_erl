@@ -27,7 +27,7 @@
     },
     {
       "type": "Linear",
-      "in_features": 6272,
+      "in_features": 3200,
       "out_features": 512,
       "dynamic": false,
       "last": false
@@ -52,7 +52,7 @@
     {
       "type": "Linear",
       "in_features": 256,
-      "out_features": 49,
+      "out_features": 25,
       "dynamic": false,
       "last": true
     }
