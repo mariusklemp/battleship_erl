@@ -47,7 +47,7 @@ class CNNGenomeConfig(object):
         ConfigParameter("weight_init_type", str),
         ConfigParameter("weight_max_value", float),
         ConfigParameter("weight_min_value", float),
-        ConfigParameter("weight_mutate_power", float),
+        ConfigParameter("weight_mutate_frac", float),
         ConfigParameter("weight_mutate_rate", float),
         ConfigParameter("weight_replace_rate", float),
         ConfigParameter("mutate_architecture", bool),
