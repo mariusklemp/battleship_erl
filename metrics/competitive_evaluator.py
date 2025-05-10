@@ -122,9 +122,9 @@ class CompetitiveEvaluator:
 
                 # 6) Re‐combine with a single entropy weight
                 w = {
-                    'moves': 0.40,
-                    'acc': 0.40,
-                    'entropy': 0.20,
+                    # 'moves': 0.40,
+                    'acc': 0.50,
+                    'entropy': 0.50,
                 }
 
                 composite = (
