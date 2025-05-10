@@ -29,13 +29,17 @@ class CompetitiveEvaluator:
 
     def init_placement_agents(self):
         placement_agents = []
-        for _ in range(self.default_num_placement):
+        num_agents = int(self.default_num_placement)
+        for _ in range(num_agents):
             placement_agents.append(
                 PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="random")
             )
             placement_agents.append(
                 PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="uniform_spread")
             )
+            #placement_agents.append(
+            #    PlacementAgent(board_size=self.board_size, ship_sizes=self.ship_sizes, strategy="chromosome", chromosome=[(0, 0, 0), (1, 1, 0), (2, 2, 0)])
+            #)
         return placement_agents
 
     def evaluate(self, search_agents, placement_agents=None):
@@ -77,28 +81,31 @@ class CompetitiveEvaluator:
             if self.run_ga:
                 pa.fitness.values = (avg_moves,)
 
-        # build composite for NEAT
         overall_raw = []
         if is_mapping:
             for key, (genome, sa) in search_agents.items():
                 data = sums[sa]
-                n = len(placement_agents)
+                n    = len(placement_agents)
 
+                # 1) collect raw‐moves‐based metric for plotting
+                avg_raw = data['raw'] / n
+                overall_raw.append(avg_raw)
+
+                # 2) compute weighted composite fitness
                 genome.fitness = self.compute_fitness(
-                    avg_raw        = data['raw']       / n,
-                    avg_accuracy   = data['accuracy']  / n,
-                    avg_efficiency = data['sink_eff']  / n,
+                    avg_raw        = avg_raw,
+                    avg_accuracy   = data['accuracy'] / n,
+                    avg_efficiency = data['sink_eff'] / n,
                     avg_start_ent  = data['start_ent'] / n,
-                    avg_end_ent    = data['end_ent']   / n,
+                    avg_end_ent    = data['end_ent'] / n,
                     board_size     = self.board_size,
                     ship_sizes     = self.ship_sizes,
-                    w_moves   = 0.3,
+                    w_moves   = 0.5,
                     w_acc     = 0.0,
-                    w_eff     = 0.3,
-                    w_entropy = 0.4,
+                    w_eff     = 0.5,
+                    w_entropy = 0.0,
                 )
 
-            # keep plotting on raw move-based fitness
             overall_avg_search = float(np.mean(overall_raw))
 
         else:
@@ -147,7 +154,7 @@ class CompetitiveEvaluator:
         acc_score = avg_accuracy
 
         # 3) Efficiency inverted (if you want it)
-        eff_score = (board_cells - avg_efficiency) / board_cells
+        eff_score = self.sink_eff_score(avg_efficiency, board_size, ship_sizes)
 
         # 4) Entropy score: high start * low end
         ent_score = avg_start_ent * (1.0 - avg_end_ent)
@@ -161,7 +168,35 @@ class CompetitiveEvaluator:
                w_acc * acc_score +
                w_eff * eff_score +
                w_entropy * ent_score)
+
         return raw / total_w
+
+    def sink_eff_score(self, avg_efficiency, board_size, ship_sizes):
+        """
+        avg_efficiency = average # moves between first hit and sink across ships
+        board_size     = side length of the square board
+        ship_sizes     = list of ship-lengths (e.g. [3,3,2])
+        """
+        # Total cells
+        N = board_size**2
+
+        # 1) Best‐case: once you hit a ship of length L, you need exactly (L-1) further hits.
+        #    So best_per_ship = L_i - 1.
+        #    Best overall avg = mean(L_i - 1).
+        best = sum(L - 1 for L in ship_sizes) / len(ship_sizes)
+
+        # 2) Random‐baseline: if you’re just guessing uniformly among N cells,
+        #    the expected number of draws until you’ve hit all the remaining (L_i - 1)
+        #    cells is roughly N/2 (the mean of a uniform [1…N] draw).
+        #    We’ll use N/2 as our “random” benchmark.
+        random_baseline = N / 2.0
+
+        # 3) Linearly map [best → random_baseline] to [1.0 → 0.0]
+        score = (random_baseline - avg_efficiency) / (random_baseline - best)
+
+        # 4) Clamp to [0,1]
+        sink_eff = max(0.0, min(1.0, score))
+        return sink_eff
 
     def create_board_from_chromosome(self, chromosome):
         """

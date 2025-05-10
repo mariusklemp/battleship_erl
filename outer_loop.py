@@ -71,7 +71,7 @@ class OuterLoopManager:
             board_size=self.board_size,
             ship_sizes=self.ship_sizes,
             run_ga=self.run_ga,
-            default_num_placement=5
+            default_num_placement=self.evolution_config["placing_population"]["size"],
         )
 
     def _initialize_neat(self):
