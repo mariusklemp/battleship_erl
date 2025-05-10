@@ -1,4 +1,5 @@
 import copy
+import json
 from random import choice, random, randint
 from neat.config import ConfigParameter, write_pretty_params
 
@@ -153,16 +154,48 @@ class CNNGenome(object):
 
     def configure_new(self, config):
         """
-        Configure a new genome with a random architecture and initialize weights.
-
-        :param config: CNNGenomeConfig instance.
+        If mutate_architecture is False, load exactly the Conv2d/Linear layers
+        from JSON (skip activation, Flatten, Dropout); otherwise build at random.
         """
         self.layer_config = []
+
+        if not config.mutate_architecture:
+            with open('ai/config_simple.json') as f:
+                spec = json.load(f)
+
+            curr_size = config.input_size
+            in_ch    = config.input_channels
+
+            for L in spec.get('layers', []):
+                t = L.get('type')
+                if t == 'Conv2d':
+                    gene = CNNConvGene.from_spec(config, L, in_ch, curr_size)
+                    # update spatial size & channel count
+                    curr_size = ((curr_size + 2*L['padding'] - L['kernel_size'])
+                                 // L['stride']) + 1
+                    in_ch = L['out_channels']
+
+                elif t == 'Linear':
+                    gene = CNNFCGene.from_spec(config, L, curr_size)
+                    # for next FC, input_size = this out_features
+                    curr_size = L['out_features']
+
+                else:
+                    # skip activation / Flatten / Dropout / anything else
+                    continue
+
+                self.layer_config.append(gene)
+
+            self.enforce_valid_ordering()
+            self._adjust_layer_sizes(config)
+            return
+
+        # Random architecture branch (unchanged)
         num_conv_layers = randint(1, config.max_num_conv_layer)
         num_pool_layers = randint(0, config.max_num_pool_layer)
-        num_fc_layers = randint(1, config.max_num_fc_layer)
-        in_channels = config.input_channels
-        current_size = config.input_size
+        num_fc_layers   = randint(1, config.max_num_fc_layer)
+        in_channels     = config.input_channels
+        current_size    = config.input_size
 
         # Create convolutional layers.
         for i in range(num_conv_layers):
@@ -183,12 +216,10 @@ class CNNGenome(object):
         # Create fully connected layers.
         flattened_size = max(1, current_size ** 2 * in_channels)
         previous_fc_size = flattened_size
-        fc_genes = []
         for i in range(num_fc_layers):
             fc_gene = CNNFCGene.create(config, input_size=previous_fc_size)
             fc_gene.initialize_weights(config)
             self.layer_config.append(fc_gene)
-            fc_genes.append(fc_gene)
             previous_fc_size = fc_gene.fc_layer_size
 
         self.enforce_valid_ordering()

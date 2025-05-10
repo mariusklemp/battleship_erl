@@ -72,6 +72,31 @@ class CNNConvGene(BaseGene):
         gene.enabled = True
         return gene
 
+
+    @classmethod
+    def from_spec(cls, config, spec, in_channels, input_size):
+        # build the same signature you’d get in `create()`
+        signature = (
+            spec['kernel_size'],
+            spec['stride'],
+            spec['padding'],
+            spec['out_channels'],
+            config.activation_function,
+        )
+        key = get_innovation_number("CNNConvGene", signature)
+        gene = cls(key)
+        gene.in_channels = in_channels
+        gene.input_size = input_size
+        gene.kernel_size = spec['kernel_size']
+        gene.stride      = spec['stride']
+        gene.padding     = spec['padding']
+        gene.out_channels= spec['out_channels']
+        gene.activation  = config.activation_function
+        gene.enabled     = True
+        gene.initialize_weights(config)
+        return gene
+
+
     def initialize_weights(self, config):
         k = int(self.kernel_size)
         in_c = int(self.in_channels)
@@ -253,6 +278,20 @@ class CNNFCGene(BaseGene):
         gene.activation = config.activation_function
         gene.input_size = input_size
         gene.enabled = True
+        return gene
+
+    @classmethod
+    def from_spec(cls, config, spec, input_size):
+        signature = (spec['out_features'], config.activation_function)
+        key = get_innovation_number("CNNFCGene", signature)
+        gene = cls(key)
+        gene.fc_layer_size = spec['out_features']
+        gene.activation    = config.activation_function
+        gene.input_size    = spec['in_features']
+        gene.dynamic       = spec.get('dynamic', True)
+        gene.last          = spec.get('last', False)
+        gene.enabled       = True
+        gene.initialize_weights(config)
         return gene
 
     def initialize_weights(self, config):

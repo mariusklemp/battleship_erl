@@ -122,15 +122,16 @@ class CompetitiveEvaluator:
 
                 # 6) Re‐combine with a single entropy weight
                 w = {
-                    'moves': 0.50,
-                    'acc': 0.50,
+                    'moves': 0.40,
+                    'acc': 0.40,
+                    'entropy': 0.20,
                 }
 
                 composite = (
                         w['moves'] * moves_score +
-                        w['acc'] * acc_score
+                        w['acc'] * acc_score +
                         # w['eff'] * eff_score
-                        # w['entropy'] * entropy_score
+                        w['entropy'] * entropy_score
                 )
 
                 genome.fitness = composite
@@ -281,63 +282,50 @@ class CompetitiveEvaluator:
 
     def plot_halls_wrapped(self,
                            hof_per_generation,
-                           hos_per_generation,
-                           board_size,
-                           max_per_row=10,
-                           max_total=20):
-        """
-        Two figures with wrapping and a hard cap on total boards shown:
-          - All HOF boards, up to `max_per_row` per row, with at most `max_total` boards total.
-          - All HOS boards likewise.
-        """
+                           hos_per_generation):
 
-        def flatten_and_label(hall_list, hall_name):
+        """
+        Single figure showing up to `max_each` HOF boards (top) and HOS boards (bottom).
+        Labels show only generation (e.g., "Gen 3").
+        """
+        max_each = 10  # Max number of boards to show per row
+        def flatten_and_label(hall_list):
             boards, labels = [], []
             for g, gen_hall in enumerate(hall_list, start=1):
-                for i, chrom in enumerate(gen_hall, start=1):
+                for chrom in gen_hall:
                     boards.append(self.create_board_from_chromosome(chrom))
-                    labels.append(f"G{g}-{hall_name}{i}")
-            return boards, labels
+                    labels.append(f"Gen {g}")
+            return boards[:max_each], labels[:max_each]
 
-        def plot_wrapped(boards, labels, title):
-            # --- subsample if over max_total ---
-            n = len(boards)
-            if n > max_total:
-                step = math.ceil(n / max_total)
-                boards = boards[::step]
-                labels = labels[::step]
-                n = len(boards)
+        hof_boards, hof_labels = flatten_and_label(hof_per_generation)
+        hos_boards, hos_labels = flatten_and_label(hos_per_generation)
 
-            if n == 0:
-                print(f"No boards to show for {title}")
-                return
+        total = len(hof_boards) + len(hos_boards)
+        cols = min(max_each, total)
+        rows = 2  # One row for HOF, one for HOS
 
-            rows = math.ceil(n / max_per_row)
-            cols = max_per_row
-            fig, axes = plt.subplots(rows, cols,
-                                     figsize=(2 * cols, 2 * rows),
-                                     squeeze=False)
+        fig, axes = plt.subplots(rows, cols, figsize=(2 * cols, 4), squeeze=False)
 
-            for idx, (bd, lbl) in enumerate(zip(boards, labels)):
-                r, c = divmod(idx, max_per_row)
-                ax = axes[r][c]
-                ax.imshow(bd, cmap="viridis", vmin=0, vmax=1)
-                ax.set_title(lbl, fontsize=8)
-                ax.axis("off")
+        # Plot HOF on top row
+        for i, (bd, lbl) in enumerate(zip(hof_boards, hof_labels)):
+            ax = axes[0][i]
+            ax.imshow(bd, cmap="viridis", vmin=0, vmax=1)
+            ax.set_title(lbl, fontsize=8)
+            ax.axis("off")
 
-            # hide any leftover subplots
-            for idx in range(n, rows * cols):
-                r, c = divmod(idx, max_per_row)
+        # Plot HOS on bottom row
+        for i, (bd, lbl) in enumerate(zip(hos_boards, hos_labels)):
+            ax = axes[1][i]
+            ax.imshow(bd, cmap="viridis", vmin=0, vmax=1)
+            ax.set_title(lbl, fontsize=8)
+            ax.axis("off")
+
+        # Hide unused subplots
+        for r in range(rows):
+            for c in range(len(hof_boards if r == 0 else hos_boards), cols):
                 axes[r][c].axis("off")
 
-            plt.suptitle(title, fontsize=14)
-            plt.tight_layout(rect=[0, 0, 1, 0.93])
-            plt.show()
+        fig.suptitle("HOF (Top) vs HOS (Bottom)", fontsize=14)
+        plt.tight_layout(rect=[0, 0, 1, 0.93])
+        plt.show()
 
-        # Hall of Fame
-        hof_boards, hof_labels = flatten_and_label(hof_per_generation, "HOF#")
-        plot_wrapped(hof_boards, hof_labels, "All Generations: Hall of Fame")
-
-        # Hall of Shame
-        hos_boards, hos_labels = flatten_and_label(hos_per_generation, "HOS#")
-        plot_wrapped(hos_boards, hos_labels, "All Generations: Hall of Shame")

@@ -1110,31 +1110,40 @@ class PlacementEvaluator(BaseEvaluator):
             boards = [self.boards_over_generations[g] for g in generations]
 
             # Only show a subset if too many
-            if len(boards) > 20:
-                step = len(boards) // 20
+            max_shown = 20
+            if len(boards) > max_shown:
+                step = len(boards) // max_shown
                 boards = boards[::step]
                 generations = generations[::step]
 
             num_boards = len(boards)
             cols = 5
-            rows = (num_boards + cols - 1) // cols  # ceil
+            rows = (num_boards + cols - 1) // cols  # ceil division
 
-            fig4, axs = plt.subplots(rows, cols, figsize=(15, 3 * rows))
-            axs = axs.flatten()
+            fig4, ax4 = plt.subplots(rows, cols, figsize=(15, 3 * rows))
+            ax4 = ax4.flatten()
+
+            im = None  # To keep track of the last image for colorbar
 
             for idx, (board, gen) in enumerate(zip(boards, generations)):
-                im = axs[idx].imshow(board, cmap="viridis", vmin=0, vmax=1)
-                axs[idx].set_title(f"Gen {gen}")
-                axs[idx].set_xticks([])
-                axs[idx].set_yticks([])
+                im = ax4[idx].imshow(board, cmap="viridis", vmin=0, vmax=1)
+                ax4[idx].set_title(f"Gen {gen}", pad=8)
+                ax4[idx].set_xticks([])
+                ax4[idx].set_yticks([])
+                ax4[idx].axis("off")
 
-            # Hide empty subplots
-            for j in range(idx + 1, len(axs)):
-                axs[j].axis("off")
+            # Hide any unused subplots
+            for j in range(idx + 1, len(ax4)):
+                ax4[j].axis("off")
 
-            fig4.suptitle("Ship Placement Frequency Over Generations")
-            plt.tight_layout()
+            # Add a single colorbar to the right of the figure
+            cbar_ax = fig4.add_axes([0.92, 0.15, 0.02, 0.7])  # [left, bottom, width, height]
+            fig4.colorbar(im, cax=cbar_ax, label='Occupancy Frequency')
+
+            fig4.suptitle("Ship Placement Frequency Over Generations", fontsize=14, y=1.02)
+            plt.tight_layout(rect=[0, 0, 0.9, 0.96])  # Leave space on the right for colorbar
             plt.show()
+
 
     def plot_metrics_from_agg(self, stats, experiment: str):
         """
