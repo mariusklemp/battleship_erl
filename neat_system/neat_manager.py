@@ -27,8 +27,6 @@ class NeatManager:
             board_size (int): Board dimensions for the game.
             ship_sizes (list): List of ship sizes to calculate fitness thresholds.
         """
-        print("[NeatManager] Initializing NEAT Manager")
-        print(neat_config_path)
         self.neat_config_path = neat_config_path
         self.evolution_config = evolution_config
         self.board_size = board_size
@@ -115,7 +113,6 @@ class NeatManager:
                                                                             self.population.species,
                                                                             self.config.pop_size,
                                                                             self.population.generation)
-
         # Handle the case of complete extinction.
         if not self.population.species.species:
             self.population.reporters.complete_extinction()
@@ -129,7 +126,13 @@ class NeatManager:
                 raise neat.CompleteExtinctionException()
 
         # Speciate the newly created population.
-        self.population.species.speciate(self.config, self.population.population, self.population.generation)
+
+        # full NEAT speciation
+        self.population.species.speciate(
+                self.config,
+                self.population.population,
+                self.population.generation)
+
         self.population.reporters.end_generation(self.config, self.population.population, self.population.species)
 
         # Increment the generation counter.

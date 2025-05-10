@@ -337,19 +337,16 @@ class OuterLoopManager:
             step_end = time.perf_counter()
             timings['evolution'].append(step_end - step_start)
 
+            # --- Collect metrics ---
             if not self.run_neat and not self.run_inner_loop:
                 for i, search_agent in enumerate(self.search_agents):
                     if hasattr(search_agent.strategy, 'get_metrics'):
                         search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
-                    else:
-                        print(f"Warning: Agent {i} does not have get_metrics method")
             elif self.run_inner_loop and self.run_neat:
                 # Collect metrics from NEAT-based agents
                 for key, (_, search_agent) in self.search_agents_mapping.items():
                     if hasattr(search_agent.strategy, 'get_metrics'):
                         search_agent_metrics[gen].append(search_agent.strategy.get_metrics())
-                    else:
-                        print(f"Warning: Agent {key} does not have get_metrics method")
 
             # --- Step 6: Save models ---
             if self.mcts_config["model"]["save"] and (gen + 1) % 10 == 0:
@@ -399,6 +396,7 @@ class OuterLoopManager:
                             gen=gen,
                             experiment=experiment,
                         )
+                print("Models saved.")
 
         # Save the best NEAT agent at the end of training
         if self.run_neat and self.run_inner_loop:
