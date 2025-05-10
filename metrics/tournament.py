@@ -523,12 +523,12 @@ def main():
         num_players=10,
         num_variations=5,
         game_manager=game_manager,
-        run_search=False,
-        run_placement=True,
+        run_search=True,
+        run_placement=False,
     )
     #tournament.skill_final_agent(baseline=True, experiment="rl")
-    #tournament.skill_progression()
-    tournament.skill_final_agent_combined(baseline=True)
+    tournament.skill_progression()
+    #tournament.skill_final_agent_combined(baseline=True)
 
 
 if __name__ == "__main__":
