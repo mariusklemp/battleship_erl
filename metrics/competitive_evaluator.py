@@ -128,7 +128,7 @@ class CompetitiveEvaluator:
                 }
 
                 composite = (
-                        w['moves'] * moves_score +
+                        #w['moves'] * moves_score +
                         w['acc'] * acc_score +
                         # w['eff'] * eff_score
                         w['entropy'] * entropy_score
