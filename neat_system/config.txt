@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
 fitness_threshold = 14.4
-pop_size = 20
+pop_size = 10
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -25,8 +25,6 @@ max_num_conv_layer = 1
 max_num_fc_layer = 1
 layer_add_prob = 0.2
 layer_delete_prob = 0.2
-conv_params_mutate_prob = 0.5
-fc_params_mutate_prob = 0.5
 pool_sizes = [2, 4]
 pool_strides = [1, 2]
 pool_type = max, avg
@@ -34,11 +32,13 @@ max_num_pool_layer = 1
 weight_init_mean = 0.0
 weight_init_stdev = 0.1
 weight_init_type = gaussian
-weight_max_value = 5.0
-weight_min_value = -5.0
-weight_mutate_rate = 0.9
-weight_replace_rate = 0.1
-weight_mutate_power = 1.0
+conv_params_mutate_prob = 0.8
+fc_params_mutate_prob = 0.8
+weight_max_value = 3.0
+weight_min_value = -3.0
+weight_mutate_rate = 0.6
+weight_replace_rate = 0.2
+weight_mutate_power = 0.2
 mutate_architecture = False
 mutate_weights = True
 crossover_architecture = False

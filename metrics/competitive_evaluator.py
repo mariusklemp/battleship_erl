@@ -84,57 +84,19 @@ class CompetitiveEvaluator:
                 data = sums[sa]
                 n = len(placement_agents)
 
-                # averages
-                avg_raw = data['raw'] / n
-                avg_acc = data['accuracy'] / n
-                avg_eff = data['sink_eff'] / n
-                avg_start = data['start_ent'] / n
-                avg_end = data['end_ent'] / n
-
-                overall_raw.append(avg_raw)
-
-                # 2) compute theoretical bounds
-                board_cells = float(self.board_size ** 2)
-                sum_ship_cells = float(sum(self.ship_sizes))
-
-                # — 2) “Raw” is already inverted moves:  raw = board_cells – moves
-                max_raw = board_cells - sum_ship_cells  # worst inverted (i.e. best moves)
-                moves_score = avg_raw / max_raw  # now in [0,1]
-
-                # sink-eff: best is finishing each ship immediately, worst same as moves
-                max_eff = board_cells
-                eff_score = (max_eff - avg_eff) / max_eff  # in [0,1]
-
-                # 4) shape accuracy (power-law here, but you can swap in a logistic)
-                acc_score = avg_acc ** 2
-
-                # Gaussian‐shape start around 1.0
-                sigma_start = 0.05
-                start_score = math.exp(-((avg_start - 1.0) ** 2) / (2 * sigma_start ** 2))
-
-                # Gaussian‐shape end around your sweet-spot 0.6
-                center_end = 0.6
-                sigma_end = 0.15
-                end_score = math.exp(-((avg_end - center_end) ** 2) / (2 * sigma_end ** 2))
-
-                # Both are in (0,1]; if either collapses → near 0
-                entropy_score = start_score * end_score
-
-                # 6) Re‐combine with a single entropy weight
-                w = {
-                    # 'moves': 0.40,
-                    'acc': 0.50,
-                    'entropy': 0.50,
-                }
-
-                composite = (
-                        w['moves'] * moves_score +
-                        w['acc'] * acc_score +
-                        # w['eff'] * eff_score
-                        w['entropy'] * entropy_score
+                genome.fitness = self.compute_fitness(
+                    avg_raw   = data['raw']      / n,
+                    avg_accuracy = data['accuracy'] / n,
+                    avg_efficiency=data['sink_eff'] / n,
+                    avg_start_ent = data['start_ent']/ n,
+                    avg_end_ent   = data['end_ent']  / n,
+                    board_size   = self.board_size,
+                    ship_sizes   = self.ship_sizes,
+                    w_moves   = 0.5,
+                    w_acc     = 0.0,
+                    w_eff     = 0.0,
+                    w_entropy = 0.5,
                 )
-
-                genome.fitness = composite
 
             # keep plotting on raw move-based fitness
             overall_avg_search = float(np.mean(overall_raw))
@@ -156,6 +118,51 @@ class CompetitiveEvaluator:
         print(f"Placement pop Fitness: {overall_avg_place:.2f}, "
               f"Search pop Fitness (raw): {overall_avg_search:.2f}")
         return search_agents, placement_agents
+
+
+    def compute_fitness(self, avg_raw,
+                               avg_accuracy,
+                               avg_efficiency,
+                               avg_start_ent,
+                               avg_end_ent,
+                               board_size,
+                               ship_sizes,
+                               w_moves   = 0.4,
+                               w_acc     = 0.3,
+                               w_eff     = 0.0,
+                               w_entropy = 0.3):
+        """
+        A simplified fitness = weighted sum of:
+          - normalized moves  (fewer is better)
+          - accuracy          (higher is better)
+          - efficiency        (optional)
+          - entropy behavior: high start, low end
+        """
+
+        # 1) Normalize moves so 0→worst, 1→best
+        board_cells = board_size**2
+        max_raw     = board_cells - sum(ship_sizes)
+        moves_score = avg_raw / max_raw if max_raw>0 else 0.0
+
+        # 2) Accuracy is already in [0,1]
+        acc_score = avg_accuracy
+
+        # 3) Efficiency inverted (if you want it)
+        eff_score = (board_cells - avg_efficiency)/board_cells
+
+        # 4) Entropy score: high start * low end
+        ent_score = avg_start_ent * (1.0 - avg_end_ent)
+
+        # 5) Weighted sum, normalized back into [0,1]
+        total_w = w_moves + w_acc + w_eff + w_entropy
+        if total_w <= 0:
+            return 0.0
+
+        raw = (w_moves   * moves_score +
+               w_acc     * acc_score +
+               w_eff     * eff_score +
+               w_entropy * ent_score)
+        return raw / total_w
 
     def create_board_from_chromosome(self, chromosome):
         """

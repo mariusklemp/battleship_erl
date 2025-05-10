@@ -112,51 +112,41 @@ class CNNConvGene(BaseGene):
         self.biases = np.zeros(out_c, dtype=np.float32)
 
     def mutate(self, config):
-        """
-        Mutate this conv gene’s weights and biases.
-        - With probability config.conv_params_mutate_prob, perform mutation.
-        - Each weight is either perturbed by Gaussian noise or replaced.
-        - Same for biases.
-        - Finally, clip to [weight_min_value, weight_max_value].
-        """
-        if random() < config.conv_params_mutate_prob:
-            # 1) Mutate each weight in the 4D tensor
-            for idx in np.ndindex(self.weights.shape):
-                if random() < config.weight_mutate_rate:
-                    # small Gaussian perturbation
-                    delta = np.random.randn() * config.weight_mutate_power
-                    self.weights[idx] += delta
-                else:
-                    # full replacement
-                    self.weights[idx] = np.random.uniform(
-                        config.weight_min_value,
-                        config.weight_max_value
-                    )
+        # 1) Decide whether to touch this whole conv‐layer’s params
+        if random() >= config.conv_params_mutate_prob:
+            return self
 
-            # 2) Mutate each bias
-            for i in range(self.biases.shape[0]):
-                if random() < config.weight_mutate_rate:
-                    delta = np.random.randn() * config.weight_mutate_power
-                    self.biases[i] += delta
-                else:
-                    self.biases[i] = np.random.uniform(
-                        config.weight_min_value,
-                        config.weight_max_value
-                    )
+        low, high = config.weight_min_value, config.weight_max_value
+        rate_mut = config.weight_mutate_rate
+        rate_rep = config.weight_replace_rate
+        total_rate = rate_mut + rate_rep
+        p_perturb = rate_mut / total_rate
 
-            # 3) Clip to allowable range
-            np.clip(
-                self.weights,
-                config.weight_min_value,
-                config.weight_max_value,
-                out=self.weights
-            )
-            np.clip(
-                self.biases,
-                config.weight_min_value,
-                config.weight_max_value,
-                out=self.biases
-            )
+        # --- WEIGHTS ---
+        W = self.weights
+        # a) mask of which weights change at all
+        mask_change = np.random.rand(*W.shape) < total_rate
+        # b) among those, which get a small perturbation vs full replace
+        mask_perturb = np.random.rand(*W.shape) < p_perturb
+        # c) generate all perturbations and replacements
+        deltas  = np.random.randn(*W.shape) * config.weight_mutate_power
+        repls   = np.random.uniform(low, high, size=W.shape)
+        # d) apply
+        W[mask_change &  mask_perturb] += deltas[mask_change &  mask_perturb]
+        W[mask_change & ~mask_perturb]  =  repls[mask_change & ~mask_perturb]
+        # e) clip
+        np.clip(W, low, high, out=W)
+
+        # --- BIASES ---
+        B = self.biases
+        mask_change = np.random.rand(*B.shape) < total_rate
+        mask_perturb = np.random.rand(*B.shape) < p_perturb
+        bdeltas = np.random.randn(*B.shape) * config.weight_mutate_power
+        brepls  = np.random.uniform(low, high, size=B.shape)
+
+        B[mask_change &  mask_perturb] += bdeltas[mask_change &  mask_perturb]
+        B[mask_change & ~mask_perturb]  =  brepls[mask_change & ~mask_perturb]
+        np.clip(B, low, high, out=B)
 
         return self
 
@@ -305,43 +295,37 @@ class CNNFCGene(BaseGene):
         self.biases = np.zeros(out_f, dtype=np.float32)
 
     def mutate(self, config):
-        # Decide whether to mutate this FC gene’s parameters at all
-        if random() < config.fc_params_mutate_prob:
-            # 1) Mutate weights
-            for idx in np.ndindex(self.weights.shape):
-                if random() < config.weight_mutate_rate:
-                    # small Gaussian perturbation
-                    delta = np.random.randn() * config.weight_mutate_power
-                    self.weights[idx] += delta
-                else:
-                    # full replacement
-                    self.weights[idx] = np.random.uniform(
-                        config.weight_min_value,
-                        config.weight_max_value
-                    )
-            # 2) Mutate biases
-            for i in range(self.biases.shape[0]):
-                if random() < config.weight_mutate_rate:
-                    delta = np.random.randn() * config.weight_mutate_power
-                    self.biases[i] += delta
-                else:
-                    self.biases[i] = np.random.uniform(
-                        config.weight_min_value,
-                        config.weight_max_value
-                    )
-            # 3) Clip everything to the allowable range
-            np.clip(
-                self.weights,
-                config.weight_min_value,
-                config.weight_max_value,
-                out=self.weights
-            )
-            np.clip(
-                self.biases,
-                config.weight_min_value,
-                config.weight_max_value,
-                out=self.biases
-            )
+        # 1) Gate on whether to mutate any FC‐layer params
+        if random() >= config.fc_params_mutate_prob:
+            return self
+
+        low, high = config.weight_min_value, config.weight_max_value
+        rate_mut = config.weight_mutate_rate
+        rate_rep = config.weight_replace_rate
+        total_rate = rate_mut + rate_rep
+        p_perturb = rate_mut / total_rate
+
+        # --- WEIGHTS ---
+        W = self.weights
+        mask_change  = np.random.rand(*W.shape) < total_rate
+        mask_perturb = np.random.rand(*W.shape) < p_perturb
+        deltas  = np.random.randn(*W.shape) * config.weight_mutate_power
+        repls   = np.random.uniform(low, high, size=W.shape)
+
+        W[mask_change &  mask_perturb] += deltas[mask_change &  mask_perturb]
+        W[mask_change & ~mask_perturb]  =  repls[mask_change & ~mask_perturb]
+        np.clip(W, low, high, out=W)
+
+        # --- BIASES ---
+        B = self.biases
+        mask_change  = np.random.rand(*B.shape) < total_rate
+        mask_perturb = np.random.rand(*B.shape) < p_perturb
+        bdeltas = np.random.randn(*B.shape) * config.weight_mutate_power
+        brepls  = np.random.uniform(low, high, size=B.shape)
+
+        B[mask_change &  mask_perturb] += bdeltas[mask_change &  mask_perturb]
+        B[mask_change & ~mask_perturb]  =  brepls[mask_change & ~mask_perturb]
+        np.clip(B, low, high, out=B)
 
         return self
 
