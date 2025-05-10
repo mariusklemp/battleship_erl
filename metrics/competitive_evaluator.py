@@ -85,17 +85,17 @@ class CompetitiveEvaluator:
                 n = len(placement_agents)
 
                 genome.fitness = self.compute_fitness(
-                    avg_raw   = data['raw']      / n,
-                    avg_accuracy = data['accuracy'] / n,
-                    avg_efficiency=data['sink_eff'] / n,
-                    avg_start_ent = data['start_ent']/ n,
-                    avg_end_ent   = data['end_ent']  / n,
-                    board_size   = self.board_size,
-                    ship_sizes   = self.ship_sizes,
-                    w_moves   = 0.5,
+                    avg_raw        = data['raw']       / n,
+                    avg_accuracy   = data['accuracy']  / n,
+                    avg_efficiency = data['sink_eff']  / n,
+                    avg_start_ent  = data['start_ent'] / n,
+                    avg_end_ent    = data['end_ent']   / n,
+                    board_size     = self.board_size,
+                    ship_sizes     = self.ship_sizes,
+                    w_moves   = 0.3,
                     w_acc     = 0.0,
-                    w_eff     = 0.4,
-                    w_entropy = 0.1,
+                    w_eff     = 0.3,
+                    w_entropy = 0.4,
                 )
 
             # keep plotting on raw move-based fitness
@@ -119,18 +119,17 @@ class CompetitiveEvaluator:
               f"Search pop Fitness (raw): {overall_avg_search:.2f}")
         return search_agents, placement_agents
 
-
     def compute_fitness(self, avg_raw,
-                               avg_accuracy,
-                               avg_efficiency,
-                               avg_start_ent,
-                               avg_end_ent,
-                               board_size,
-                               ship_sizes,
-                               w_moves   = 0.6,
-                               w_acc     = 0.0,
-                               w_eff     = 0.4,
-                               w_entropy = 0.0):
+                        avg_accuracy,
+                        avg_efficiency,
+                        avg_start_ent,
+                        avg_end_ent,
+                        board_size,
+                        ship_sizes,
+                        w_moves,
+                        w_acc,
+                        w_eff,
+                        w_entropy):
         """
         A simplified fitness = weighted sum of:
           - normalized moves  (fewer is better)
@@ -140,15 +139,15 @@ class CompetitiveEvaluator:
         """
 
         # 1) Normalize moves so 0→worst, 1→best
-        board_cells = board_size**2
-        max_raw     = board_cells - sum(ship_sizes)
-        moves_score = avg_raw / max_raw if max_raw>0 else 0.0
+        board_cells = board_size ** 2
+        max_raw = board_cells - sum(ship_sizes)
+        moves_score = avg_raw / max_raw if max_raw > 0 else 0.0
 
         # 2) Accuracy is already in [0,1]
         acc_score = avg_accuracy
 
         # 3) Efficiency inverted (if you want it)
-        eff_score = (board_cells - avg_efficiency)/board_cells
+        eff_score = (board_cells - avg_efficiency) / board_cells
 
         # 4) Entropy score: high start * low end
         ent_score = avg_start_ent * (1.0 - avg_end_ent)
@@ -158,9 +157,9 @@ class CompetitiveEvaluator:
         if total_w <= 0:
             return 0.0
 
-        raw = (w_moves   * moves_score +
-               w_acc     * acc_score +
-               w_eff     * eff_score +
+        raw = (w_moves * moves_score +
+               w_acc * acc_score +
+               w_eff * eff_score +
                w_entropy * ent_score)
         return raw / total_w
 
@@ -296,6 +295,7 @@ class CompetitiveEvaluator:
         Labels show only generation (e.g., "Gen 3").
         """
         max_each = 10  # Max number of boards to show per row
+
         def flatten_and_label(hall_list):
             boards, labels = [], []
             for g, gen_hall in enumerate(hall_list, start=1):
@@ -335,4 +335,3 @@ class CompetitiveEvaluator:
         fig.suptitle("HOF (Top) vs HOS (Bottom)", fontsize=14)
         plt.tight_layout(rect=[0, 0, 1, 0.93])
         plt.show()
-

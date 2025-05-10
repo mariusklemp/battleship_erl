@@ -267,19 +267,16 @@ class ANET(nn.Module):
         """
         os.makedirs(os.path.dirname(path), exist_ok=True)
         torch.save({'model_state_dict': self.state_dict()}, path)
-        print(f"[ANET] Saved state_dict to {path}")
 
     def load_model(self, path: str):
         """
         Load into this network from a state_dict checkpoint.
         """
-        print(f"[ANET] Loading weights from {path}")
         ckpt = torch.load(path, map_location=self.device)
         # ckpt might be a plain state_dict or wrapped in a dict
         state_dict = ckpt.get('model_state_dict', ckpt)
         self.load_state_dict(state_dict)
         self.eval()
-        print(f"[ANET] Loaded weights.")
 
     def save_model_genome(self, path: str):
         """
@@ -292,7 +289,6 @@ class ANET(nn.Module):
         }
 
         torch.save(checkpoint, path)
-        print(f"[ANET] Saved NEAT checkpoint to {path}")
 
 
 
