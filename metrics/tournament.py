@@ -128,7 +128,8 @@ class Tournament:
     def init_placement_agents(self, experiment, variation):
         for i in range(self.num_players + 1):
             model_number = i * (self.num_games // self.num_players)
-            file_path = f"../placement_population/{self.board_size}/{experiment}/{variation}/population_gen{model_number}.json"
+            file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                     f"placement_population/{self.board_size}/{experiment}/{variation}/population_gen{model_number}.json")
 
             with open(file_path, "r") as f:
                 chromosomes = json.load(f)
@@ -515,19 +516,19 @@ def main():
 
     tournament = Tournament(
         board_size=config["board_size"],
-        num_games=10,
+        num_games=100,
         ship_sizes=config["ship_sizes"],
         placing_strategies=["random", "uniform_spread"],
         search_strategies=["random", "hunt_down", "mcts"],
-        num_players=2,
-        num_variations=2,
+        num_players=10,
+        num_variations=5,
         game_manager=game_manager,
-        run_search=True,
-        run_placement=False,
+        run_search=False,
+        run_placement=True,
     )
-    tournament.skill_final_agent(baseline=True, experiment="rl")
-    # tournament.skill_progression()
-    # tournament.skill_final_agent_combined(baseline=True)
+    #tournament.skill_final_agent(baseline=True, experiment="rl")
+    #tournament.skill_progression()
+    tournament.skill_final_agent_combined(baseline=True)
 
 
 if __name__ == "__main__":
