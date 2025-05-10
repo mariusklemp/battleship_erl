@@ -449,7 +449,7 @@ class OuterLoopManager:
                 self.plot_search_agent_metrics(search_agent_metrics)
             else:
                 print("No metrics available to plot for search agents")
-        #self._generate_visualizations(timings)
+        self._generate_visualizations(timings)
 
     def _generate_visualizations(self, timings):
         """Generate all visualizations at the end of training."""
@@ -471,7 +471,6 @@ class OuterLoopManager:
             self.competitive_evaluator.plot_halls_wrapped(
                 hof_per_generation=self.placement_ga.hof_per_generation,
                 hos_per_generation=self.placement_ga.hos_per_generation,
-                board_size=self.placement_ga.board_size
             )
 
         self.competitive_evaluator.plot()
