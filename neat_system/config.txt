@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
 fitness_threshold = 14.4
-pop_size = 10
+pop_size = 100
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -34,11 +34,11 @@ weight_init_stdev = 0.1
 weight_init_type = gaussian
 conv_params_mutate_prob = 0.8
 fc_params_mutate_prob = 0.8
-weight_max_value = 3.0
-weight_min_value = -3.0
-weight_mutate_rate = 0.6
-weight_replace_rate = 0.2
-weight_mutate_power = 0.2
+weight_max_value = 1.0
+weight_min_value = -1.0
+weight_mutate_rate = 0.15
+weight_replace_rate = 0.01
+weight_mutate_power = 0.01
 mutate_architecture = False
 mutate_weights = True
 crossover_architecture = False

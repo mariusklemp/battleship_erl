@@ -94,8 +94,8 @@ class CompetitiveEvaluator:
                     ship_sizes   = self.ship_sizes,
                     w_moves   = 0.5,
                     w_acc     = 0.0,
-                    w_eff     = 0.0,
-                    w_entropy = 0.5,
+                    w_eff     = 0.4,
+                    w_entropy = 0.1,
                 )
 
             # keep plotting on raw move-based fitness
@@ -127,10 +127,10 @@ class CompetitiveEvaluator:
                                avg_end_ent,
                                board_size,
                                ship_sizes,
-                               w_moves   = 0.4,
-                               w_acc     = 0.3,
-                               w_eff     = 0.0,
-                               w_entropy = 0.3):
+                               w_moves   = 0.6,
+                               w_acc     = 0.0,
+                               w_eff     = 0.4,
+                               w_entropy = 0.0):
         """
         A simplified fitness = weighted sum of:
           - normalized moves  (fewer is better)

@@ -3,15 +3,15 @@
     "run_neat": true,
     "run_ga": false,
     "placing_population": {
-        "size": 10,
+        "size": 50,
         "elite_size": 1,
         "tournament_size": 2,
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 10
+        "size": 100
     },
     "evolution": {
-        "num_generations": 10
+        "num_generations": 20
     }
 } 
