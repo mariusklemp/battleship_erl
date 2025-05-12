@@ -92,10 +92,10 @@ class CompetitiveEvaluator:
                     avg_end_ent    = data['end_ent']   / n,
                     board_size     = self.board_size,
                     ship_sizes     = self.ship_sizes,
-                    w_moves   = 0.3,
+                    w_moves   = 0.5,
                     w_acc     = 0.0,
-                    w_eff     = 0.3,
-                    w_entropy = 0.4,
+                    w_eff     = 0.5,
+                    w_entropy = 0.0,
                 )
 
             # keep plotting on raw move-based fitness

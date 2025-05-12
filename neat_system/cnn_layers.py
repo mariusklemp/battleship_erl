@@ -116,9 +116,9 @@ class CNNConvGene(BaseGene):
         if random() >= config.conv_params_mutate_prob:
             return self
 
-        print("mutate conv gene")
-        self.summarize(self.weights, "  BEFORE weights")
-        self.summarize(self.biases,  "  BEFORE biases")
+        #print("mutate conv gene")
+        #self.summarize(self.weights, "  BEFORE weights")
+        #self.summarize(self.biases,  "  BEFORE biases")
         low, high     = config.weight_min_value, config.weight_max_value
         rate_mut      = config.weight_mutate_rate
         rate_rep      = config.weight_replace_rate
@@ -126,13 +126,13 @@ class CNNConvGene(BaseGene):
         p_perturb     = rate_mut / total_rate
 
         # 2) Compute layer‐specific Gaussian σ = init_std × frac
-        print(f"min,max {low, high}")
-        print("mutate_rate", rate_mut)
-        print("replace_rate", rate_rep)
-        print("total_rate", total_rate)
-        print("p_perturb", p_perturb)
-        print("weight_mutate_frac", config.weight_mutate_frac)
-        print("weigt_init_std", self._weight_init_std)
+        #print(f"min,max {low, high}")
+        #print("mutate_rate", rate_mut)
+        #print("replace_rate", rate_rep)
+        #print("total_rate", total_rate)
+        #print("p_perturb", p_perturb)
+        #print("weight_mutate_frac", config.weight_mutate_frac)
+        #print("weigt_init_std", self._weight_init_std)
         layer_sigma = self._weight_init_std * config.weight_mutate_frac
 
         # --- WEIGHTS ---
@@ -163,8 +163,8 @@ class CNNConvGene(BaseGene):
         B[mask_change & ~mask_perturb]  = brepls[mask_change & ~mask_perturb]
         np.clip(B, low, high, out=B)
 
-        self.summarize(self.weights, "  AFTER weights")
-        self.summarize(self.biases,  "  AFTER biases")
+        #self.summarize(self.weights, "  AFTER weights")
+        #self.summarize(self.biases,  "  AFTER biases")
         return self
 
     def summarize(self, tensor, name):
