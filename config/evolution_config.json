@@ -1,7 +1,7 @@
 {
-    "experiment": 1,
+    "experiment": 5,
     "run_neat": true,
-    "run_ga": false,
+    "run_ga": true,
     "placing_population": {
         "size": 50,
         "elite_size": 1,
