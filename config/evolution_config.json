@@ -1,5 +1,5 @@
 {
-    "experiment": 1,
+    "experiment": 5,
     "run_neat": true,
     "run_ga": false,
     "placing_population": {
