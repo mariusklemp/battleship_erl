@@ -227,7 +227,7 @@ class Tournament:
             num_evaluation_games=100,
             game_manager=self.game_manager,
         )
-        experiment_placement = {"rl": [], "neat": [], "erl": [], "hunt_down": []}
+        experiment_placement = {"rl": [], "neat": [], "erl": [], "hunt_down": [], "random": []}
 
         for experiment in experiment_placement:
             print(f"\n=== PLACEMENT: {experiment.upper()} ===")
@@ -455,8 +455,8 @@ def main():
         num_players=10,
         num_variations=5,
         game_manager=game_manager,
-        run_search=True,
-        run_placement=False,
+        run_search=False,
+        run_placement=True,
     )
     tournament.skill_final_agent(baseline=True, experiment="neat")
     #tournament.skill_progression()
