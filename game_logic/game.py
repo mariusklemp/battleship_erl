@@ -1,7 +1,7 @@
 import sys
 import pygame
 
-import visualize
+from metrics import visualize
 
 
 class Game:

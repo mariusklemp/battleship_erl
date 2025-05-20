@@ -3,20 +3,11 @@ import json
 import torch
 import numpy as np
 
-from RBUF import RBUF
-from ai.model import ANET
-from game_logic.game_manager import GameManager
-import os
 from game_logic.placement_agent import PlacementAgent
-from ai.mcts import MCTS
+from rl.mcts import MCTS
 from tqdm import tqdm
 
-from game_logic.search_agent import SearchAgent
-from gui import GUI
-from game_logic.game_manager import GameManager
-from RBUF import RBUF
-from ai.model import ANET
-from game_logic.search_agent import SearchAgent
+from helpers.gui import GUI
 
 
 class InnerLoopManager:
@@ -141,44 +132,4 @@ class InnerLoopManager:
             rbuf.save_to_file(file_path=self.config["replay_buffer"]["file_path"])
 
 
-def main():
-    board_size = 7
 
-    game_manager = GameManager(board_size)
-
-    inner_loop_manager = InnerLoopManager(game_manager)
-
-    rbuf = RBUF(max_len=10000)
-
-    if inner_loop_manager.config["replay_buffer"]["load_from_file"]:
-        rbuf.init_from_file(file_path=inner_loop_manager.config["replay_buffer"]["file_path"])
-
-    search_agents = []
-
-    for i in range(1):
-        net = ANET(
-            board_size=board_size,
-            activation="relu",
-            device="cpu",
-            layer_config="ai/config_simple.json",
-        )
-
-        search_agent = SearchAgent(
-            board_size=board_size,
-            strategy="nn_search",
-            net=net,
-            optimizer="adam",
-            lr=0.0001,
-        )
-        search_agents.append(search_agent)
-
-    for gen in range(10):
-        for i, search_agent in tqdm(enumerate(search_agents), desc="Training search agents", total=len(search_agents)):
-            print(f"Training search agent {i + 1}")
-            inner_loop_manager.run(search_agent, rbuf, gen=gen)
-
-    search_agents[0].strategy.plot_metrics()
-
-
-if __name__ == "__main__":
-    main()

@@ -15,7 +15,7 @@ from tqdm import tqdm
 from game_logic.game_manager import GameManager
 from game_logic.placement_agent import PlacementAgent
 from game_logic.search_agent import SearchAgent
-from ai.model import ANET
+from rl.model import ANET
 from evaluator import Evaluator
 
 
@@ -53,7 +53,7 @@ class Tournament:
             evolution_config = json.load(f)
 
         neat_config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "neat_system",
-                                        "config.txt")
+                                        "neat_config.txt")
         self.neat_manager = NeatManager(
             neat_config_path=neat_config_path,
             evolution_config=evolution_config,
@@ -119,8 +119,8 @@ class Tournament:
     def init_players(self, experiment, variation, subdir):
         self.search_players.clear()
 
-        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "ai",
-                                   "config_simple.json")
+        config_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "rl",
+                                   "cnn_config.json")
         for i in range(self.num_players + 1):
             agent = self.set_nn_agent(i, config_path, subdir)
             self.search_players[agent.name] = agent
@@ -272,12 +272,12 @@ class Tournament:
         """
         import numpy as np
         from game_logic.search_agent import SearchAgent
-        from ai.mcts import MCTS
+        from rl.mcts import MCTS
         import os
 
         config_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "ai", "config_simple.json"
+            "rl", "cnn_config.json"
         )
 
         evaluator = Evaluator(
@@ -371,11 +371,11 @@ class Tournament:
         import numpy as np
         import os
         from game_logic.search_agent import SearchAgent
-        from ai.mcts import MCTS
+        from rl.mcts import MCTS
 
         config_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "ai", "config_simple.json"
+            "rl", "cnn_config.json"
         )
 
         evaluator = Evaluator(
@@ -444,11 +444,11 @@ class Tournament:
         import numpy as np
         import os
         from game_logic.search_agent import SearchAgent
-        from ai.mcts import MCTS
+        from rl.mcts import MCTS
 
         config_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "ai", "config_simple.json"
+            "rl", "cnn_config.json"
         )
 
         evaluator = Evaluator(

@@ -1,7 +1,7 @@
 import configparser
 import neat
 
-import visualize
+from metrics import visualize
 from neat_system.cnn_genome import CNNGenome
 from neat_system.weight_reporter import WeightStatsReporter
 from neat_system.cnn_layers import global_innovation_registry

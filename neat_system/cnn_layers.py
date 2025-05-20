@@ -72,7 +72,6 @@ class CNNConvGene(BaseGene):
         gene.enabled = True
         return gene
 
-
     @classmethod
     def from_spec(cls, config, spec, in_channels, input_size):
         # build the same signature you’d get in `create()`
@@ -88,25 +87,24 @@ class CNNConvGene(BaseGene):
         gene.in_channels = in_channels
         gene.input_size = input_size
         gene.kernel_size = spec['kernel_size']
-        gene.stride      = spec['stride']
-        gene.padding     = spec['padding']
-        gene.out_channels= spec['out_channels']
-        gene.activation  = config.activation_function
-        gene.enabled     = True
+        gene.stride = spec['stride']
+        gene.padding = spec['padding']
+        gene.out_channels = spec['out_channels']
+        gene.activation = config.activation_function
+        gene.enabled = True
         gene.initialize_weights(config)
         return gene
 
-
     def initialize_weights(self, config):
         # For ConvGene:
-        k    = int(self.kernel_size)
+        k = int(self.kernel_size)
         in_c = int(self.in_channels)
-        out_c= int(self.out_channels)
+        out_c = int(self.out_channels)
         fan_in = in_c * k * k
-        scale  = math.sqrt(2.0 / fan_in)         # He‐init σ
+        scale = math.sqrt(2.0 / fan_in)  # He‐init σ
 
         self.weights = np.random.randn(out_c, in_c, k, k) * scale
-        self.biases  = np.zeros(out_c, dtype=np.float32)
+        self.biases = np.zeros(out_c, dtype=np.float32)
 
         # remember for mutation
         self._weight_init_std = scale
@@ -116,45 +114,44 @@ class CNNConvGene(BaseGene):
         if random() >= config.conv_params_mutate_prob:
             return self
 
-        low, high     = config.weight_min_value, config.weight_max_value
-        rate_mut      = config.weight_mutate_rate
-        rate_rep      = config.weight_replace_rate
-        total_rate    = rate_mut + rate_rep
-        p_perturb     = rate_mut / total_rate
+        low, high = config.weight_min_value, config.weight_max_value
+        rate_mut = config.weight_mutate_rate
+        rate_rep = config.weight_replace_rate
+        total_rate = rate_mut + rate_rep
+        p_perturb = rate_mut / total_rate
 
         # 2) Compute layer‐specific Gaussian σ = init_std × frac
         layer_sigma = self._weight_init_std * config.weight_mutate_frac
 
         # --- WEIGHTS ---
         W = self.weights
-        mask_change  = np.random.rand(*W.shape) < total_rate
+        mask_change = np.random.rand(*W.shape) < total_rate
         mask_perturb = np.random.rand(*W.shape) < p_perturb
 
         # a) perturbation deltas, b) full‐range replacements
         deltas = np.random.randn(*W.shape) * layer_sigma
-        repls  = np.random.uniform(low, high, size=W.shape)
+        repls = np.random.uniform(low, high, size=W.shape)
 
         # c) apply
-        W[mask_change &  mask_perturb] += deltas[mask_change &  mask_perturb]
-        W[mask_change & ~mask_perturb]  = repls[mask_change & ~mask_perturb]
+        W[mask_change & mask_perturb] += deltas[mask_change & mask_perturb]
+        W[mask_change & ~mask_perturb] = repls[mask_change & ~mask_perturb]
 
         # d) clip into bounds
         np.clip(W, low, high, out=W)
 
         # --- BIASES ---
         B = self.biases
-        mask_change  = np.random.rand(*B.shape) < total_rate
+        mask_change = np.random.rand(*B.shape) < total_rate
         mask_perturb = np.random.rand(*B.shape) < p_perturb
 
         bdeltas = np.random.randn(*B.shape) * layer_sigma
-        brepls  = np.random.uniform(low, high, size=B.shape)
+        brepls = np.random.uniform(low, high, size=B.shape)
 
-        B[mask_change &  mask_perturb] += bdeltas[mask_change &  mask_perturb]
-        B[mask_change & ~mask_perturb]  = brepls[mask_change & ~mask_perturb]
+        B[mask_change & mask_perturb] += bdeltas[mask_change & mask_perturb]
+        B[mask_change & ~mask_perturb] = brepls[mask_change & ~mask_perturb]
         np.clip(B, low, high, out=B)
 
         return self
-
 
     def distance(self, other, config):
         """
@@ -282,22 +279,22 @@ class CNNFCGene(BaseGene):
         key = get_innovation_number("CNNFCGene", signature)
         gene = cls(key)
         gene.fc_layer_size = spec['out_features']
-        gene.activation    = config.activation_function
-        gene.input_size    = spec['in_features']
-        gene.dynamic       = spec.get('dynamic', True)
-        gene.last          = spec.get('last', False)
-        gene.enabled       = True
+        gene.activation = config.activation_function
+        gene.input_size = spec['in_features']
+        gene.dynamic = spec.get('dynamic', True)
+        gene.last = spec.get('last', False)
+        gene.enabled = True
         gene.initialize_weights(config)
         return gene
 
     def initialize_weights(self, config):
-        in_f   = int(self.input_size)
-        out_f  = int(self.fc_layer_size)
+        in_f = int(self.input_size)
+        out_f = int(self.fc_layer_size)
         fan_in = in_f
-        scale  = math.sqrt(2.0 / fan_in)
+        scale = math.sqrt(2.0 / fan_in)
 
         self.weights = np.random.randn(out_f, in_f) * scale
-        self.biases  = np.zeros(out_f, dtype=np.float32)
+        self.biases = np.zeros(out_f, dtype=np.float32)
 
         # ← and here as well
         self._weight_init_std = scale
@@ -307,43 +304,42 @@ class CNNFCGene(BaseGene):
         if random() >= config.fc_params_mutate_prob:
             return self
 
-        low, high     = config.weight_min_value, config.weight_max_value
-        rate_mut      = config.weight_mutate_rate
-        rate_rep      = config.weight_replace_rate
-        total_rate    = rate_mut + rate_rep
-        p_perturb     = rate_mut / total_rate
+        low, high = config.weight_min_value, config.weight_max_value
+        rate_mut = config.weight_mutate_rate
+        rate_rep = config.weight_replace_rate
+        total_rate = rate_mut + rate_rep
+        p_perturb = rate_mut / total_rate
 
         # Compute this layer’s Gaussian σ as a fraction of its He‐init std
         layer_sigma = self._weight_init_std * config.weight_mutate_frac
 
         # --- WEIGHTS ---
         W = self.weights
-        mask_change  = np.random.rand(*W.shape) < total_rate
+        mask_change = np.random.rand(*W.shape) < total_rate
         mask_perturb = np.random.rand(*W.shape) < p_perturb
 
         # a) Gaussian perturbations
         deltas = np.random.randn(*W.shape) * layer_sigma
         # b) Uniform replacements
-        repls  = np.random.uniform(low, high, size=W.shape)
+        repls = np.random.uniform(low, high, size=W.shape)
 
         # c) Apply them
-        W[mask_change &  mask_perturb] += deltas[mask_change &  mask_perturb]
-        W[mask_change & ~mask_perturb]  =  repls[mask_change & ~mask_perturb]
+        W[mask_change & mask_perturb] += deltas[mask_change & mask_perturb]
+        W[mask_change & ~mask_perturb] = repls[mask_change & ~mask_perturb]
 
         # d) Clip back into [low, high]
         np.clip(W, low, high, out=W)
 
-
         # --- BIASES ---
         B = self.biases
-        mask_change  = np.random.rand(*B.shape) < total_rate
+        mask_change = np.random.rand(*B.shape) < total_rate
         mask_perturb = np.random.rand(*B.shape) < p_perturb
 
         bdeltas = np.random.randn(*B.shape) * layer_sigma
-        brepls  = np.random.uniform(low, high, size=B.shape)
+        brepls = np.random.uniform(low, high, size=B.shape)
 
-        B[mask_change &  mask_perturb] += bdeltas[mask_change &  mask_perturb]
-        B[mask_change & ~mask_perturb]  = brepls[mask_change & ~mask_perturb]
+        B[mask_change & mask_perturb] += bdeltas[mask_change & mask_perturb]
+        B[mask_change & ~mask_perturb] = brepls[mask_change & ~mask_perturb]
         np.clip(B, low, high, out=B)
 
         return self

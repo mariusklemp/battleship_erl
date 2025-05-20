@@ -5,10 +5,9 @@ from neat.config import ConfigParameter, write_pretty_params
 
 from neat_system.cnn_layers import CNNConvGene, CNNPoolGene, CNNFCGene
 from neat_system.helpers import (
-    adapt_conv_weights, adapt_biases, adapt_fc_weights,
     calculate_pool_output_size, calculate_conv_output_size,
     compute_gene_type_distance,
-    _crossover_by_key)
+    _crossover_by_key, adapt_fc_weights, adapt_biases, adapt_conv_weights)
 
 
 class CNNGenomeConfig(object):
@@ -42,9 +41,6 @@ class CNNGenomeConfig(object):
         ConfigParameter("compatibility_weight_coefficient", float),
         ConfigParameter("compatibility_disjoint_coefficient", float),
         ConfigParameter("compatibility_excess_coefficient", float),
-        ConfigParameter("weight_init_mean", float),
-        ConfigParameter("weight_init_stdev", float),
-        ConfigParameter("weight_init_type", str),
         ConfigParameter("weight_max_value", float),
         ConfigParameter("weight_min_value", float),
         ConfigParameter("weight_mutate_frac", float),
@@ -160,7 +156,7 @@ class CNNGenome(object):
         self.layer_config = []
 
         if not config.mutate_architecture:
-            with open('ai/config_simple.json') as f:
+            with open('rl/cnn_config.json') as f:
                 spec = json.load(f)
 
             curr_size = config.input_size

@@ -158,32 +158,6 @@ def compute_gene_type_distance(self_genes, other_genes, gene_distance_func, conf
 
 
 # ============================================================================
-# Helper functions to mutate weights
-# ============================================================================
-
-def _mutate_weights_conv(conv_gene, weight_mutate_rate, weight_mutate_power, weight_replace_rate,
-                         weight_min_value, weight_max_value, config):
-    # Mutate weights and biases using the helper.
-    weights = _mutate_array(conv_gene.weights, weight_mutate_rate, weight_mutate_power,
-                            weight_replace_rate, weight_min_value, weight_max_value, config)
-    biases = _mutate_array(conv_gene.biases, weight_mutate_rate, weight_mutate_power,
-                           weight_replace_rate, weight_min_value, weight_max_value, config)
-
-    return weights, biases
-
-
-def _mutate_weights_fc(fc_gene, weight_mutate_rate, weight_mutate_power, weight_replace_rate,
-                       weight_min_value, weight_max_value, config):
-    # Mutate weights and biases using the same helper.
-    weights = _mutate_array(fc_gene.weights, weight_mutate_rate, weight_mutate_power,
-                            weight_replace_rate, weight_min_value, weight_max_value, config)
-    biases = _mutate_array(fc_gene.biases, weight_mutate_rate, weight_mutate_power,
-                           weight_replace_rate, weight_min_value, weight_max_value, config)
-
-    return weights, biases
-
-
-# ============================================================================
 # Helper functions to add new layers to a genome.
 # ============================================================================
 
@@ -204,42 +178,6 @@ def calculate_pool_output_size(input_size, pool_gene):
 
     output_size = ((input_size - pool_size) // stride) + 1
     return max(1, output_size)  # Ensure valid size
-
-
-# ============================================================================
-# Helper functions to adapt weights when dimensions change.
-# ============================================================================
-def _mutate_array(arr, mutate_rate, mutate_power, replace_rate, weight_min, weight_max, config):
-    """
-    Applies controlled noise and selective replacement to a NumPy array (weights or biases).
-
-    Parameters:
-      arr: The original NumPy array.
-      mutate_rate: Probability of applying additive noise.
-      mutate_power: Standard deviation of the noise.
-      replace_rate: Probability of fully replacing an element.
-      weight_min, weight_max: Clipping bounds.
-      config: Configuration object (to decide the initialization type).
-
-    Returns:
-      The mutated array.
-    """
-    # --- Additive Noise Mutation ---
-    mask = np.random.rand(*arr.shape) < mutate_rate
-    # Generate noise and clip it to avoid extreme values.
-    noise = np.clip(np.random.randn(*arr.shape) * mutate_power, -mutate_power * 2, mutate_power * 2)
-    arr = arr + mask * noise
-
-    # --- Replacement Mutation (Less Frequent) ---
-    rep_mask = np.random.rand(*arr.shape) < replace_rate
-    new_vals = np.random.randn(*arr.shape) * config.weight_init_stdev + config.weight_init_mean
-
-    # Clip the new values and apply replacement.
-    new_vals = np.clip(new_vals, weight_min, weight_max)
-    arr = np.where(rep_mask, new_vals, arr)
-
-    # Ensure the final array is within the allowed range.
-    return np.clip(arr, weight_min, weight_max)
 
 
 def adapt_conv_weights(old_weights, new_shape):

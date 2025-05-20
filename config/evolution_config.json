@@ -1,15 +1,15 @@
 {
-    "experiment": 1,
-    "run_neat": true,
-    "run_ga": false,
+    "variant": 1,
+    "run_neat": false,
+    "run_ga": true,
     "placing_population": {
-        "size": 50,
+        "size": 5,
         "elite_size": 1,
         "tournament_size": 2,
         "mutation_probability": 0.2
     },
     "search_population": {
-        "size": 5
+        "size": 2
     },
     "evolution": {
         "num_generations": 20
