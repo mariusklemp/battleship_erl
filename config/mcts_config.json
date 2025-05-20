@@ -1,5 +1,5 @@
 {
-    "run_inner_loop": true,
+    "run_inner_loop": false,
     "board_size": 5,
     "ship_sizes": [3, 2, 2],
     "mcts": {

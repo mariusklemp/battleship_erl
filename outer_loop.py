@@ -202,20 +202,12 @@ class OuterLoopManager:
             if not self.run_neat:
                 self.search_agents = self._initialize_nn_search_agents()
 
-        # Determine opponent strategy for GA-only mode
-        self.placement_ga_opponent_subdir_label = "hunt_down" # Default
-        if not self.run_neat and not self.run_inner_loop: # GA-only or pure hunt_down baseline
+        if not self.run_neat and not self.run_inner_loop:
             opponent_strategy_config = self.evolution_config.get("placement_ga_opponent_strategy", "hunt_down")
             if opponent_strategy_config == "random":
                 self.search_agents = self._initialize_random_search_agents()
-                self.placement_ga_opponent_subdir_label = "random"
-            else: # Default to hunt_down
+            else:
                 self.search_agents = self._initialize_hunt_down_search_agents()
-                # self.placement_ga_opponent_subdir_label is already "hunt_down"
-        elif not self.run_neat and self.run_inner_loop:
-             # This case is for RL agents, self.search_agents already initialized
-             pass # Subdir will be 'rl'
-        # NEAT cases handle search_agents internally or update them later
 
         for gen in range(num_generations):
             print(f"\n\n--- Generation {gen}/{num_generations} ---")
@@ -319,7 +311,12 @@ class OuterLoopManager:
         if   self.run_neat and self.run_inner_loop: subdir = "erl"
         elif self.run_neat:                          subdir = "neat"
         elif self.run_inner_loop:                    subdir = "rl"
-        else:                                        subdir = "hunt_down"
+        else:
+            opponent_strategy_config = self.evolution_config.get("placement_ga_opponent_strategy", "hunt_down")
+            if opponent_strategy_config == "random":
+                subdir = "random"
+            else:
+                subdir = "hunt_down"
 
         # For NEAT we always call save_best_neat_agent()
         if self.run_neat:
@@ -352,6 +349,8 @@ class OuterLoopManager:
                 gen=save_gen,
                 variant=variant
             )
+
+
 
     def save_best_neat_agent(self, model_dir, subdir, gen, variant):
         if self.run_ga:
