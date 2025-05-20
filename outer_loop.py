@@ -124,6 +124,21 @@ class OuterLoopManager:
 
         return search_agents
 
+    def _initialize_random_search_agents(self):
+        """Initialize search agents with a random search strategy."""
+        population_size = self.evolution_config["search_population"]["size"]
+        search_agents = []
+
+        for i in range(population_size):
+            agent = SearchAgent(
+                board_size=self.board_size,
+                strategy="random", # Use random_search strategy
+                name=f"random_search_{i}", # Naming accordingly
+            )
+            search_agents.append(agent)
+
+        return search_agents
+
     def _create_nn_agent(self, model_number):
         """Create a neural network-based search agent."""
 
@@ -187,8 +202,20 @@ class OuterLoopManager:
             if not self.run_neat:
                 self.search_agents = self._initialize_nn_search_agents()
 
-        if not self.run_neat and not self.run_inner_loop:
-            self.search_agents = self._initialize_hunt_down_search_agents()
+        # Determine opponent strategy for GA-only mode
+        self.placement_ga_opponent_subdir_label = "hunt_down" # Default
+        if not self.run_neat and not self.run_inner_loop: # GA-only or pure hunt_down baseline
+            opponent_strategy_config = self.evolution_config.get("placement_ga_opponent_strategy", "hunt_down")
+            if opponent_strategy_config == "random":
+                self.search_agents = self._initialize_random_search_agents()
+                self.placement_ga_opponent_subdir_label = "random"
+            else: # Default to hunt_down
+                self.search_agents = self._initialize_hunt_down_search_agents()
+                # self.placement_ga_opponent_subdir_label is already "hunt_down"
+        elif not self.run_neat and self.run_inner_loop:
+             # This case is for RL agents, self.search_agents already initialized
+             pass # Subdir will be 'rl'
+        # NEAT cases handle search_agents internally or update them later
 
         for gen in range(num_generations):
             print(f"\n\n--- Generation {gen}/{num_generations} ---")

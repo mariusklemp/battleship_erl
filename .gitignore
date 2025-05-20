@@ -130,6 +130,7 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-models/
+#models/
 placement_population/
 models_graveyard/
+models/

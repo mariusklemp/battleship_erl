@@ -1,7 +1,7 @@
 [NEAT]
 fitness_criterion = max
 fitness_threshold = 14.4
-pop_size = 2
+pop_size = 25
 reset_on_extinction = True
 no_fitness_termination = True
 
@@ -29,6 +29,9 @@ pool_sizes = [2, 4]
 pool_strides = [1, 2]
 pool_type = max, avg
 max_num_pool_layer = 1
+weight_init_mean = 0.0
+weight_init_stdev = 0.1
+weight_init_type = gaussian
 conv_params_mutate_prob = 0.8
 fc_params_mutate_prob = 0.8
 weight_max_value = 1.0

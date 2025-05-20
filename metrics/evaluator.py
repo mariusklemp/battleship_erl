@@ -604,7 +604,7 @@ class SearchEvaluator(BaseEvaluator):
 
     def plot_combined_all(self, all_stats):
         """
-        Overlay multiple experiments’ aggregated stats:
+        Overlay multiple experiments' aggregated stats:
           - One combined entropy plot (start & end together)
           - Individual plots for other metrics
         """
@@ -795,7 +795,7 @@ class SearchEvaluator(BaseEvaluator):
 
             ll = label.lower()
             if "initial" in ll:
-                ls, lw, alpha_fill = 'dashed', 3, 0.1
+                ls, lw, alpha_fill = 'solid', 3, 0.1
             elif "final" in ll:
                 ls, lw, alpha_fill = 'solid', 3, 0.15
             else:
@@ -1237,7 +1237,7 @@ class PlacementEvaluator(BaseEvaluator):
                     mins.append((m - s).min())
                     maxs.append((m + s).max())
 
-                # tighten this subplot’s y‐limit
+                # tighten this subplot's y‐limit
                 lo, hi = min(mins), max(maxs)
                 pad = (hi - lo) * 0.1
                 ax.set_ylim(lo - pad, hi + pad)
